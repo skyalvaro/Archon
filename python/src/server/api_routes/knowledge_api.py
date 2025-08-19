@@ -718,7 +718,6 @@ async def search_knowledge_items(request: RagQueryRequest):
     return await perform_rag_query(request)
 
 
-@router.post("/rag/query")
 async def perform_rag_query(request: RagQueryRequest):
     """Perform a RAG query on the knowledge base using service layer."""
     # Validate query
@@ -746,10 +745,57 @@ async def perform_rag_query(request: RagQueryRequest):
     except HTTPException:
         raise
     except Exception as e:
-        safe_logfire_error(
-            f"RAG query failed | error={str(e)} | query={request.query[:50]} | source={request.source}"
+        # Import embedding exceptions for specific error handling
+        from ..services.embeddings.embedding_exceptions import (
+            EmbeddingQuotaExhaustedError,
+            EmbeddingRateLimitError,
+            EmbeddingAPIError,
         )
-        raise HTTPException(status_code=500, detail={"error": f"RAG query failed: {str(e)}"})
+        
+        # Handle specific OpenAI/embedding errors with detailed messages
+        if isinstance(e, EmbeddingQuotaExhaustedError):
+            safe_logfire_error(
+                f"OpenAI quota exhausted during RAG query | query={request.query[:50]} | source={request.source}"
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "OpenAI API quota exhausted",
+                    "message": "Your OpenAI API key has no remaining credits. Please add credits to your OpenAI account or check your billing settings.",
+                    "error_type": "quota_exhausted",
+                    "tokens_used": getattr(e, "tokens_used", None),
+                }
+            )
+        elif isinstance(e, EmbeddingRateLimitError):
+            safe_logfire_error(
+                f"OpenAI rate limit hit during RAG query | query={request.query[:50]} | source={request.source}"
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "OpenAI API rate limit exceeded",
+                    "message": "Too many requests to OpenAI API. Please wait a moment and try again.",
+                    "error_type": "rate_limit",
+                }
+            )
+        elif isinstance(e, EmbeddingAPIError):
+            safe_logfire_error(
+                f"OpenAI API error during RAG query | error={str(e)} | query={request.query[:50]} | source={request.source}"
+            )
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "OpenAI API error",
+                    "message": f"OpenAI API error: {str(e)}",
+                    "error_type": "api_error",
+                }
+            )
+        else:
+            # Generic error handling for other exceptions
+            safe_logfire_error(
+                f"RAG query failed | error={str(e)} | query={request.query[:50]} | source={request.source}"
+            )
+            raise HTTPException(status_code=500, detail={"error": f"RAG query failed: {str(e)}"})
 
 
 @router.post("/rag/code-examples")

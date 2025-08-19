@@ -18,6 +18,11 @@ from typing import Any
 from ...config.logfire_config import get_logger, safe_span
 from ...utils import get_supabase_client
 from ..embeddings.embedding_service import create_embedding
+from ..embeddings.embedding_exceptions import (
+    EmbeddingAPIError,
+    EmbeddingQuotaExhaustedError,
+    EmbeddingRateLimitError,
+)
 from .agentic_rag_strategy import AgenticRAGStrategy
 
 # Import all strategies
@@ -104,6 +109,11 @@ class RAGService:
 
         Returns:
             List of matching documents
+
+        Raises:
+            EmbeddingQuotaExhaustedError: When OpenAI quota is exhausted
+            EmbeddingRateLimitError: When rate limited
+            EmbeddingAPIError: For other embedding API errors
         """
         with safe_span(
             "rag_search_documents",
@@ -140,6 +150,9 @@ class RAGService:
                 span.set_attribute("results_found", len(results))
                 return results
 
+            except (EmbeddingQuotaExhaustedError, EmbeddingRateLimitError, EmbeddingAPIError):
+                # Re-raise embedding errors so they propagate to the API layer with specific error info
+                raise
             except Exception as e:
                 logger.error(f"Document search failed: {e}")
                 span.set_attribute("error", str(e))
