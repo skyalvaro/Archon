@@ -215,7 +215,6 @@ class RAGService:
 
                 # Check which strategies are enabled
                 use_hybrid_search = self.get_bool_setting("USE_HYBRID_SEARCH", False)
-                use_reranking = self.get_bool_setting("USE_RERANKING", False)
 
                 # Step 1 & 2: Get results (with hybrid search if enabled)
                 results = await self.search_documents(
@@ -324,7 +323,6 @@ class RAGService:
 
                 # Check which strategies are enabled
                 use_hybrid_search = self.get_bool_setting("USE_HYBRID_SEARCH", False)
-                use_reranking = self.get_bool_setting("USE_RERANKING", False)
 
                 # Prepare filter
                 filter_metadata = {"source": source_id} if source_id and source_id.strip() else None
