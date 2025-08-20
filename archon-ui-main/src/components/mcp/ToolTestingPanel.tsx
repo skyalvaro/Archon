@@ -95,6 +95,13 @@ export const ToolTestingPanel = ({
     };
   }, [isResizing]);
 
+  // Cleanup error state on component unmount
+  useEffect(() => {
+    return () => {
+      clearError(); // Clear any pending errors when component unmounts
+    };
+  }, [clearError]);
+
   // Handle tool selection
   const handleToolSelect = (tool: Tool) => {
     setSelectedTool(tool);

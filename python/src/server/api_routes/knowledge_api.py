@@ -45,6 +45,12 @@ router = APIRouter(prefix="/api", tags=["knowledge"])
 
 def _sanitize_openai_error(error_message: str) -> str:
     """Sanitize OpenAI API error messages to prevent information disclosure."""
+    # Input validation
+    if not isinstance(error_message, str):
+        return "OpenAI API encountered an error. Please verify your API key and quota."
+    if not error_message.strip():
+        return "OpenAI API encountered an error. Please verify your API key and quota."
+    
     # Common patterns to sanitize
     sanitized_patterns = {
         r'https?://[^\s]+': '[REDACTED_URL]',  # Remove URLs
@@ -55,7 +61,7 @@ def _sanitize_openai_error(error_message: str) -> str:
         r'req_[a-zA-Z0-9]{6,}': '[REDACTED_REQ]',   # Remove OpenAI request IDs (adjusted length)
         r'user-[a-zA-Z0-9]{10,}': '[REDACTED_USER]', # Remove OpenAI user IDs
         r'sess_[a-zA-Z0-9]{10,}': '[REDACTED_SESS]', # Remove session IDs
-        r'Bearer\s+[^\s]+': 'Bearer [REDACTED_AUTH_TOKEN]', # Remove bearer tokens (changed name to avoid "token" sensitive word)
+        r'Bearer\s+[^\s]{1,200}': 'Bearer [REDACTED_AUTH_TOKEN]', # Remove bearer tokens (bounded to prevent ReDoS)
     }
 
     sanitized = error_message

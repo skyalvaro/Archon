@@ -39,6 +39,28 @@ function createFallbackError(reason: string): EnhancedError {
  * Check if an object can be safely serialized (no circular references)
  */
 function isSafeObject(obj: any): boolean {
+  if (typeof obj !== 'object' || obj === null) return true;
+  
+  // Quick size estimate to prevent expensive operations on large objects
+  const keys = Object.keys(obj);
+  if (keys.length > 100) return false;
+  
+  // Check for deep nesting that could indicate circular references
+  let depth = 0;
+  function checkDepth(value: any, currentDepth: number): boolean {
+    if (currentDepth > 10) return false; // Max depth exceeded
+    if (typeof value !== 'object' || value === null) return true;
+    
+    for (const key in value) {
+      if (value.hasOwnProperty(key)) {
+        if (!checkDepth(value[key], currentDepth + 1)) return false;
+      }
+    }
+    return true;
+  }
+  
+  if (!checkDepth(obj, 0)) return false;
+  
   try {
     JSON.stringify(obj);
     return true;

@@ -186,10 +186,10 @@ class TestOpenAIQuotaErrorHandling:
 
     def test_sanitize_openai_error_removes_api_keys(self):
         """Test that sanitization function removes API keys from error messages."""
-        error_message = "Authentication failed with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
+        error_message = "Authentication failed with key sk-FAKE00000000000000000000000000000000000000000000"
         sanitized = _sanitize_openai_error(error_message)
         
-        assert "sk-1234567890" not in sanitized
+        assert "sk-FAKE00000000000000000000000000000000000000000000" not in sanitized
         assert "[REDACTED_KEY]" in sanitized
         assert "Authentication failed" in sanitized
 
@@ -229,7 +229,7 @@ class TestOpenAIQuotaErrorHandling:
             
             mock_service = Mock()
             mock_service.perform_rag_query = AsyncMock(
-                side_effect=EmbeddingAPIError("Request failed to https://api.openai.com/v1/embeddings with key sk-1234567890abcdef1234567890abcdef1234567890abcdef")
+                side_effect=EmbeddingAPIError("Request failed to https://api.openai.com/v1/embeddings with key sk-FAKE00000000000000000000000000000000000000000000")
             )
             mock_rag_service_class.return_value = mock_service
             
@@ -239,7 +239,7 @@ class TestOpenAIQuotaErrorHandling:
             
             # Verify error is sanitized
             error_message = exc_info.value.detail["message"]
-            assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in error_message
+            assert "sk-FAKE00000000000000000000000000000000000000000000" not in error_message
             assert "https://api.openai.com" not in error_message
             assert "[REDACTED_KEY]" in error_message
             assert "[REDACTED_URL]" in error_message
@@ -311,10 +311,10 @@ class TestOpenAIQuotaErrorHandling:
 
     def test_sanitize_openai_error_removes_organization_ids(self):
         """Test that sanitization function removes OpenAI organization IDs."""
-        error_message = "Permission denied for org-1234567890abcdef12345678 with model access"
+        error_message = "Permission denied for org-FAKE00000000000000000000 with model access"
         sanitized = _sanitize_openai_error(error_message)
         
-        assert "org-1234567890abcdef12345678" not in sanitized
+        assert "org-FAKE00000000000000000000" not in sanitized
         assert "[REDACTED_ORG]" in sanitized
         assert "Permission denied" in sanitized
 
@@ -338,23 +338,23 @@ class TestOpenAIQuotaErrorHandling:
 
     def test_sanitize_openai_error_removes_bearer_tokens(self):
         """Test that sanitization function removes Bearer tokens."""
-        error_message = "Authorization failed: Bearer sk-1234567890abcdef1234567890abcdef1234567890abcdef invalid"
+        error_message = "Authorization failed: Bearer sk-FAKE00000000000000000000000000000000000000000000 invalid"
         sanitized = _sanitize_openai_error(error_message)
         
         # This message should be fully sanitized due to potential sensitive content
-        assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in sanitized
+        assert "sk-FAKE00000000000000000000000000000000000000000000" not in sanitized
         assert sanitized == "OpenAI API encountered an error. Please verify your API key and quota."
 
     def test_sanitize_openai_error_handles_multiple_patterns(self):
         """Test that sanitization handles multiple sensitive patterns in one message."""
-        error_message = "Request req_abc123 to https://api.openai.com failed for org-1234567890abcdef12345678 with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
+        error_message = "Request req_abc123 to https://api.openai.com failed for org-FAKE00000000000000000000 with key sk-FAKE00000000000000000000000000000000000000000000"
         sanitized = _sanitize_openai_error(error_message)
         
         # Verify all patterns are redacted
         assert "req_abc123" not in sanitized
         assert "https://api.openai.com" not in sanitized
-        assert "org-1234567890abcdef12345678" not in sanitized
-        assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in sanitized
+        assert "org-FAKE00000000000000000000" not in sanitized
+        assert "sk-FAKE00000000000000000000000000000000000000000000" not in sanitized
         
         # Verify redacted placeholders are present
         assert "[REDACTED_REQ]" in sanitized
@@ -387,3 +387,21 @@ class TestOpenAIQuotaErrorHandling:
             assert error_detail["error_type"] == "rate_limit"
             assert "retry_after" in error_detail
             assert error_detail["retry_after"] == 30
+
+    def test_sanitize_openai_error_input_validation(self):
+        """Test that sanitization function handles invalid input gracefully."""
+        # Test None input
+        result = _sanitize_openai_error(None)
+        assert result == "OpenAI API encountered an error. Please verify your API key and quota."
+        
+        # Test non-string input
+        result = _sanitize_openai_error(123)
+        assert result == "OpenAI API encountered an error. Please verify your API key and quota."
+        
+        # Test empty string
+        result = _sanitize_openai_error("")
+        assert result == "OpenAI API encountered an error. Please verify your API key and quota."
+        
+        # Test whitespace-only string
+        result = _sanitize_openai_error("   ")
+        assert result == "OpenAI API encountered an error. Please verify your API key and quota."
