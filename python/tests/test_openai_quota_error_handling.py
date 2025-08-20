@@ -19,7 +19,7 @@ from src.server.services.embeddings.embedding_exceptions import (
     EmbeddingAPIError,
 )
 from src.server.services.search.rag_service import RAGService
-from src.server.api_routes.knowledge_api import perform_rag_query, RagQueryRequest
+from src.server.api_routes.knowledge_api import perform_rag_query, RagQueryRequest, _sanitize_openai_error
 
 
 class TestOpenAIQuotaErrorHandling:
@@ -73,7 +73,9 @@ class TestOpenAIQuotaErrorHandling:
         request = RagQueryRequest(query="test query", match_count=5)
         
         # Mock RAGService to raise quota exhausted error
-        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class:
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
             mock_service = Mock()
             mock_service.perform_rag_query = AsyncMock(
                 side_effect=EmbeddingQuotaExhaustedError(
@@ -100,7 +102,9 @@ class TestOpenAIQuotaErrorHandling:
         request = RagQueryRequest(query="test query", match_count=5)
         
         # Mock RAGService to raise rate limit error
-        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class:
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
             mock_service = Mock()
             mock_service.perform_rag_query = AsyncMock(
                 side_effect=EmbeddingRateLimitError("Rate limit exceeded")
@@ -124,7 +128,9 @@ class TestOpenAIQuotaErrorHandling:
         request = RagQueryRequest(query="test query", match_count=5)
         
         # Mock RAGService to raise generic API error
-        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class:
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
             mock_service = Mock()
             mock_service.perform_rag_query = AsyncMock(
                 side_effect=EmbeddingAPIError("Invalid API key")
@@ -154,7 +160,9 @@ class TestOpenAIQuotaErrorHandling:
             "total_found": 1,
         }
         
-        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class:
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
             mock_service = Mock()
             mock_service.perform_rag_query = AsyncMock(return_value=(True, mock_result))
             mock_rag_service_class.return_value = mock_service
@@ -166,3 +174,216 @@ class TestOpenAIQuotaErrorHandling:
             assert result["success"] is True
             assert result["results"] == [{"content": "test result"}]
             assert result["total_found"] == 1
+
+    def test_sanitize_openai_error_removes_urls(self):
+        """Test that sanitization function removes URLs from error messages."""
+        error_message = "Connection failed to https://api.openai.com/v1/embeddings with status 400"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "https://api.openai.com" not in sanitized
+        assert "[REDACTED_URL]" in sanitized
+        assert "Connection failed" in sanitized
+
+    def test_sanitize_openai_error_removes_api_keys(self):
+        """Test that sanitization function removes API keys from error messages."""
+        error_message = "Authentication failed with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "sk-1234567890" not in sanitized
+        assert "[REDACTED_KEY]" in sanitized
+        assert "Authentication failed" in sanitized
+
+    def test_sanitize_openai_error_removes_auth_info(self):
+        """Test that sanitization function removes auth details from error messages."""
+        error_message = 'Failed to authenticate: "auth_bearer_xyz123"'
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "auth_bearer_xyz123" not in sanitized
+        assert "[REDACTED_AUTH]" in sanitized
+
+    def test_sanitize_openai_error_returns_generic_for_sensitive_words(self):
+        """Test that sanitization returns generic message for sensitive internal details."""
+        error_message = "Internal server error on endpoint /v1/embeddings"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        # Should return generic message due to 'internal' and 'endpoint' keywords
+        assert sanitized == "OpenAI API encountered an error. Please verify your API key and quota."
+
+    def test_sanitize_openai_error_preserves_safe_messages(self):
+        """Test that sanitization preserves safe error messages."""
+        error_message = "Model not found: text-embedding-ada-002"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        # Should preserve the message since it contains no sensitive info
+        assert sanitized == error_message
+
+    @pytest.mark.asyncio
+    async def test_api_error_sanitization_in_endpoint(self):
+        """Test that API errors are sanitized in the RAG endpoint response."""
+        
+        request = RagQueryRequest(query="test query", match_count=5)
+        
+        # Mock RAGService to raise API error with sensitive information
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
+            mock_service = Mock()
+            mock_service.perform_rag_query = AsyncMock(
+                side_effect=EmbeddingAPIError("Request failed to https://api.openai.com/v1/embeddings with key sk-1234567890abcdef1234567890abcdef1234567890abcdef")
+            )
+            mock_rag_service_class.return_value = mock_service
+            
+            # Should raise HTTPException with sanitized error message
+            with pytest.raises(HTTPException) as exc_info:
+                await perform_rag_query(request)
+            
+            # Verify error is sanitized
+            error_message = exc_info.value.detail["message"]
+            assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in error_message
+            assert "https://api.openai.com" not in error_message
+            assert "[REDACTED_KEY]" in error_message
+            assert "[REDACTED_URL]" in error_message
+
+    @pytest.mark.asyncio
+    async def test_fail_fast_pattern_embedding_failure(self):
+        """Test that embedding failures now fail fast instead of returning empty results."""
+        
+        # Mock the create_embedding function to return None (failure)
+        with patch("src.server.services.search.rag_service.create_embedding") as mock_create_embedding:
+            mock_create_embedding.return_value = None
+            
+            # Create RAG service and test search_documents method
+            with patch("src.server.services.search.rag_service.get_supabase_client"):
+                rag_service = RAGService()
+                
+                # Should raise RuntimeError instead of returning empty list
+                with pytest.raises(RuntimeError) as exc_info:
+                    await rag_service.search_documents("test query")
+                
+                assert "Failed to create embedding" in str(exc_info.value)
+                assert "configuration or API issue" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_fail_fast_pattern_search_failure(self):
+        """Test that search failures now fail fast instead of returning empty results."""
+        
+        # Mock the create_embedding to succeed but vector search to fail
+        with patch("src.server.services.search.rag_service.create_embedding") as mock_create_embedding:
+            mock_create_embedding.return_value = [0.1] * 1536  # Mock embedding vector
+            
+            with patch("src.server.services.search.rag_service.get_supabase_client"):
+                rag_service = RAGService()
+                
+                # Mock the base strategy to raise an exception
+                with patch.object(rag_service.base_strategy, 'vector_search', side_effect=Exception("Database connection failed")):
+                    
+                    # Should raise RuntimeError instead of returning empty list
+                    with pytest.raises(RuntimeError) as exc_info:
+                        await rag_service.search_documents("test query")
+                    
+                    assert "Document search failed" in str(exc_info.value)
+                    assert "Database connection failed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_integration_error_flow_rag_to_api(self):
+        """Test complete error flow from RAG service through API endpoint."""
+        
+        request = RagQueryRequest(query="test query", match_count=5)
+        
+        # Mock both RAGService and get_supabase_client to avoid real connections
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
+            mock_service = Mock()
+            mock_service.perform_rag_query = AsyncMock(
+                side_effect=RuntimeError("Document search failed: Database connection failed")
+            )
+            mock_rag_service_class.return_value = mock_service
+            
+            # Should raise HTTPException with generic error (not OpenAI specific)
+            with pytest.raises(HTTPException) as exc_info:
+                await perform_rag_query(request)
+            
+            # Verify error details
+            assert exc_info.value.status_code == 500
+            assert "RAG query failed" in exc_info.value.detail["error"]
+            assert "Database connection failed" in exc_info.value.detail["error"]
+
+    def test_sanitize_openai_error_removes_organization_ids(self):
+        """Test that sanitization function removes OpenAI organization IDs."""
+        error_message = "Permission denied for org-1234567890abcdef12345678 with model access"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "org-1234567890abcdef12345678" not in sanitized
+        assert "[REDACTED_ORG]" in sanitized
+        assert "Permission denied" in sanitized
+
+    def test_sanitize_openai_error_removes_project_ids(self):
+        """Test that sanitization function removes OpenAI project IDs."""
+        error_message = "Project proj_abcdef1234567890xyz not found"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "proj_abcdef1234567890xyz" not in sanitized
+        assert "[REDACTED_PROJ]" in sanitized
+        assert "Project" in sanitized and "not found" in sanitized
+
+    def test_sanitize_openai_error_removes_request_ids(self):
+        """Test that sanitization function removes OpenAI request IDs."""
+        error_message = "Request req_1234567890abcdefghij failed with timeout"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        assert "req_1234567890abcdefghij" not in sanitized
+        assert "[REDACTED_REQ]" in sanitized
+        assert "Request" in sanitized and "failed with timeout" in sanitized
+
+    def test_sanitize_openai_error_removes_bearer_tokens(self):
+        """Test that sanitization function removes Bearer tokens."""
+        error_message = "Authorization failed: Bearer sk-1234567890abcdef1234567890abcdef1234567890abcdef invalid"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        # This message should be fully sanitized due to potential sensitive content
+        assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in sanitized
+        assert sanitized == "OpenAI API encountered an error. Please verify your API key and quota."
+
+    def test_sanitize_openai_error_handles_multiple_patterns(self):
+        """Test that sanitization handles multiple sensitive patterns in one message."""
+        error_message = "Request req_abc123 to https://api.openai.com failed for org-1234567890abcdef12345678 with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
+        sanitized = _sanitize_openai_error(error_message)
+        
+        # Verify all patterns are redacted
+        assert "req_abc123" not in sanitized
+        assert "https://api.openai.com" not in sanitized
+        assert "org-1234567890abcdef12345678" not in sanitized
+        assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in sanitized
+        
+        # Verify redacted placeholders are present
+        assert "[REDACTED_REQ]" in sanitized
+        assert "[REDACTED_URL]" in sanitized
+        assert "[REDACTED_ORG]" in sanitized
+        assert "[REDACTED_KEY]" in sanitized
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_error_includes_retry_after(self):
+        """Test that rate limit errors now include retry_after information."""
+        
+        request = RagQueryRequest(query="test query", match_count=5)
+        
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
+            mock_service = Mock()
+            mock_service.perform_rag_query = AsyncMock(
+                side_effect=EmbeddingRateLimitError("Rate limit exceeded")
+            )
+            mock_rag_service_class.return_value = mock_service
+            
+            # Should raise HTTPException with retry_after field
+            with pytest.raises(HTTPException) as exc_info:
+                await perform_rag_query(request)
+            
+            # Verify rate limit error with retry_after
+            assert exc_info.value.status_code == 429
+            error_detail = exc_info.value.detail
+            assert error_detail["error_type"] == "rate_limit"
+            assert "retry_after" in error_detail
+            assert error_detail["retry_after"] == 30

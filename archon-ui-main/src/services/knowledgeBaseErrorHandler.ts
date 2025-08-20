@@ -13,6 +13,7 @@ export interface OpenAIErrorDetails {
   message: string;
   error_type: 'quota_exhausted' | 'rate_limit' | 'api_error';
   tokens_used?: number;
+  retry_after?: number;
 }
 
 export interface EnhancedError extends Error {
@@ -22,9 +23,71 @@ export interface EnhancedError extends Error {
 }
 
 /**
+ * Create a fallback error for cases where input is invalid or unparseable
+ */
+function createFallbackError(reason: string): EnhancedError {
+  return Object.assign(new Error('Unknown error occurred'), {
+    errorDetails: {
+      error: 'unknown',
+      message: `${reason}. Please try again or contact support if the problem persists.`,
+      error_type: 'api_error' as const
+    }
+  }) as EnhancedError;
+}
+
+/**
+ * Check if an object can be safely serialized (no circular references)
+ */
+function isSafeObject(obj: any): boolean {
+  try {
+    JSON.stringify(obj);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Parse and enhance API errors from knowledge base operations
  */
 export function parseKnowledgeBaseError(error: any): EnhancedError {
+  // Enhanced input validation
+  if (!error) {
+    return createFallbackError('No error information provided');
+  }
+  
+  if (typeof error === 'string') {
+    return Object.assign(new Error(error), {
+      errorDetails: {
+        error: 'api_error',
+        message: error,
+        error_type: 'api_error' as const
+      }
+    }) as EnhancedError;
+  }
+  
+  if (typeof error !== 'object' || error === null) {
+    return createFallbackError('Invalid error format');
+  }
+
+  // Check for empty objects or objects with no useful properties
+  if (error.constructor === Object && Object.keys(error).length === 0) {
+    return createFallbackError('Empty error object received');
+  }
+
+  // Check for circular references and object safety
+  if (!isSafeObject(error)) {
+    return createFallbackError('Error object contains circular references');
+  }
+
+  // Handle Error instances that might have been serialized/deserialized
+  if (error instanceof Error || (error.name && error.message && error.stack)) {
+    // This is likely an Error object, proceed with parsing
+  } else if (!error.message && !error.error && !error.detail && !error.status) {
+    // Object doesn't have any recognizable error properties
+    return createFallbackError('Unrecognized error object structure');
+  }
+  
   const enhancedError: EnhancedError = new Error(error.message || 'Unknown error');
   
   // Check if this is an HTTP response error with JSON details
@@ -122,7 +185,8 @@ export function getErrorAction(error: EnhancedError): string | null {
       case 'quota_exhausted':
         return 'Check your OpenAI billing dashboard and add credits';
       case 'rate_limit':
-        return 'Wait 30 seconds and try again';
+        const retryAfter = error.errorDetails.retry_after || 30;
+        return `Wait ${retryAfter} seconds and try again`;
       case 'api_error':
         return 'Verify your OpenAI API key in Settings';
       default:

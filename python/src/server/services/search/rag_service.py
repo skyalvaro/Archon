@@ -127,7 +127,8 @@ class RAGService:
 
                 if not query_embedding:
                     logger.error("Failed to create embedding for query")
-                    return []
+                    # Follow alpha "fail fast" principle - embedding failure should not return empty results
+                    raise RuntimeError("Failed to create embedding for query - this indicates a configuration or API issue")
 
                 if use_hybrid_search:
                     # Use hybrid strategy
@@ -156,7 +157,8 @@ class RAGService:
             except Exception as e:
                 logger.error(f"Document search failed: {e}")
                 span.set_attribute("error", str(e))
-                return []
+                # Follow alpha "fail fast" principle - don't return empty results for legitimate failures
+                raise RuntimeError(f"Document search failed: {str(e)}") from e
 
     async def search_code_examples(
         self,

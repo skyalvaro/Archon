@@ -11,6 +11,7 @@ This module handles all knowledge base operations including:
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from datetime import datetime
@@ -18,16 +19,11 @@ from datetime import datetime
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..utils import get_supabase_client
-from ..services.storage import DocumentStorageService
-from ..services.search.rag_service import RAGService
-from ..services.knowledge import KnowledgeItemService, DatabaseMetricsService
-from ..services.crawling import CrawlOrchestrationService
-from ..services.crawler_manager import get_crawler
-
 # Import unified logging
 from ..config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
 from ..services.crawler_manager import get_crawler
+from ..services.crawling import CrawlOrchestrationService
+from ..services.knowledge import DatabaseMetricsService, KnowledgeItemService
 from ..services.search.rag_service import RAGService
 from ..services.storage import DocumentStorageService
 from ..utils import get_supabase_client
@@ -45,6 +41,39 @@ from .socketio_handlers import (
 
 # Create router
 router = APIRouter(prefix="/api", tags=["knowledge"])
+
+
+def _sanitize_openai_error(error_message: str) -> str:
+    """Sanitize OpenAI API error messages to prevent information disclosure."""
+    # Common patterns to sanitize
+    sanitized_patterns = {
+        r'https?://[^\s]+': '[REDACTED_URL]',  # Remove URLs
+        r'sk-[a-zA-Z0-9]{48}': '[REDACTED_KEY]',     # Remove API keys (OpenAI format)
+        r'"[^"]*auth[^"]*"': '[REDACTED_AUTH]',     # Remove auth details
+        r'org-[a-zA-Z0-9]{24}': '[REDACTED_ORG]',   # Remove OpenAI organization IDs
+        r'proj_[a-zA-Z0-9]{10,}': '[REDACTED_PROJ]', # Remove OpenAI project IDs (adjusted length)
+        r'req_[a-zA-Z0-9]{6,}': '[REDACTED_REQ]',   # Remove OpenAI request IDs (adjusted length)
+        r'user-[a-zA-Z0-9]{10,}': '[REDACTED_USER]', # Remove OpenAI user IDs
+        r'sess_[a-zA-Z0-9]{10,}': '[REDACTED_SESS]', # Remove session IDs
+        r'Bearer\s+[^\s]+': 'Bearer [REDACTED_AUTH_TOKEN]', # Remove bearer tokens (changed name to avoid "token" sensitive word)
+    }
+
+    sanitized = error_message
+    for pattern, replacement in sanitized_patterns.items():
+        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+
+    # Check for sensitive words after pattern replacement, but exclude our redacted patterns
+    sensitive_words = ['internal', 'server', 'token']
+    # Only check for 'endpoint' if it's not part of our redacted URL pattern
+    if 'endpoint' in sanitized.lower() and '[REDACTED_URL]' not in sanitized:
+        sensitive_words.append('endpoint')
+
+    # Return generic message if still contains sensitive info
+    if any(word in sanitized.lower() for word in sensitive_words):
+        return "OpenAI API encountered an error. Please verify your API key and quota."
+
+    return sanitized
+
 
 # Get Socket.IO instance
 sio = get_socketio_instance()
@@ -747,11 +776,11 @@ async def perform_rag_query(request: RagQueryRequest):
     except Exception as e:
         # Import embedding exceptions for specific error handling
         from ..services.embeddings.embedding_exceptions import (
+            EmbeddingAPIError,
             EmbeddingQuotaExhaustedError,
             EmbeddingRateLimitError,
-            EmbeddingAPIError,
         )
-        
+
         # Handle specific OpenAI/embedding errors with detailed messages
         if isinstance(e, EmbeddingQuotaExhaustedError):
             safe_logfire_error(
@@ -776,17 +805,19 @@ async def perform_rag_query(request: RagQueryRequest):
                     "error": "OpenAI API rate limit exceeded",
                     "message": "Too many requests to OpenAI API. Please wait a moment and try again.",
                     "error_type": "rate_limit",
+                    "retry_after": 30,  # Suggest 30 second wait
                 }
             )
         elif isinstance(e, EmbeddingAPIError):
             safe_logfire_error(
                 f"OpenAI API error during RAG query | error={str(e)} | query={request.query[:50]} | source={request.source}"
             )
+            sanitized_message = _sanitize_openai_error(str(e))
             raise HTTPException(
                 status_code=502,
                 detail={
                     "error": "OpenAI API error",
-                    "message": f"OpenAI API error: {str(e)}",
+                    "message": f"OpenAI API error: {sanitized_message}",
                     "error_type": "api_error",
                 }
             )
@@ -948,7 +979,7 @@ async def stop_crawl_task(progress_id: str):
     """Stop a running crawl task."""
     try:
         from ..services.crawling import get_active_orchestration, unregister_orchestration
-        
+
         # Emit stopping status immediately
         await sio.emit(
             "crawl:stopping",
