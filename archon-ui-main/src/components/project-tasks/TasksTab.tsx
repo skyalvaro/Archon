@@ -4,9 +4,11 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toggle } from '../ui/Toggle';
 import { projectService } from '../../services/projectService';
+import { getGlobalOperationTracker } from '../../utils/operationTracker';
 
 import { useTaskSocket } from '../../hooks/useTaskSocket';
 import type { CreateTaskRequest, UpdateTaskRequest, DatabaseTaskStatus } from '../../types/project';
+import { WebSocketState } from '../../services/socketIOService';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
@@ -65,10 +67,13 @@ export const TasksTab = ({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
+  const [projectFeatures, setProjectFeatures] = useState<import('../types/jsonb').ProjectFeature[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  
+  // Track recently deleted tasks to prevent race conditions
+  const [recentlyDeletedIds, setRecentlyDeletedIds] = useState<Set<string>>(new Set());
   
   // Initialize tasks
   useEffect(() => {
@@ -85,6 +90,12 @@ export const TasksTab = ({
     const updatedTask = message.data || message;
     const mappedTask = mapDatabaseTaskToUITask(updatedTask);
     
+    // Skip updates for recently deleted tasks (race condition prevention)
+    if (recentlyDeletedIds.has(updatedTask.id)) {
+      console.log('[Socket] Ignoring update for recently deleted task:', updatedTask.id);
+      return;
+    }
+    
     // Skip updates while modal is open for the same task to prevent conflicts
     if (isModalOpen && editingTask?.id === updatedTask.id) {
       console.log('[Socket] Skipping update for task being edited:', updatedTask.id);
@@ -94,20 +105,15 @@ export const TasksTab = ({
     setTasks(prev => {
       // Use server timestamp for conflict resolution
       const existingTask = prev.find(task => task.id === updatedTask.id);
-      if (existingTask) {
-        // Check if this is a more recent update
-        const serverTimestamp = message.server_timestamp || Date.now();
-        const lastUpdate = existingTask.lastUpdate || 0;
-        
-        if (serverTimestamp <= lastUpdate) {
-          console.log('[Socket] Ignoring stale update for task:', updatedTask.id);
-          return prev;
-        }
+      
+      // Skip if we already have this task (prevent duplicate additions)
+      if (!existingTask) {
+        console.log('[Socket] Task not found locally, adding:', updatedTask.id);
       }
       
       const updated = prev.map(task => 
         task.id === updatedTask.id 
-          ? { ...mappedTask, lastUpdate: message.server_timestamp || Date.now() }
+          ? { ...mappedTask }
           : task
       );
       
@@ -115,7 +121,7 @@ export const TasksTab = ({
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
-  }, [onTasksChange, isModalOpen, editingTask?.id]);
+  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds]);
 
   const handleTaskCreated = useCallback((message: any) => {
     const newTask = message.data || message;
@@ -123,11 +129,27 @@ export const TasksTab = ({
     const mappedTask = mapDatabaseTaskToUITask(newTask);
     
     setTasks(prev => {
+      // Check if this is replacing a temporary task from optimistic update
+      const hasTempTask = prev.some(task => task.id.startsWith('temp-') && task.title === mappedTask.title);
+      
+      if (hasTempTask) {
+        // Replace temporary task with real task
+        const updated = prev.map(task => 
+          task.id.startsWith('temp-') && task.title === mappedTask.title 
+            ? mappedTask 
+            : task
+        );
+        setTimeout(() => onTasksChange(updated), 0);
+        console.log('Replaced temporary task with real task:', mappedTask.id);
+        return updated;
+      }
+      
       // Check if task already exists to prevent duplicates
       if (prev.some(task => task.id === newTask.id)) {
         console.log('Task already exists, skipping create');
         return prev;
       }
+      
       const updated = [...prev, mappedTask];
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
@@ -137,6 +159,14 @@ export const TasksTab = ({
   const handleTaskDeleted = useCallback((message: any) => {
     const deletedTask = message.data || message;
     console.log('🗑️ Real-time task deleted:', deletedTask);
+    
+    // Remove from recently deleted cache when deletion is confirmed
+    setRecentlyDeletedIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(deletedTask.id);
+      return newSet;
+    });
+    
     setTasks(prev => {
       const updated = prev.filter(task => task.id !== deletedTask.id);
       setTimeout(() => onTasksChange(updated), 0);
@@ -183,7 +213,7 @@ export const TasksTab = ({
     onTasksReordered: handleTasksReordered,
     onInitialTasks: handleInitialTasks,
     onConnectionStateChange: (state) => {
-      setIsWebSocketConnected(state === 'connected');
+      setIsWebSocketConnected(state === WebSocketState.CONNECTED);
     }
   });
 
@@ -305,29 +335,53 @@ export const TasksTab = ({
     };
   };
 
-  // Improved debounced persistence with better coordination
+  // Batch reorder persistence for efficient updates
+  const debouncedPersistBatchReorder = useMemo(
+    () => debounce(async (tasksToUpdate: Task[]) => {
+      try {
+        console.log(`REORDER: Persisting batch update for ${tasksToUpdate.length} tasks`);
+        
+        // Send batch update request to backend
+        // For now, update tasks individually (backend can be optimized later for batch endpoint)
+        const updatePromises = tasksToUpdate.map(task =>
+          projectService.updateTask(task.id, { 
+            task_order: task.task_order
+          })
+        );
+        
+        await Promise.all(updatePromises);
+        console.log('REORDER: Batch reorder persisted successfully');
+        
+      } catch (error) {
+        console.error('REORDER: Failed to persist batch reorder:', error);
+        // Socket will handle state recovery
+        console.log('REORDER: Socket will handle state recovery');
+      }
+    }, 500), // Shorter delay for batch updates
+    [projectId]
+  );
+  
+  // Single task persistence (still used for other operations)
   const debouncedPersistSingleTask = useMemo(
     () => debounce(async (task: Task) => {
       try {
         console.log('REORDER: Persisting position change for task:', task.title, 'new position:', task.task_order);
         
-        // Update only the moved task with server timestamp for conflict resolution
+        // Update only the moved task
         await projectService.updateTask(task.id, { 
-          task_order: task.task_order,
-          client_timestamp: Date.now()
+          task_order: task.task_order
         });
         console.log('REORDER: Single task position persisted successfully');
         
       } catch (error) {
         console.error('REORDER: Failed to persist task position:', error);
-        // Don't reload tasks immediately - let socket handle recovery
         console.log('REORDER: Socket will handle state recovery');
       }
-    }, 800), // Slightly reduced delay for better responsiveness
+    }, 800),
     [projectId]
   );
 
-  // Optimized task reordering without optimistic update conflicts
+  // Standard drag-and-drop reordering with sequential integers (like Jira/Trello/Linear)
   const handleTaskReorder = useCallback((taskId: string, targetIndex: number, status: Task['status']) => {
     console.log('REORDER: Moving task', taskId, 'to index', targetIndex, 'in status', status);
     
@@ -357,63 +411,37 @@ export const TasksTab = ({
       return;
     }
     
-    const movingTask = statusTasks[movingTaskIndex];
-    console.log('REORDER: Moving', movingTask.title, 'from', movingTaskIndex, 'to', targetIndex);
+    console.log('REORDER: Moving task from position', movingTaskIndex, 'to', targetIndex);
     
-    // Calculate new position using improved algorithm
-    let newPosition: number;
+    // Remove the task from its current position and insert at target position
+    const reorderedTasks = [...statusTasks];
+    const [movedTask] = reorderedTasks.splice(movingTaskIndex, 1);
+    reorderedTasks.splice(targetIndex, 0, movedTask);
     
-    if (targetIndex === 0) {
-      // Moving to first position
-      const firstTask = statusTasks[0];
-      newPosition = firstTask.task_order / 2;
-    } else if (targetIndex === statusTasks.length - 1) {
-      // Moving to last position
-      const lastTask = statusTasks[statusTasks.length - 1];
-      newPosition = lastTask.task_order + 1024;
-    } else {
-      // Moving between two items
-      let prevTask, nextTask;
-      
-      if (targetIndex > movingTaskIndex) {
-        // Moving down
-        prevTask = statusTasks[targetIndex];
-        nextTask = statusTasks[targetIndex + 1];
-      } else {
-        // Moving up
-        prevTask = statusTasks[targetIndex - 1];
-        nextTask = statusTasks[targetIndex];
-      }
-      
-      if (prevTask && nextTask) {
-        newPosition = (prevTask.task_order + nextTask.task_order) / 2;
-      } else if (prevTask) {
-        newPosition = prevTask.task_order + 1024;
-      } else if (nextTask) {
-        newPosition = nextTask.task_order / 2;
-      } else {
-        newPosition = 1024; // Fallback
-      }
-    }
+    // Assign sequential order numbers (1, 2, 3, etc.) to all tasks in this status
+    const updatedStatusTasks = reorderedTasks.map((task, index) => ({
+      ...task,
+      task_order: index + 1,
+      lastUpdate: Date.now()
+    }));
     
-    console.log('REORDER: New position calculated:', newPosition);
+    console.log('REORDER: New order:', updatedStatusTasks.map(t => `${t.title}:${t.task_order}`));
     
-    // Create updated task with new position and timestamp
-    const updatedTask = {
-      ...movingTask,
-      task_order: newPosition,
-      lastUpdate: Date.now() // Add timestamp for conflict resolution
-    };
-    
-    // Immediate UI update without optimistic tracking interference
-    const allUpdatedTasks = otherTasks.concat(
-      statusTasks.map(task => task.id === taskId ? updatedTask : task)
-    );
+    // Update UI immediately with all reordered tasks
+    const allUpdatedTasks = [...otherTasks, ...updatedStatusTasks];
     updateTasks(allUpdatedTasks);
     
-    // Persist to backend (single API call)
-    debouncedPersistSingleTask(updatedTask);
-  }, [tasks, updateTasks, debouncedPersistSingleTask]);
+    // Batch update to backend - only update tasks that changed position
+    const tasksToUpdate = updatedStatusTasks.filter((task, index) => {
+      const originalTask = statusTasks.find(t => t.id === task.id);
+      return originalTask && originalTask.task_order !== task.task_order;
+    });
+    
+    console.log(`REORDER: Updating ${tasksToUpdate.length} tasks in backend`);
+    
+    // Send batch update to backend (debounced)
+    debouncedPersistBatchReorder(tasksToUpdate);
+  }, [tasks, updateTasks, debouncedPersistBatchReorder]);
 
   // Task move function (for board view)
   const moveTask = async (taskId: string, newStatus: Task['status']) => {
@@ -433,8 +461,7 @@ export const TasksTab = ({
       // Update the task with new status and order
       await projectService.updateTask(taskId, {
         status: mapUIStatusToDBStatus(newStatus),
-        task_order: newOrder,
-        client_timestamp: Date.now()
+        task_order: newOrder
       });
       console.log(`[TasksTab] Successfully updated task ${taskId} status in backend.`);
       
@@ -498,9 +525,7 @@ export const TasksTab = ({
   const updateTaskInline = async (taskId: string, updates: Partial<Task>) => {
     console.log(`[TasksTab] Inline update for task ${taskId} with updates:`, updates);
     try {
-      const updateData: Partial<UpdateTaskRequest> = {
-        client_timestamp: Date.now()
-      };
+      const updateData: Partial<UpdateTaskRequest> = {};
       
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;

@@ -601,21 +601,18 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // Create a new document with a unique ID
-      const newDocument: ProjectDoc = {
-        id: `doc-${Date.now()}`,
+      // Create document via backend API
+      const newDocument = await projectService.createDocument(project.id, {
         title: template.name,
         content: template.content,
-        document_type: template.document_type,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+        document_type: template.document_type
+      });
       
       // Add to documents list
       setDocuments(prev => [...prev, newDocument]);
       setSelectedDocument(newDocument);
       
-      console.log('Document created successfully:', newDocument);
+      console.log('Document created successfully via API:', newDocument);
       showToast('Document created successfully', 'success');
       setShowTemplateModal(false);
     } catch (error) {
@@ -636,18 +633,19 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // Update the document in local state
-      const updatedDocument = { 
-        ...selectedDocument, 
-        updated_at: new Date().toISOString() 
-      };
+      // Update the document via backend API
+      const updatedDocument = await projectService.updateDocument(project.id, selectedDocument.id, {
+        ...selectedDocument,
+        updated_at: new Date().toISOString()
+      });
       
+      // Update local state with the response from backend
       setDocuments(prev => prev.map(doc => 
         doc.id === selectedDocument.id ? updatedDocument : doc
       ));
       setSelectedDocument(updatedDocument);
       
-      console.log('Document saved successfully:', updatedDocument);
+      console.log('Document saved successfully via API:', updatedDocument);
       showToast('Document saved successfully', 'success');
       setIsEditing(false);
     } catch (error) {
@@ -938,6 +936,8 @@ export const DocsTab = ({
                 isActive={selectedDocument?.id === doc.id}
                 onSelect={setSelectedDocument}
                 onDelete={async (docId) => {
+                  if (!project?.id) return;
+                  
                   try {
                     // Call API to delete from database first
                     await projectService.deleteDocument(project.id, docId);
@@ -981,22 +981,24 @@ export const DocsTab = ({
               document={selectedDocument}
               isDarkMode={isDarkMode}
               onSave={async (updatedDocument) => {
+                if (!project?.id) return;
+                
                 try {
                   setIsSaving(true);
                   
-                  // Update document with timestamp
-                  const docWithTimestamp = {
+                  // Update document via backend API
+                  const savedDocument = await projectService.updateDocument(project.id, updatedDocument.id, {
                     ...updatedDocument,
                     updated_at: new Date().toISOString()
-                  };
+                  });
                   
-                  // Update local state
-                  setSelectedDocument(docWithTimestamp);
+                  // Update local state with the response from backend
+                  setSelectedDocument(savedDocument);
                   setDocuments(prev => prev.map(doc => 
-                    doc.id === updatedDocument.id ? docWithTimestamp : doc
+                    doc.id === updatedDocument.id ? savedDocument : doc
                   ));
                   
-                  console.log('Document saved via MilkdownEditor');
+                  console.log('Document saved via MilkdownEditor API:', savedDocument);
                   showToast('Document saved successfully', 'success');
                 } catch (error) {
                   console.error('Failed to save document:', error);
@@ -1190,7 +1192,7 @@ const TemplateModal: React.FC<{
 const KnowledgeSection: React.FC<{
   title: string;
   color: 'blue' | 'purple' | 'pink' | 'orange';
-  sources: any[];
+  sources: Array<{id: string; title: string; type: string; lastUpdated: string} | undefined>;
   onAddClick: () => void;
 }> = ({
   title,
@@ -1273,7 +1275,7 @@ const KnowledgeSection: React.FC<{
 
 const SourceSelectionModal: React.FC<{
   title: string;
-  sources: any[];
+  sources: Array<{id: string; title: string; type: string; lastUpdated: string}>;
   selectedSources: string[];
   onToggleSource: (id: string) => void;
   onSave: () => void;

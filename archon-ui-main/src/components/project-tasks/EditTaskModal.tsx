@@ -8,7 +8,7 @@ import type { Task } from './TaskTableView';
 interface EditTaskModalProps {
   isModalOpen: boolean;
   editingTask: Task | null;
-  projectFeatures: any[];
+  projectFeatures: import('../types/jsonb').ProjectFeature[];
   isLoadingFeatures: boolean;
   isSavingTask: boolean;
   onClose: () => void;

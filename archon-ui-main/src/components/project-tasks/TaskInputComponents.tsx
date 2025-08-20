@@ -92,7 +92,7 @@ DebouncedInput.displayName = 'DebouncedInput';
 interface FeatureInputProps {
   value: string;
   onChange: (value: string) => void;
-  projectFeatures: any[];
+  projectFeatures: import('../types/jsonb').ProjectFeature[];
   isLoadingFeatures: boolean;
   placeholder?: string;
   className?: string;

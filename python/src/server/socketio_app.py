@@ -29,7 +29,6 @@ sio = socketio.AsyncServer(
 # Global Socket.IO instance for use across modules
 _socketio_instance: socketio.AsyncServer | None = None
 
-
 def get_socketio_instance() -> socketio.AsyncServer:
     """Get the global Socket.IO server instance."""
     global _socketio_instance
