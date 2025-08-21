@@ -117,9 +117,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm(`Delete "${document.title}"?`)) {
-              onDelete(document.id);
-            }
+            onDelete(document.id);
           }}
           className="absolute top-2 right-2 p-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors"
           aria-label={`Delete ${document.title}`}

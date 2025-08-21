@@ -176,7 +176,9 @@ export const TasksTab = ({
     
     // Check if this is an echo of a local update
     const localUpdateTime = localUpdates[updatedTask.id];
-    if (localUpdateTime && Date.now() - localUpdateTime < 2000) {
+    console.log(`[Socket] Checking for echo - Task ${updatedTask.id}, localUpdateTime: ${localUpdateTime}, current time: ${Date.now()}, diff: ${localUpdateTime ? Date.now() - localUpdateTime : 'N/A'}`);
+    
+    if (localUpdateTime && Date.now() - localUpdateTime < 5000) { // Increased window to 5 seconds
       console.log('[Socket] Skipping echo update for locally updated task:', updatedTask.id);
       // Clean up the local update marker after the echo protection window
       setTimeout(() => {
@@ -185,9 +187,10 @@ export const TasksTab = ({
           delete newUpdates[updatedTask.id];
           return newUpdates;
         });
-      }, 2000);
+      }, 5000);
       return;
     }
+    console.log('[Socket] Not an echo, applying update for task:', updatedTask.id);
     
     // Skip updates while modal is open for the same task to prevent conflicts
     if (isModalOpen && editingTask?.id === updatedTask.id) {
@@ -553,18 +556,26 @@ export const TasksTab = ({
     console.log(`[TasksTab] Moving task ${movingTask.title} from ${oldStatus} to ${newStatus} with order ${newOrder}`);
 
     // OPTIMISTIC UPDATE: Update UI immediately
+    console.log(`[TasksTab] Applying optimistic move for task ${taskId} to ${newStatus}`);
     setTasks(prev => {
       const updated = prev.map(task => task.id === taskId ? updatedTask : task);
+      console.log(`[TasksTab] Tasks after optimistic move:`, updated);
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
     console.log(`[TasksTab] Optimistically updated UI for task ${taskId}`);
     
     // Mark this update as local to prevent echo when socket update arrives
-    setLocalUpdates(prev => ({
-      ...prev,
-      [taskId]: Date.now()
-    }));
+    const updateTime = Date.now();
+    console.log(`[TasksTab] Marking update as local for task ${taskId} at time ${updateTime}`);
+    setLocalUpdates(prev => {
+      const newUpdates = {
+        ...prev,
+        [taskId]: updateTime
+      };
+      console.log('[TasksTab] LocalUpdates state:', newUpdates);
+      return newUpdates;
+    });
 
     try {
       // Then update the backend
@@ -698,19 +709,30 @@ export const TasksTab = ({
     const originalTask = tasks.find(t => t.id === taskId);
     
     // Optimistically update the UI immediately
-    setTasks(prevTasks => 
-      prevTasks.map(task => 
+    console.log(`[TasksTab] Applying optimistic update for task ${taskId}`, updates);
+    setTasks(prevTasks => {
+      const updated = prevTasks.map(task => 
         task.id === taskId 
           ? { ...task, ...updates }
           : task
-      )
-    );
+      );
+      console.log(`[TasksTab] Tasks after optimistic update:`, updated);
+      // Notify parent of the optimistic update
+      setTimeout(() => onTasksChange(updated), 0);
+      return updated;
+    });
     
     // Mark this update as local to prevent echo when socket update arrives
-    setLocalUpdates(prev => ({
-      ...prev,
-      [taskId]: Date.now()
-    }));
+    const updateTime = Date.now();
+    console.log(`[TasksTab] Marking update as local for task ${taskId} at time ${updateTime}`);
+    setLocalUpdates(prev => {
+      const newUpdates = {
+        ...prev,
+        [taskId]: updateTime
+      };
+      console.log('[TasksTab] LocalUpdates state:', newUpdates);
+      return newUpdates;
+    });
     
     try {
       const updateData: Partial<UpdateTaskRequest> = {};

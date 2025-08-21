@@ -14,6 +14,7 @@ import { MilkdownEditor } from './MilkdownEditor';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { PRPViewer } from '../prp';
 import { DocumentCard, NewDocumentCard } from './DocumentCard';
+import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 
 
 
@@ -514,6 +515,10 @@ export const DocsTab = ({
   // Document state
   const [documents, setDocuments] = useState<ProjectDoc[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<ProjectDoc | null>(null);
+  
+  // Delete confirmation modal state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<{ id: string; title: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -575,7 +580,14 @@ export const DocsTab = ({
         document_type: doc.document_type || 'document'
       }));
       
-      setDocuments(projectDocuments);
+      // Merge with existing documents, preserving any temporary documents
+      setDocuments(prev => {
+        // Keep any temporary documents (ones with temp- prefix)
+        const tempDocs = prev.filter(doc => doc.id.startsWith('temp-'));
+        
+        // Merge temporary docs with loaded docs
+        return [...projectDocuments, ...tempDocs];
+      });
       
       // Auto-select first document if available and no document is currently selected
       if (projectDocuments.length > 0 && !selectedDocument) {
@@ -598,6 +610,26 @@ export const DocsTab = ({
     const template = DOCUMENT_TEMPLATES[templateKey as keyof typeof DOCUMENT_TEMPLATES];
     if (!template) return;
 
+    // Create a temporary document for optimistic update
+    const tempDocument: ProjectDoc = {
+      id: `temp-${Date.now()}`,
+      title: template.name,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      content: template.content,
+      document_type: template.document_type
+    };
+    
+    // Optimistically add the document to the UI immediately
+    console.log('[DocsTab] Adding temporary document:', tempDocument);
+    setDocuments(prev => {
+      const updated = [...prev, tempDocument];
+      console.log('[DocsTab] Documents after optimistic add:', updated);
+      return updated;
+    });
+    setSelectedDocument(tempDocument);
+    setShowTemplateModal(false);
+    
     try {
       setIsSaving(true);
       
@@ -608,15 +640,22 @@ export const DocsTab = ({
         document_type: template.document_type
       });
       
-      // Add to documents list
-      setDocuments(prev => [...prev, newDocument]);
+      // Replace temporary document with the real one
+      setDocuments(prev => prev.map(doc => 
+        doc.id === tempDocument.id ? newDocument : doc
+      ));
       setSelectedDocument(newDocument);
       
       console.log('Document created successfully via API:', newDocument);
       showToast('Document created successfully', 'success');
-      setShowTemplateModal(false);
     } catch (error) {
       console.error('Failed to create document:', error);
+      
+      // Remove the temporary document on error
+      setDocuments(prev => prev.filter(doc => doc.id !== tempDocument.id));
+      setSelectedDocument(null);
+      setShowTemplateModal(true); // Re-open the modal
+      
       showToast(
         error instanceof Error ? error.message : 'Failed to create document', 
         'error'
@@ -783,6 +822,34 @@ export const DocsTab = ({
     }
   };
 
+  // Delete confirmation handlers
+  const confirmDeleteDocument = async () => {
+    if (!documentToDelete || !project?.id) return;
+    
+    try {
+      // Call API to delete from database first
+      await projectService.deleteDocument(project.id, documentToDelete.id);
+      
+      // Then remove from local state
+      setDocuments(prev => prev.filter(d => d.id !== documentToDelete.id));
+      if (selectedDocument?.id === documentToDelete.id) {
+        setSelectedDocument(documents.find(d => d.id !== documentToDelete.id) || null);
+      }
+      showToast('Document deleted', 'success');
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      showToast('Failed to delete document', 'error');
+    } finally {
+      setShowDeleteConfirm(false);
+      setDocumentToDelete(null);
+    }
+  };
+  
+  const cancelDeleteDocument = () => {
+    setShowDeleteConfirm(false);
+    setDocumentToDelete(null);
+  };
+
   const handleProgressComplete = (data: CrawlProgressData) => {
     console.log('Crawl completed:', data);
     setProgressItems(prev => prev.filter(item => item.progressId !== data.progressId));
@@ -935,22 +1002,11 @@ export const DocsTab = ({
                 document={doc}
                 isActive={selectedDocument?.id === doc.id}
                 onSelect={setSelectedDocument}
-                onDelete={async (docId) => {
-                  if (!project?.id) return;
-                  
-                  try {
-                    // Call API to delete from database first
-                    await projectService.deleteDocument(project.id, docId);
-                    
-                    // Then remove from local state
-                    setDocuments(prev => prev.filter(d => d.id !== docId));
-                    if (selectedDocument?.id === docId) {
-                      setSelectedDocument(documents.find(d => d.id !== docId) || null);
-                    }
-                    showToast('Document deleted', 'success');
-                  } catch (error) {
-                    console.error('Failed to delete document:', error);
-                    showToast('Failed to delete document', 'error');
+                onDelete={(docId) => {
+                  const doc = documents.find(d => d.id === docId);
+                  if (doc) {
+                    setDocumentToDelete({ id: docId, title: doc.title });
+                    setShowDeleteConfirm(true);
                   }
                 }}
                 isDarkMode={isDarkMode}
@@ -1097,6 +1153,16 @@ export const DocsTab = ({
             loadProjectDocuments();
             setShowVersionHistory(false);
           }}
+        />
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && documentToDelete && (
+        <DeleteConfirmModal
+          itemName={documentToDelete.title}
+          onConfirm={confirmDeleteDocument}
+          onCancel={cancelDeleteDocument}
+          type="document"
         />
       )}
     </div>
