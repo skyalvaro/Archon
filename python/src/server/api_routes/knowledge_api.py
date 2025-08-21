@@ -789,12 +789,27 @@ async def perform_rag_query(request: RagQueryRequest):
         # Import embedding exceptions for specific error handling
         from ..services.embeddings.embedding_exceptions import (
             EmbeddingAPIError,
+            EmbeddingAuthenticationError,
             EmbeddingQuotaExhaustedError,
             EmbeddingRateLimitError,
         )
 
         # Handle specific OpenAI/embedding errors with detailed messages
-        if isinstance(e, EmbeddingQuotaExhaustedError):
+        if isinstance(e, EmbeddingAuthenticationError):
+            safe_logfire_error(
+                f"OpenAI authentication failed during RAG query | query={request.query[:50]} | source={request.source}"
+            )
+            sanitized_message = _sanitize_openai_error(str(e))
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "OpenAI API authentication failed",
+                    "message": "Invalid or expired OpenAI API key. Please check your API key in settings.",
+                    "error_type": "authentication_failed",
+                    "api_key_prefix": getattr(e, "api_key_prefix", None),
+                }
+            )
+        elif isinstance(e, EmbeddingQuotaExhaustedError):
             safe_logfire_error(
                 f"OpenAI quota exhausted during RAG query | query={request.query[:50]} | source={request.source}"
             )

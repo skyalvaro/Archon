@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
 from src.server.services.embeddings.embedding_exceptions import (
+    EmbeddingAuthenticationError,
     EmbeddingQuotaExhaustedError,
     EmbeddingRateLimitError,
     EmbeddingAPIError,
@@ -45,6 +46,27 @@ class TestOpenAIQuotaErrorHandling:
                 
                 assert "quota exhausted" in str(exc_info.value).lower()
                 assert exc_info.value.tokens_used == 1000
+
+    @pytest.mark.asyncio
+    async def test_authentication_error_propagation(self):
+        """Test that authentication errors propagate correctly through service layer."""
+        
+        # Mock the create_embedding function to raise authentication error
+        with patch("src.server.services.search.rag_service.create_embedding") as mock_create_embedding:
+            mock_create_embedding.side_effect = EmbeddingAuthenticationError(
+                "Invalid API key", api_key_prefix="sk-1234"
+            )
+            
+            # Create RAG service and test search_documents method
+            with patch("src.server.services.search.rag_service.get_supabase_client"):
+                rag_service = RAGService()
+                
+                # Should propagate the authentication error
+                with pytest.raises(EmbeddingAuthenticationError) as exc_info:
+                    await rag_service.search_documents("test query")
+                
+                assert "invalid api key" in str(exc_info.value).lower()
+                assert exc_info.value.api_key_prefix == "sk-1234"
 
     @pytest.mark.asyncio
     async def test_rate_limit_error_propagation(self):
@@ -120,6 +142,35 @@ class TestOpenAIQuotaErrorHandling:
             assert "rate limit" in exc_info.value.detail["error"].lower()
             assert "too many requests" in exc_info.value.detail["message"].lower()
             assert exc_info.value.detail["error_type"] == "rate_limit"
+
+    @pytest.mark.asyncio
+    async def test_api_authentication_error_in_rag_endpoint(self):
+        """Test that authentication errors are properly handled in RAG API endpoint."""
+        
+        request = RagQueryRequest(query="test query", match_count=5)
+        
+        # Mock RAGService to raise authentication error
+        with patch("src.server.api_routes.knowledge_api.RAGService") as mock_rag_service_class, \
+             patch("src.server.api_routes.knowledge_api.get_supabase_client"):
+            
+            mock_service = Mock()
+            mock_service.perform_rag_query = AsyncMock(
+                side_effect=EmbeddingAuthenticationError(
+                    "Invalid API key", api_key_prefix="sk-1234"
+                )
+            )
+            mock_rag_service_class.return_value = mock_service
+            
+            # Should raise HTTPException with status 401 and detailed error info
+            with pytest.raises(HTTPException) as exc_info:
+                await perform_rag_query(request)
+            
+            # Verify error details
+            assert exc_info.value.status_code == 401
+            assert "authentication failed" in exc_info.value.detail["error"].lower()
+            assert "invalid or expired" in exc_info.value.detail["message"].lower()
+            assert exc_info.value.detail["error_type"] == "authentication_failed"
+            assert exc_info.value.detail["api_key_prefix"] == "sk-1234"
 
     @pytest.mark.asyncio
     async def test_api_generic_error_in_rag_endpoint(self):
