@@ -511,33 +511,50 @@ export const TasksTab = ({
     debouncedPersistBatchReorder(tasksToUpdate);
   }, [tasks, updateTasks, debouncedPersistBatchReorder]);
 
-  // Task move function (for board view)
+  // Task move function (for board view) with optimistic UI update
   const moveTask = async (taskId: string, newStatus: Task['status']) => {
     console.log(`[TasksTab] Attempting to move task ${taskId} to new status: ${newStatus}`);
+    
+    const movingTask = tasks.find(task => task.id === taskId);
+    if (!movingTask) {
+      console.warn(`[TasksTab] Task ${taskId} not found for move operation.`);
+      return;
+    }
+    
+    const oldStatus = movingTask.status;
+    const newOrder = getNextOrderForStatus(newStatus);
+    const updatedTask = { ...movingTask, status: newStatus, task_order: newOrder };
+
+    console.log(`[TasksTab] Moving task ${movingTask.title} from ${oldStatus} to ${newStatus} with order ${newOrder}`);
+
+    // OPTIMISTIC UPDATE: Update UI immediately
+    setTasks(prev => {
+      const updated = prev.map(task => task.id === taskId ? updatedTask : task);
+      setTimeout(() => onTasksChange(updated), 0);
+      return updated;
+    });
+    console.log(`[TasksTab] Optimistically updated UI for task ${taskId}`);
+
     try {
-      const movingTask = tasks.find(task => task.id === taskId);
-      if (!movingTask) {
-        console.warn(`[TasksTab] Task ${taskId} not found for move operation.`);
-        return;
-      }
-      
-      const oldStatus = movingTask.status;
-      const newOrder = getNextOrderForStatus(newStatus);
-
-      console.log(`[TasksTab] Moving task ${movingTask.title} from ${oldStatus} to ${newStatus} with order ${newOrder}`);
-
-      // Update the task with new status and order
+      // Then update the backend
       await projectService.updateTask(taskId, {
         status: mapUIStatusToDBStatus(newStatus),
         task_order: newOrder
       });
       console.log(`[TasksTab] Successfully updated task ${taskId} status in backend.`);
       
-      // Don't update local state immediately - let socket handle it
-      console.log(`[TasksTab] Waiting for socket update for task ${taskId}.`);
+      // Socket will confirm the update, but UI is already updated
       
     } catch (error) {
-      console.error(`[TasksTab] Failed to move task ${taskId}:`, error);
+      console.error(`[TasksTab] Failed to move task ${taskId}, rolling back:`, error);
+      
+      // ROLLBACK on error - restore original task
+      setTasks(prev => {
+        const updated = prev.map(task => task.id === taskId ? movingTask : task);
+        setTimeout(() => onTasksChange(updated), 0);
+        return updated;
+      });
+      
       alert(`Failed to move task: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -557,15 +574,50 @@ export const TasksTab = ({
     if (!taskToDelete) return;
     
     try {
-      // Delete (actually archives) the task - backend will emit socket event
-      await projectService.deleteTask(taskToDelete.id);
-      console.log(`[TasksTab] Task ${taskToDelete.id} archival sent to backend`);
+      // Add to recently deleted cache to prevent race conditions
+      setRecentlyDeletedIds(prev => new Set(prev).add(taskToDelete.id));
       
-      // Don't update local state - let socket handle it
+      // OPTIMISTIC UPDATE: Remove task from UI immediately
+      setTasks(prev => {
+        const updated = prev.filter(t => t.id !== taskToDelete.id);
+        setTimeout(() => onTasksChange(updated), 0);
+        return updated;
+      });
+      console.log(`[TasksTab] Optimistically removed task ${taskToDelete.id} from UI`);
+      
+      // Then delete from backend
+      await projectService.deleteTask(taskToDelete.id);
+      console.log(`[TasksTab] Task ${taskToDelete.id} deletion confirmed by backend`);
+      
+      // Clear from recently deleted cache after a delay (to catch any lingering socket events)
+      setTimeout(() => {
+        setRecentlyDeletedIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskToDelete.id);
+          return newSet;
+        });
+      }, 3000); // 3 second window to ignore stale socket events
       
     } catch (error) {
-      console.error('Failed to archive task:', error);
-      // Note: The toast notification for deletion is now handled by TaskBoardView and TaskTableView
+      console.error('Failed to delete task:', error);
+      
+      // Remove from recently deleted cache on error
+      setRecentlyDeletedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskToDelete.id);
+        return newSet;
+      });
+      
+      // ROLLBACK on error - restore the task
+      setTasks(prev => {
+        const updated = [...prev, taskToDelete].sort((a, b) => a.task_order - b.task_order);
+        setTimeout(() => onTasksChange(updated), 0);
+        return updated;
+      });
+      console.log(`[TasksTab] Rolled back task deletion for ${taskToDelete.id}`);
+      
+      // Re-throw to let the calling component handle the error display
+      throw error;
     } finally {
       setTaskToDelete(null);
       setShowDeleteConfirm(false);

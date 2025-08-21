@@ -678,28 +678,15 @@ export function createWebSocketService(config?: WebSocketConfig): WebSocketServi
   return new WebSocketService(config);
 }
 
-// Create SEPARATE WebSocket instances for different features
-// This prevents a failure in one feature (like a long crawl) from breaking the entire site
-export const knowledgeSocketIO = new WebSocketService({
-  maxReconnectAttempts: 10,  // More attempts for crawls that can take a long time
-  reconnectInterval: 2000,
-  heartbeatInterval: 30000,
-  enableAutoReconnect: true
-});
+// Create a SINGLE shared WebSocket instance to prevent multiple connections
+// This fixes the socket disconnection issue when switching tabs
+const sharedSocketInstance = new WebSocketService();
 
-export const taskUpdateSocketIO = new WebSocketService({
-  maxReconnectAttempts: 5,
-  reconnectInterval: 1000,
-  heartbeatInterval: 30000,
-  enableAutoReconnect: true
-});
+// Export the SAME instance with different names for backward compatibility
+// This ensures only ONE Socket.IO connection is created and shared across all features
+export const knowledgeSocketIO = sharedSocketInstance;
+export const taskUpdateSocketIO = sharedSocketInstance;
+export const projectListSocketIO = sharedSocketInstance;
 
-export const projectListSocketIO = new WebSocketService({
-  maxReconnectAttempts: 5,
-  reconnectInterval: 1000,
-  heartbeatInterval: 30000,
-  enableAutoReconnect: true
-});
-
-// Export knowledgeSocketIO as default for backward compatibility
-export default knowledgeSocketIO;
+// Export as default for new code
+export default sharedSocketInstance;
