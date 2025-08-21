@@ -640,10 +640,10 @@ export const DocsTab = ({
         document_type: template.document_type
       });
       
-      // Replace temporary document with the real one
-      setDocuments(prev => prev.map(doc => 
-        doc.id === tempDocument.id ? newDocument : doc
-      ));
+      // Force refresh to get the real document from server
+      await loadProjectDocuments();
+      
+      // Select the newly created document
       setSelectedDocument(newDocument);
       
       console.log('Document created successfully via API:', newDocument);

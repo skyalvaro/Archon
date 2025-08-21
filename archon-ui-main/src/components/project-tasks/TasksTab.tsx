@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Table, LayoutGrid, Plus, Wifi, WifiOff, List, Trash2 } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -8,6 +8,7 @@ import { getGlobalOperationTracker } from '../../utils/operationTracker';
 import { Card } from '../ui/card';
 
 import { useTaskSocket } from '../../hooks/useTaskSocket';
+import { useOptimisticUpdates } from '../../hooks/useOptimisticUpdates';
 import type { CreateTaskRequest, UpdateTaskRequest, DatabaseTaskStatus } from '../../types/project';
 import { WebSocketState } from '../../services/socketIOService';
 import { TaskTableView, Task } from './TaskTableView';
@@ -85,16 +86,26 @@ export const TasksTab = ({
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
-  // Track local updates to prevent echo from WebSocket
-  const [localUpdates, setLocalUpdates] = useState<Record<string, number>>({});
+  // Use optimistic updates hook for proper echo suppression
+  const { addPendingUpdate, isPendingUpdate, removePendingUpdate } = useOptimisticUpdates<Task>();
   
   // Track recently deleted tasks to prevent race conditions
   const [recentlyDeletedIds, setRecentlyDeletedIds] = useState<Set<string>>(new Set());
   
-  // Initialize tasks
+  // Track the project ID to detect when we switch projects
+  const lastProjectId = useRef(projectId);
+  
+  // Initialize tasks when component mounts or project changes
   useEffect(() => {
-    setTasks(initialTasks);
-  }, [initialTasks]);
+    // If project changed, always reinitialize
+    if (lastProjectId.current !== projectId) {
+      setTasks(initialTasks);
+      lastProjectId.current = projectId;
+    } else if (tasks.length === 0 && initialTasks.length > 0) {
+      // Only initialize if we have no tasks but received initial tasks
+      setTasks(initialTasks);
+    }
+  }, [initialTasks, projectId]);
 
   // Load project features on component mount
   useEffect(() => {
@@ -113,19 +124,8 @@ export const TasksTab = ({
     }
     
     // Check if this is an echo of a local update
-    const localUpdateTime = localUpdates[updatedTask.id];
-    console.log(`[Socket] Checking for echo - Task ${updatedTask.id}, localUpdateTime: ${localUpdateTime}, current time: ${Date.now()}, diff: ${localUpdateTime ? Date.now() - localUpdateTime : 'N/A'}`);
-    
-    if (localUpdateTime && Date.now() - localUpdateTime < 5000) { // Increased window to 5 seconds
+    if (isPendingUpdate(updatedTask.id, mappedTask)) {
       console.log('[Socket] Skipping echo update for locally updated task:', updatedTask.id);
-      // Clean up the local update marker after the echo protection window
-      setTimeout(() => {
-        setLocalUpdates(prev => {
-          const newUpdates = { ...prev };
-          delete newUpdates[updatedTask.id];
-          return newUpdates;
-        });
-      }, 5000);
       return;
     }
     console.log('[Socket] Not an echo, applying update for task:', updatedTask.id);
@@ -155,7 +155,7 @@ export const TasksTab = ({
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
-  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds, localUpdates]);
+  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds, isPendingUpdate]);
 
   const handleTaskCreated = useCallback((message: any) => {
     const newTask = message.data || message;
@@ -286,6 +286,30 @@ export const TasksTab = ({
     setEditingTask(task);
     
     setIsSavingTask(true);
+    
+    // Store original task for rollback
+    const originalTask = task.id ? tasks.find(t => t.id === task.id) : null;
+    
+    // OPTIMISTIC UPDATE: Update UI immediately for existing tasks
+    if (task.id) {
+      setTasks(prev => {
+        const updated = prev.map(t => 
+          t.id === task.id ? task : t
+        );
+        // Notify parent of the change
+        onTasksChange(updated);
+        return updated;
+      });
+      
+      // Mark as pending update to prevent echo
+      addPendingUpdate({
+        id: task.id,
+        timestamp: Date.now(),
+        data: task,
+        operation: 'update'
+      });
+    }
+    
     try {
       let parentTaskId = task.id;
       
@@ -323,6 +347,22 @@ export const TasksTab = ({
       closeModal();
     } catch (error) {
       console.error('Failed to save task:', error);
+      
+      // Rollback optimistic update on error
+      if (task.id && originalTask) {
+        setTasks(prev => {
+          const updated = prev.map(t => 
+            t.id === task.id ? originalTask : t
+          );
+          // Notify parent of the rollback
+          onTasksChange(updated);
+          return updated;
+        });
+        
+        // Clear pending update tracking
+        removePendingUpdate(task.id);
+      }
+      
       alert(`Failed to save task: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSavingTask(false);
@@ -503,17 +543,17 @@ export const TasksTab = ({
     });
     console.log(`[TasksTab] Optimistically updated UI for task ${taskId}`);
     
-    // Mark this update as local to prevent echo when socket update arrives
-    const updateTime = Date.now();
-    console.log(`[TasksTab] Marking update as local for task ${taskId} at time ${updateTime}`);
-    setLocalUpdates(prev => {
-      const newUpdates = {
-        ...prev,
-        [taskId]: updateTime
-      };
-      console.log('[TasksTab] LocalUpdates state:', newUpdates);
-      return newUpdates;
-    });
+    // Mark as pending update to prevent echo when socket update arrives
+    const taskToUpdate = tasks.find(t => t.id === taskId);
+    if (taskToUpdate) {
+      const updatedTask = { ...taskToUpdate, status: newStatus, task_order: newOrder };
+      addPendingUpdate({
+        id: taskId,
+        timestamp: Date.now(),
+        data: updatedTask,
+        operation: 'update'
+      });
+    }
 
     try {
       // Then update the backend
@@ -535,12 +575,8 @@ export const TasksTab = ({
         return updated;
       });
       
-      // Clear the local update marker
-      setLocalUpdates(prev => {
-        const newUpdates = { ...prev };
-        delete newUpdates[taskId];
-        return newUpdates;
-      });
+      // Clear the pending update marker
+      removePendingUpdate(taskId);
       
       alert(`Failed to move task: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -613,9 +649,24 @@ export const TasksTab = ({
 
   // Inline task creation function
   const createTaskInline = async (newTask: Omit<Task, 'id'>) => {
+    // Create temporary task with a temp ID for optimistic update
+    const tempId = `temp-${Date.now()}`;
+    
     try {
       // Auto-assign next order number if not provided
       const nextOrder = newTask.task_order || getNextOrderForStatus(newTask.status);
+      
+      const tempTask: Task = {
+        ...newTask,
+        id: tempId,
+        task_order: nextOrder
+      };
+      
+      // OPTIMISTIC UPDATE: Add to UI immediately
+      setTasks(prev => [...prev, tempTask]);
+      
+      // Notify parent component of the change
+      onTasksChange([...tasks, tempTask]);
       
       const createData: CreateTaskRequest = {
         project_id: projectId,
@@ -628,13 +679,30 @@ export const TasksTab = ({
         ...(newTask.featureColor && { featureColor: newTask.featureColor })
       };
       
-      await projectService.createTask(createData);
+      const createdTask = await projectService.createTask(createData);
       
-      // Don't reload tasks - let socket updates handle synchronization
-      console.log('[TasksTab] Task creation sent to backend, waiting for socket update');
+      // Replace temp task with real one
+      setTasks(prev => {
+        const updated = prev.map(t => 
+          t.id === tempId ? mapDatabaseTaskToUITask(createdTask) : t
+        );
+        // Notify parent of the update
+        onTasksChange(updated);
+        return updated;
+      });
+      
+      console.log('[TasksTab] Task created successfully with optimistic update');
       
     } catch (error) {
       console.error('Failed to create task:', error);
+      
+      // Rollback: Remove temp task on error
+      setTasks(prev => {
+        const updated = prev.filter(t => t.id !== tempId);
+        onTasksChange(updated);
+        return updated;
+      });
+      
       throw error;
     }
   };
@@ -660,17 +728,17 @@ export const TasksTab = ({
       return updated;
     });
     
-    // Mark this update as local to prevent echo when socket update arrives
-    const updateTime = Date.now();
-    console.log(`[TasksTab] Marking update as local for task ${taskId} at time ${updateTime}`);
-    setLocalUpdates(prev => {
-      const newUpdates = {
-        ...prev,
-        [taskId]: updateTime
-      };
-      console.log('[TasksTab] LocalUpdates state:', newUpdates);
-      return newUpdates;
-    });
+    // Mark as pending update to prevent echo when socket update arrives
+    const taskToUpdate = tasks.find(t => t.id === taskId);
+    if (taskToUpdate) {
+      const updatedTask = { ...taskToUpdate, ...updates };
+      addPendingUpdate({
+        id: taskId,
+        timestamp: Date.now(),
+        data: updatedTask,
+        operation: 'update'
+      });
+    }
     
     try {
       const updateData: Partial<UpdateTaskRequest> = {};
@@ -703,12 +771,8 @@ export const TasksTab = ({
         );
       }
       
-      // Clear the local update marker
-      setLocalUpdates(prev => {
-        const newUpdates = { ...prev };
-        delete newUpdates[taskId];
-        return newUpdates;
-      });
+      // Clear the pending update marker
+      removePendingUpdate(taskId);
       
       alert(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
