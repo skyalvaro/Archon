@@ -118,10 +118,7 @@ export const TasksTab = ({
   // Optimized socket handlers with conflict resolution
   const handleTaskUpdated = useCallback((message: any) => {
     const updatedTask = message.data || message;
-    console.log('📝 Real-time task updated received:', updatedTask);
-    
     const mappedTask = mapDatabaseTaskToUITask(updatedTask);
-    console.log('📝 Mapped task:', mappedTask);
     
     // Skip updates for recently deleted tasks (race condition prevention)
     if (recentlyDeletedIdsRef.current.has(updatedTask.id)) {
@@ -134,7 +131,6 @@ export const TasksTab = ({
       console.log('[Socket] Skipping echo update for locally updated task:', updatedTask.id);
       return;
     }
-    console.log('[Socket] Not an echo, applying update for task:', updatedTask.id);
     
     // Skip updates while modal is open for the same task to prevent conflicts
     if (isModalOpen && editingTask?.id === updatedTask.id) {
@@ -147,12 +143,9 @@ export const TasksTab = ({
       const existingTask = prev.find(task => task.id === updatedTask.id);
       
       if (!existingTask) {
-        console.log('[Socket] Task not found locally, skipping update for:', updatedTask.id);
-        console.log('[Socket] Current task IDs:', prev.map(t => t.id));
+        // Task not found locally, skip the update
         return prev;
       }
-      
-      console.log('[Socket] Updating task from:', existingTask.status, 'to:', mappedTask.status);
       
       const updated = prev.map(task => 
         task.id === updatedTask.id 
@@ -696,7 +689,6 @@ export const TasksTab = ({
         return updated;
       });
       
-      console.log('[TasksTab] Task created successfully with optimistic update');
       
     } catch (error) {
       console.error('Failed to create task:', error);
