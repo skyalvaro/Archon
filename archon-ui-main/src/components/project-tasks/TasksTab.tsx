@@ -13,6 +13,7 @@ import { WebSocketState } from '../../services/socketIOService';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
+import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 
 // Assignee utilities - expanded to include all agent types
 const ASSIGNEE_OPTIONS = [
@@ -25,69 +26,6 @@ const ASSIGNEE_OPTIONS = [
 ] as const;
 
 // Delete confirmation modal component
-interface DeleteConfirmModalProps {
-  onConfirm: () => void;
-  onCancel: () => void;
-  title: string;
-  message: string;
-  confirmText?: string;
-}
-
-const DeleteConfirmModal = ({
-  onConfirm,
-  onCancel,
-  title,
-  message,
-  confirmText = 'Archive'
-}: DeleteConfirmModalProps) => {
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="relative p-6 rounded-md backdrop-blur-md w-full max-w-md
-          bg-gradient-to-b from-white/80 to-white/60 dark:from-white/10 dark:to-black/30
-          border border-gray-200 dark:border-zinc-800/50
-          shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_30px_-15px_rgba(0,0,0,0.7)]
-          before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-[2px] 
-          before:rounded-t-[4px] before:bg-red-500 
-          before:shadow-[0_0_10px_2px_rgba(239,68,68,0.4)] dark:before:shadow-[0_0_20px_5px_rgba(239,68,68,0.7)]">
-        
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-              <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                {title}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                This action cannot be undone
-              </p>
-            </div>
-          </div>
-          
-          <p className="text-gray-700 dark:text-gray-300 mb-6">
-            {message}
-          </p>
-          
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-lg shadow-red-600/25 hover:shadow-red-700/25"
-            >
-              {confirmText}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Mapping functions for status conversion
 const mapUIStatusToDBStatus = (uiStatus: Task['status']): DatabaseTaskStatus => {
@@ -927,14 +865,13 @@ export const TasksTab = ({
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && taskToDelete && (
           <DeleteConfirmModal
+            itemName={taskToDelete.title}
             onConfirm={confirmDeleteTask}
             onCancel={() => {
               setTaskToDelete(null);
               setShowDeleteConfirm(false);
             }}
-            title="Archive Task"
-            message={`Are you sure you want to archive the task "${taskToDelete.title}"? You can restore it from the archived tasks view.`}
-            confirmText="Archive Task"
+            type="task"
           />
         )}
       </div>
