@@ -25,7 +25,7 @@ interface ProjectDoc {
   created_at: string;
   updated_at: string;
   // Content field stores markdown or structured data
-  content?: any;
+  content: any;
   document_type?: string;
 }
 
@@ -574,9 +574,9 @@ export const DocsTab = ({
       const projectDocuments: ProjectDoc[] = project.docs.map((doc: any) => ({
         id: doc.id,
         title: doc.title || 'Untitled Document',
-        created_at: doc.created_at,
-        updated_at: doc.updated_at,
-        content: doc.content,
+        created_at: doc.created_at || new Date().toISOString(),
+        updated_at: doc.updated_at || new Date().toISOString(),
+        content: doc.content || {},
         document_type: doc.document_type || 'document'
       }));
       
@@ -629,19 +629,36 @@ export const DocsTab = ({
     });
     setSelectedDocument(tempDocument);
     setShowTemplateModal(false);
+    setIsSaving(false); // Allow UI to show the temp document
     
     try {
       setIsSaving(true);
       
       // Create document via backend API
-      const newDocument = await projectService.createDocument(project.id, {
+      const createdDoc = await projectService.createDocument(project.id, {
         title: template.name,
         content: template.content,
         document_type: template.document_type
       });
       
-      // Force refresh to get the real document from server
-      await loadProjectDocuments();
+      // Ensure the created document has all required fields
+      const newDocument: ProjectDoc = {
+        id: createdDoc.id,
+        title: createdDoc.title || template.name,
+        created_at: createdDoc.created_at || new Date().toISOString(),
+        updated_at: createdDoc.updated_at || new Date().toISOString(),
+        content: createdDoc.content || template.content,
+        document_type: createdDoc.document_type || template.document_type
+      };
+      
+      // Replace temp document with real one - same pattern as tasks
+      setDocuments(prev => {
+        // Find and replace the temp document
+        const updated = prev.map(doc => 
+          doc.id === tempDocument.id ? newDocument : doc
+        );
+        return updated;
+      });
       
       // Select the newly created document
       setSelectedDocument(newDocument);
