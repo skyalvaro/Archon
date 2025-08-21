@@ -53,15 +53,15 @@ const mapDBStatusToUIStatus = (dbStatus: DatabaseTaskStatus): Task['status'] => 
 const mapDatabaseTaskToUITask = (dbTask: any): Task => {
   return {
     id: dbTask.id,
-    title: dbTask.title,
+    title: dbTask.title || '',
     description: dbTask.description || '',
-    status: mapDBStatusToUIStatus(dbTask.status),
+    status: mapDBStatusToUIStatus(dbTask.status || 'todo'),
     assignee: {
       name: dbTask.assignee || 'User',
       avatar: ''
     },
     feature: dbTask.feature || 'General',
-    featureColor: '#3b82f6', // Default blue color
+    featureColor: dbTask.featureColor || '#3b82f6', // Default blue color
     task_order: dbTask.task_order || 0,
   };
 };
@@ -90,7 +90,10 @@ export const TasksTab = ({
   const { addPendingUpdate, isPendingUpdate, removePendingUpdate } = useOptimisticUpdates<Task>();
   
   // Track recently deleted tasks to prevent race conditions
-  const [recentlyDeletedIds, setRecentlyDeletedIds] = useState<Set<string>>(new Set());
+  const recentlyDeletedIdsRef = useRef<Set<string>>(new Set());
+  
+  // Track recently created tasks to prevent WebSocket echo
+  const recentlyCreatedIdsRef = useRef<Set<string>>(new Set());
   
   // Track the project ID to detect when we switch projects
   const lastProjectId = useRef(projectId);
@@ -115,10 +118,13 @@ export const TasksTab = ({
   // Optimized socket handlers with conflict resolution
   const handleTaskUpdated = useCallback((message: any) => {
     const updatedTask = message.data || message;
+    console.log('📝 Real-time task updated received:', updatedTask);
+    
     const mappedTask = mapDatabaseTaskToUITask(updatedTask);
+    console.log('📝 Mapped task:', mappedTask);
     
     // Skip updates for recently deleted tasks (race condition prevention)
-    if (recentlyDeletedIds.has(updatedTask.id)) {
+    if (recentlyDeletedIdsRef.current.has(updatedTask.id)) {
       console.log('[Socket] Ignoring update for recently deleted task:', updatedTask.id);
       return;
     }
@@ -140,10 +146,13 @@ export const TasksTab = ({
       // Use server timestamp for conflict resolution
       const existingTask = prev.find(task => task.id === updatedTask.id);
       
-      // Skip if we already have this task (prevent duplicate additions)
       if (!existingTask) {
-        console.log('[Socket] Task not found locally, adding:', updatedTask.id);
+        console.log('[Socket] Task not found locally, skipping update for:', updatedTask.id);
+        console.log('[Socket] Current task IDs:', prev.map(t => t.id));
+        return prev;
       }
+      
+      console.log('[Socket] Updating task from:', existingTask.status, 'to:', mappedTask.status);
       
       const updated = prev.map(task => 
         task.id === updatedTask.id 
@@ -155,36 +164,36 @@ export const TasksTab = ({
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
-  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds, isPendingUpdate]);
+  }, [onTasksChange, isModalOpen, editingTask?.id, isPendingUpdate]);
 
   const handleTaskCreated = useCallback((message: any) => {
     const newTask = message.data || message;
     console.log('🆕 Real-time task created:', newTask);
+    
+    // Skip if this is our own recently created task
+    if (recentlyCreatedIdsRef.current.has(newTask.id)) {
+      console.log('[Socket] Skipping echo of our own task creation:', newTask.id);
+      return;
+    }
+    
     const mappedTask = mapDatabaseTaskToUITask(newTask);
     
     setTasks(prev => {
-      // Check if this is replacing a temporary task from optimistic update
-      const hasTempTask = prev.some(task => task.id.startsWith('temp-') && task.title === mappedTask.title);
-      
-      if (hasTempTask) {
-        // Replace temporary task with real task
-        const updated = prev.map(task => 
-          task.id.startsWith('temp-') && task.title === mappedTask.title 
-            ? mappedTask 
-            : task
-        );
-        setTimeout(() => onTasksChange(updated), 0);
-        console.log('Replaced temporary task with real task:', mappedTask.id);
-        return updated;
-      }
-      
       // Check if task already exists to prevent duplicates
       if (prev.some(task => task.id === newTask.id)) {
         console.log('Task already exists, skipping create');
         return prev;
       }
       
-      const updated = [...prev, mappedTask];
+      // Remove any temp tasks with same title (in case of race condition)
+      const filteredPrev = prev.filter(task => {
+        // Keep non-temp tasks
+        if (!task.id?.startsWith('temp-')) return true;
+        // Remove temp tasks with matching title
+        return task.title !== newTask.title;
+      });
+      
+      const updated = [...filteredPrev, mappedTask];
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
@@ -195,11 +204,7 @@ export const TasksTab = ({
     console.log('🗑️ Real-time task deleted:', deletedTask);
     
     // Remove from recently deleted cache when deletion is confirmed
-    setRecentlyDeletedIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(deletedTask.id);
-      return newSet;
-    });
+    recentlyDeletedIdsRef.current.delete(deletedTask.id);
     
     setTasks(prev => {
       const updated = prev.filter(task => task.id !== deletedTask.id);
@@ -234,7 +239,7 @@ export const TasksTab = ({
     const initialWebSocketTasks = message.data || message;
     const uiTasks: Task[] = initialWebSocketTasks.map(mapDatabaseTaskToUITask);
     setTasks(uiTasks);
-    onTasksChange(uiTasks);
+    setTimeout(() => onTasksChange(uiTasks), 0);
   }, [onTasksChange]);
 
   // Simplified socket connection with better lifecycle management
@@ -297,7 +302,7 @@ export const TasksTab = ({
           t.id === task.id ? task : t
         );
         // Notify parent of the change
-        onTasksChange(updated);
+        setTimeout(() => onTasksChange(updated), 0);
         return updated;
       });
       
@@ -355,7 +360,7 @@ export const TasksTab = ({
             t.id === task.id ? originalTask : t
           );
           // Notify parent of the rollback
-          onTasksChange(updated);
+          setTimeout(() => onTasksChange(updated), 0);
           return updated;
         });
         
@@ -372,7 +377,7 @@ export const TasksTab = ({
   // Update tasks helper
   const updateTasks = (newTasks: Task[]) => {
     setTasks(newTasks);
-    onTasksChange(newTasks);
+    setTimeout(() => onTasksChange(newTasks), 0);
   };
 
   // Helper function to reorder tasks by status to ensure no gaps (1,2,3...)
@@ -598,7 +603,7 @@ export const TasksTab = ({
     
     try {
       // Add to recently deleted cache to prevent race conditions
-      setRecentlyDeletedIds(prev => new Set(prev).add(taskToDelete.id));
+      recentlyDeletedIdsRef.current.add(taskToDelete.id);
       
       // OPTIMISTIC UPDATE: Remove task from UI immediately
       setTasks(prev => {
@@ -614,22 +619,14 @@ export const TasksTab = ({
       
       // Clear from recently deleted cache after a delay (to catch any lingering socket events)
       setTimeout(() => {
-        setRecentlyDeletedIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskToDelete.id);
-          return newSet;
-        });
+        recentlyDeletedIdsRef.current.delete(taskToDelete.id);
       }, 3000); // 3 second window to ignore stale socket events
       
     } catch (error) {
       console.error('Failed to delete task:', error);
       
       // Remove from recently deleted cache on error
-      setRecentlyDeletedIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(taskToDelete.id);
-        return newSet;
-      });
+      recentlyDeletedIdsRef.current.delete(taskToDelete.id);
       
       // ROLLBACK on error - restore the task
       setTasks(prev => {
@@ -647,7 +644,7 @@ export const TasksTab = ({
     }
   };
 
-  // Inline task creation function
+  // Inline task creation function with optimistic update
   const createTaskInline = async (newTask: Omit<Task, 'id'>) => {
     // Create temporary task with a temp ID for optimistic update
     const tempId = `temp-${Date.now()}`;
@@ -663,10 +660,11 @@ export const TasksTab = ({
       };
       
       // OPTIMISTIC UPDATE: Add to UI immediately
-      setTasks(prev => [...prev, tempTask]);
-      
-      // Notify parent component of the change
-      onTasksChange([...tasks, tempTask]);
+      setTasks(prev => {
+        const updated = [...prev, tempTask];
+        setTimeout(() => onTasksChange(updated), 0);
+        return updated;
+      });
       
       const createData: CreateTaskRequest = {
         project_id: projectId,
@@ -680,14 +678,21 @@ export const TasksTab = ({
       };
       
       const createdTask = await projectService.createTask(createData);
+      const mappedCreatedTask = mapDatabaseTaskToUITask(createdTask);
+      
+      // Add to recently created to prevent WebSocket echo from duplicating
+      recentlyCreatedIdsRef.current.add(createdTask.id);
+      setTimeout(() => {
+        recentlyCreatedIdsRef.current.delete(createdTask.id);
+      }, 5000);
       
       // Replace temp task with real one
       setTasks(prev => {
+        // Find and replace the temp task
         const updated = prev.map(t => 
-          t.id === tempId ? mapDatabaseTaskToUITask(createdTask) : t
+          t.id === tempId ? mappedCreatedTask : t
         );
-        // Notify parent of the update
-        onTasksChange(updated);
+        setTimeout(() => onTasksChange(updated), 0);
         return updated;
       });
       
@@ -697,11 +702,7 @@ export const TasksTab = ({
       console.error('Failed to create task:', error);
       
       // Rollback: Remove temp task on error
-      setTasks(prev => {
-        const updated = prev.filter(t => t.id !== tempId);
-        onTasksChange(updated);
-        return updated;
-      });
+      setTasks(prev => prev.filter(t => t.id !== tempId));
       
       throw error;
     }
@@ -831,7 +832,7 @@ export const TasksTab = ({
         <div className="relative h-[calc(100vh-220px)] overflow-auto">
           {viewMode === 'table' ? (
             <TaskTableView
-              tasks={tasks}
+              tasks={tasks.filter(t => t && t.id && t.title !== undefined)}
               onTaskView={openEditModal}
               onTaskComplete={completeTask}
               onTaskDelete={deleteTask}
@@ -841,7 +842,7 @@ export const TasksTab = ({
             />
           ) : (
             <TaskBoardView
-              tasks={tasks}
+              tasks={tasks.filter(t => t && t.id && t.title !== undefined)}
               onTaskView={openEditModal}
               onTaskComplete={completeTask}
               onTaskDelete={deleteTask}

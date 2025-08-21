@@ -98,7 +98,7 @@ export function useTaskSocket(options: UseTaskSocketOptions) {
     return () => {
       clearInterval(interval);
     };
-  }, [onConnectionStateChange, memoizedHandlers]);
+  }, []); // No dependencies - only run once on mount
 
   // Initialize connection once and register handlers
   useEffect(() => {
@@ -132,15 +132,7 @@ export function useTaskSocket(options: UseTaskSocketOptions) {
 
     initializeConnection();
 
-  }, [projectId, memoizedHandlers]);
-
-  // Update handlers when they change (without reconnecting)
-  useEffect(() => {
-    if (isInitializedRef.current && currentProjectIdRef.current === projectId) {
-      console.log(`[USE_TASK_SOCKET] Updating handlers for component: ${componentIdRef.current}`);
-      taskSocketService.registerHandlers(componentIdRef.current, memoizedHandlers());
-    }
-  }, [memoizedHandlers, projectId]);
+  }, [projectId]); // Only depend on projectId
 
   // Handle project change (different project)
   useEffect(() => {
@@ -176,7 +168,7 @@ export function useTaskSocket(options: UseTaskSocketOptions) {
 
       switchProject();
     }
-  }, [projectId, memoizedHandlers]);
+  }, [projectId]); // Only depend on projectId
 
   // Cleanup on unmount
   useEffect(() => {

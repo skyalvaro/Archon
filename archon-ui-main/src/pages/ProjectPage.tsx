@@ -367,12 +367,12 @@ export function ProjectPage({
       
       const tasksData = await projectService.getTasksByProject(projectId);
       
-             // Convert backend tasks to UI format
+             // Convert backend tasks to UI format with proper defaults
        const uiTasks: Task[] = tasksData.map(task => ({
          id: task.id,
-         title: task.title,
-         description: task.description,
-         status: (task.uiStatus || 'backlog') as Task['status'],
+         title: task.title || '',
+         description: task.description || '',
+         status: (task.uiStatus || task.status || 'backlog') as Task['status'],
          assignee: {
            name: (task.assignee || 'User') as 'User' | 'Archon' | 'AI IDE Agent',
            avatar: ''

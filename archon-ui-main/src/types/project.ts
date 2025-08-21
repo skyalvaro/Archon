@@ -195,7 +195,13 @@ export const statusMappings = {
 export function dbTaskToUITask(dbTask: Task): Task {
   return {
     ...dbTask,
-    uiStatus: statusMappings.dbToUI[dbTask.status]
+    uiStatus: statusMappings.dbToUI[dbTask.status || 'todo'],
+    // Ensure all required fields have defaults
+    title: dbTask.title || '',
+    description: dbTask.description || '',
+    assignee: dbTask.assignee || 'User',
+    feature: dbTask.feature || 'General',
+    task_order: dbTask.task_order || 0
   };
 }
 
