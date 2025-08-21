@@ -87,30 +87,42 @@ class RateLimiter:
     async def acquire(self, estimated_tokens: int = 8000) -> bool:
         """Acquire permission to make API call with token awareness"""
         async with self._lock:
-            now = time.time()
+            while True:  # Use a loop instead of recursion
+                now = time.time()
 
-            # Clean old entries
-            self._clean_old_entries(now)
+                # Clean old entries
+                self._clean_old_entries(now)
 
-            # Check if we can make the request
-            if not self._can_make_request(estimated_tokens):
+                # Check if we can make the request
+                if self._can_make_request(estimated_tokens):
+                    # Record the request
+                    self.request_times.append(now)
+                    self.token_usage.append((now, estimated_tokens))
+                    return True
+
+                # Calculate wait time
                 wait_time = self._calculate_wait_time(estimated_tokens)
-                if wait_time > 0:
-                    logfire_logger.info(
-                        f"Rate limiting: waiting {wait_time:.1f}s",
-                        extra={
-                            "tokens": estimated_tokens,
-                            "current_usage": self._get_current_usage(),
-                        }
-                    )
-                    await asyncio.sleep(wait_time)
-                    return await self.acquire(estimated_tokens)
-                return False
+                if wait_time <= 0:
+                    return False
 
-            # Record the request
-            self.request_times.append(now)
-            self.token_usage.append((now, estimated_tokens))
-            return True
+                logfire_logger.info(
+                    f"Rate limiting: waiting {wait_time:.1f}s",
+                    extra={
+                        "tokens": estimated_tokens,
+                        "current_usage": self._get_current_usage(),
+                    }
+                )
+                
+                # Release the lock while sleeping to allow other operations
+                self._lock.release()
+                try:
+                    await asyncio.sleep(wait_time)
+                    logfire_logger.info(f"Rate limiting: resuming after {wait_time:.1f}s wait")
+                finally:
+                    # Re-acquire the lock before continuing
+                    await self._lock.acquire()
+                
+                # Loop will continue and re-check conditions
 
     def _can_make_request(self, estimated_tokens: int) -> bool:
         """Check if request can be made within limits"""
