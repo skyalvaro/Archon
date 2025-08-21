@@ -170,3 +170,6 @@ export const FeatureInput = memo(({
 });
 
 FeatureInput.displayName = 'FeatureInput';
+
+// Re-export AssigneeTypeaheadInput for convenience
+export { AssigneeTypeaheadInput } from './AssigneeTypeaheadInput';

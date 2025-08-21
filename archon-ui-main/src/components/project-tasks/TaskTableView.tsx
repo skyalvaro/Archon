@@ -7,6 +7,7 @@ import { projectService } from '../../services/projectService';
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
 import { DraggableTaskCard } from './DraggableTaskCard';
 import { copyToClipboard } from '../../utils/clipboard';
+import { AssigneeTypeaheadInput } from './TaskInputComponents';
 
 export interface Task {
   id: string;
@@ -79,7 +80,7 @@ const reorderTasks = (tasks: Task[], fromIndex: number, toIndex: number): Task[]
 interface EditableCellProps {
   value: string;
   onSave: (value: string) => void;
-  type?: 'text' | 'textarea' | 'select';
+  type?: 'text' | 'textarea' | 'select' | 'typeahead';
   options?: string[];
   placeholder?: string;
   isEditing: boolean;
@@ -140,7 +141,37 @@ const EditableCell = ({
 
   return (
     <div className="flex items-center w-full">
-      {type === 'select' ? (
+      {type === 'typeahead' ? (
+        <div className="relative">
+          <AssigneeTypeaheadInput
+            value={editValue}
+            onChange={(value) => {
+              setEditValue(value);
+              // Update the value but don't auto-save yet
+            }}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancel();
+              }
+            }}
+            placeholder={placeholder}
+            className="w-full bg-white/90 dark:bg-black/90 border border-cyan-300 dark:border-cyan-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_5px_rgba(34,211,238,0.3)]"
+            autoFocus
+          />
+          {/* Save button for explicit save */}
+          <button
+            onClick={handleSave}
+            className="absolute right-0 top-0 h-full px-2 text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300"
+            title="Save (Enter)"
+          >
+            ✓
+          </button>
+        </div>
+      ) : type === 'select' ? (
         <select
           value={editValue}
           onChange={(e) => {
@@ -341,6 +372,7 @@ const DraggableTaskRow = ({
         <EditableCell
           value={task.assignee?.name || 'AI IDE Agent'}
           onSave={(value) => handleUpdateField('assignee', value || 'AI IDE Agent')}
+          type="typeahead"
           isEditing={editingField === 'assignee'}
           onEdit={() => setEditingField('assignee')}
           onCancel={() => setEditingField(null)}
@@ -513,12 +545,11 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
         />
       </td>
       <td className="p-3">
-        <input
-          type="text"
+        <AssigneeTypeaheadInput
           value={newTask.assignee.name}
-          onChange={(e) => setNewTask(prev => ({ 
+          onChange={(value) => setNewTask(prev => ({ 
             ...prev, 
-            assignee: { name: e.target.value || 'AI IDE Agent', avatar: '' }
+            assignee: { name: value || 'AI IDE Agent', avatar: '' }
           }))}
           onKeyPress={handleKeyPress}
           placeholder="AI IDE Agent"

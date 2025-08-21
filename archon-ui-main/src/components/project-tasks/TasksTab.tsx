@@ -14,8 +14,15 @@ import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
 
-// Assignee utilities
-const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
+// Assignee utilities - expanded to include all agent types
+const ASSIGNEE_OPTIONS = [
+  'User', 
+  'Archon', 
+  'AI IDE Agent',
+  'IDE Agent',
+  'prp-executor',
+  'prp-validator'
+] as const;
 
 // Delete confirmation modal component
 interface DeleteConfirmModalProps {
@@ -140,6 +147,9 @@ export const TasksTab = ({
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
+  // Track local updates to prevent echo from WebSocket
+  const [localUpdates, setLocalUpdates] = useState<Record<string, number>>({});
+  
   // Track recently deleted tasks to prevent race conditions
   const [recentlyDeletedIds, setRecentlyDeletedIds] = useState<Set<string>>(new Set());
   
@@ -161,6 +171,21 @@ export const TasksTab = ({
     // Skip updates for recently deleted tasks (race condition prevention)
     if (recentlyDeletedIds.has(updatedTask.id)) {
       console.log('[Socket] Ignoring update for recently deleted task:', updatedTask.id);
+      return;
+    }
+    
+    // Check if this is an echo of a local update
+    const localUpdateTime = localUpdates[updatedTask.id];
+    if (localUpdateTime && Date.now() - localUpdateTime < 2000) {
+      console.log('[Socket] Skipping echo update for locally updated task:', updatedTask.id);
+      // Clean up the local update marker after the echo protection window
+      setTimeout(() => {
+        setLocalUpdates(prev => {
+          const newUpdates = { ...prev };
+          delete newUpdates[updatedTask.id];
+          return newUpdates;
+        });
+      }, 2000);
       return;
     }
     
@@ -189,7 +214,7 @@ export const TasksTab = ({
       setTimeout(() => onTasksChange(updated), 0);
       return updated;
     });
-  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds]);
+  }, [onTasksChange, isModalOpen, editingTask?.id, recentlyDeletedIds, localUpdates]);
 
   const handleTaskCreated = useCallback((message: any) => {
     const newTask = message.data || message;
@@ -534,6 +559,12 @@ export const TasksTab = ({
       return updated;
     });
     console.log(`[TasksTab] Optimistically updated UI for task ${taskId}`);
+    
+    // Mark this update as local to prevent echo when socket update arrives
+    setLocalUpdates(prev => ({
+      ...prev,
+      [taskId]: Date.now()
+    }));
 
     try {
       // Then update the backend
@@ -553,6 +584,13 @@ export const TasksTab = ({
         const updated = prev.map(task => task.id === taskId ? movingTask : task);
         setTimeout(() => onTasksChange(updated), 0);
         return updated;
+      });
+      
+      // Clear the local update marker
+      setLocalUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[taskId];
+        return newUpdates;
       });
       
       alert(`Failed to move task: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -655,6 +693,25 @@ export const TasksTab = ({
   // Inline task update function
   const updateTaskInline = async (taskId: string, updates: Partial<Task>) => {
     console.log(`[TasksTab] Inline update for task ${taskId} with updates:`, updates);
+    
+    // Store the original task for potential rollback
+    const originalTask = tasks.find(t => t.id === taskId);
+    
+    // Optimistically update the UI immediately
+    setTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === taskId 
+          ? { ...task, ...updates }
+          : task
+      )
+    );
+    
+    // Mark this update as local to prevent echo when socket update arrives
+    setLocalUpdates(prev => ({
+      ...prev,
+      [taskId]: Date.now()
+    }));
+    
     try {
       const updateData: Partial<UpdateTaskRequest> = {};
       
@@ -674,11 +731,25 @@ export const TasksTab = ({
       await projectService.updateTask(taskId, updateData);
       console.log(`[TasksTab] projectService.updateTask successful for ${taskId}.`);
       
-      // Don't update local state optimistically - let socket handle it
-      console.log(`[TasksTab] Waiting for socket update for task ${taskId}.`);
-      
     } catch (error) {
       console.error(`[TasksTab] Failed to update task ${taskId} inline:`, error);
+      
+      // Revert the optimistic update on error
+      if (originalTask) {
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? originalTask : task
+          )
+        );
+      }
+      
+      // Clear the local update marker
+      setLocalUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[taskId];
+        return newUpdates;
+      });
+      
       alert(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
