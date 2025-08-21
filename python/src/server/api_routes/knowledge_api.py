@@ -548,6 +548,11 @@ async def upload_document(
 ):
     """Upload and process a document with progress tracking."""
     try:
+        # DETAILED LOGGING: Track knowledge_type parameter flow
+        safe_logfire_info(
+            f"📋 UPLOAD: Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
+        )
+        
         safe_logfire_info(
             f"Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
         )
@@ -753,6 +758,7 @@ async def search_knowledge_items(request: RagQueryRequest):
     return await perform_rag_query(request)
 
 
+@router.post("/rag/query")
 async def perform_rag_query(request: RagQueryRequest):
     """Perform a RAG query on the knowledge base using service layer."""
     # Validate query
@@ -985,7 +991,7 @@ async def stop_crawl_task(progress_id: str):
     """Stop a running crawl task."""
     try:
         from ..services.crawling import get_active_orchestration, unregister_orchestration
-
+        
         # Emit stopping status immediately
         await sio.emit(
             "crawl:stopping",
