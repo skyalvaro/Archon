@@ -141,6 +141,7 @@ class CrawlingService:
         Returns:
             Dictionary with discovered files categorized by type
         """
+        safe_logfire_info(f"🔥 DEBUG: auto_discover_files called with base_url: {base_url}")
         try:
             discovery_results = await self.file_discovery.discover_all_files(base_url)
             
