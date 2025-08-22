@@ -557,6 +557,7 @@ class CrawlingService:
             if discovery_results.get('llm_files'):
                 llm_files = discovery_results['llm_files']
                 safe_logfire_info(f"🎯 DISCOVERED LLM FILES: {llm_files} - Will crawl these instead of regular website")
+                safe_logfire_info(f"📋 CRAWLING DECISION: Using LLM files for content - {llm_files}")
                 
                 if self.progress_id:
                     self.progress_state.update({
@@ -565,6 +566,9 @@ class CrawlingService:
                         "log": f"Crawling discovered LLM files ({len(llm_files)} files) - skipping regular crawl...",
                     })
                     await update_crawl_progress(self.progress_id, self.progress_state)
+                
+                # Log exactly what we're about to crawl
+                safe_logfire_info(f"🚀 STARTING CRAWL: LLM files only - {llm_files}")
                 
                 # Crawl LLM files as batch
                 llm_crawl_results = await self.crawl_batch_with_progress(
@@ -611,12 +615,17 @@ class CrawlingService:
                 
                 if sitemap_crawl_results:
                     crawl_results.extend(sitemap_crawl_results)
-                    safe_logfire_info(f"Sitemaps from robots.txt crawled successfully, skipping regular crawl. Found {len(sitemap_crawl_results)} results.")
+                    safe_logfire_info(f"📋 CRAWLING DECISION: Using robots.txt sitemaps for content")
+                    safe_logfire_info(f"🎉 SUCCESS: Sitemaps from robots.txt crawled successfully, skipping regular crawl. Found {len(sitemap_crawl_results)} results.")
                     return crawl_results, "robots_sitemaps_discovered"
                             
         except Exception as e:
             safe_logfire_error(f"File discovery integration failed: {e}")
             # Continue with normal crawling if discovery fails
+
+        # If no discovery results, log that we're falling back to regular crawling
+        if not crawl_results:
+            safe_logfire_info(f"📋 CRAWLING DECISION: No LLM files or sitemaps discovered, using regular website crawling for {url}")
 
         # Check if this is specifically an LLM file
         if self.url_handler.is_llm_file(url):
