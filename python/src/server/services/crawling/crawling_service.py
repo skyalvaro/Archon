@@ -536,6 +536,9 @@ class CrawlingService:
             Tuple of (crawl_results, crawl_type)
         """
         _ensure_socketio_imports()
+        
+        # DEBUG: Check if this method is being called
+        safe_logfire_info(f"🚨 DEBUG: _crawl_by_url_type called with URL: {url}")
 
         crawl_results = []
         crawl_type = None
