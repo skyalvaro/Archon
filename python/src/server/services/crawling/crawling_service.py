@@ -553,6 +553,9 @@ class CrawlingService:
             base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
             discovery_results = await self.auto_discover_files(base_url)
             
+            # Debug log the discovery results structure
+            safe_logfire_info(f"🔍 DEBUG: Discovery results = {discovery_results}")
+            
             # If we discovered LLM files, prioritize them and STOP regular crawling
             if discovery_results.get('llm_files'):
                 llm_files = discovery_results['llm_files']
