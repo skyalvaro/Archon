@@ -153,8 +153,14 @@ class CrawlProgressService {
     switch (status) {
       case 'running':
         return 'crawling';
+      case 'processing':
+        return 'processing';
+      case 'queued':
+        return 'starting';
       case 'completed':
         return 'completed';
+      case 'cancelled':
+        return 'cancelled';
       case 'failed':
       case 'error':
         return 'failed';
