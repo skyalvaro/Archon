@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Search, Upload, Link as LinkIcon, Check, Brain, Save, History, Eye, Edit3, Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { knowledgeBaseService, KnowledgeItem } from '../../services/knowledgeBaseService';
@@ -14,6 +14,7 @@ import { MilkdownEditor } from './MilkdownEditor';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { PRPViewer } from '../prp';
 import { DocumentCard, NewDocumentCard } from './DocumentCard';
+import { useSocketRoom } from '../../hooks/useSocketRoom';
 
 
 
@@ -557,6 +558,21 @@ export const DocsTab = ({
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
   const [progressItems, setProgressItems] = useState<CrawlProgressData[]>([]);
   const { showToast } = useToast();
+  
+  // Socket room for real-time document updates
+  const roomId = project?.id ? `project:${project.id}` : null;
+  const {
+    isInRoom,
+    emitToRoom,
+    emitWithAck,
+    subscribe,
+    emitOptimistic
+  } = useSocketRoom(roomId, {
+    namespace: '/',
+    autoJoin: true,
+    autoReconnect: true,
+    debugMode: false
+  });
 
   // Load project documents from the project data
   const loadProjectDocuments = async () => {
@@ -601,25 +617,35 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // Create a new document with a unique ID
-      const newDocument: ProjectDoc = {
-        id: `doc-${Date.now()}`,
+      // Prepare document data for API
+      const documentData = {
         title: template.name,
         content: template.content,
-        document_type: template.document_type,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        document_type: template.document_type
       };
       
-      // Add to documents list
-      setDocuments(prev => [...prev, newDocument]);
-      setSelectedDocument(newDocument);
+      // ACTUALLY CALL THE FUCKING API
+      const createdDocument = await projectService.createDocument(project.id, documentData);
       
-      console.log('Document created successfully:', newDocument);
+      // Only update UI after successful API response
+      setDocuments(prev => [...prev, createdDocument]);
+      setSelectedDocument(createdDocument);
+      
+      // Emit socket event for real-time sync to other clients
+      if (isInRoom) {
+        emitToRoom('document_created', { 
+          document: createdDocument,
+          project_id: project.id 
+        });
+      }
+      
+      // Only show success after API confirms
       showToast('Document created successfully', 'success');
       setShowTemplateModal(false);
+      
     } catch (error) {
       console.error('Failed to create document:', error);
+      // Show the actual error from the API
       showToast(
         error instanceof Error ? error.message : 'Failed to create document', 
         'error'
@@ -636,22 +662,38 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // Update the document in local state
-      const updatedDocument = { 
-        ...selectedDocument, 
-        updated_at: new Date().toISOString() 
-      };
+      // ACTUALLY CALL THE FUCKING API TO UPDATE THE DOCUMENT
+      const updatedDocument = await projectService.updateDocument(
+        project.id, 
+        selectedDocument.id, 
+        {
+          title: selectedDocument.title,
+          content: selectedDocument.content,
+          document_type: selectedDocument.document_type
+        }
+      );
       
+      // Only update UI after successful API response
       setDocuments(prev => prev.map(doc => 
         doc.id === selectedDocument.id ? updatedDocument : doc
       ));
       setSelectedDocument(updatedDocument);
       
-      console.log('Document saved successfully:', updatedDocument);
+      // Emit socket event for real-time sync to other clients
+      if (isInRoom) {
+        emitToRoom('document_updated', { 
+          document: updatedDocument,
+          project_id: project.id 
+        });
+      }
+      
+      // Only show success after API confirms
       showToast('Document saved successfully', 'success');
       setIsEditing(false);
+      
     } catch (error) {
       console.error('Failed to save document:', error);
+      // Show the actual error from the API
       showToast(
         error instanceof Error ? error.message : 'Failed to save document', 
         'error'
@@ -689,6 +731,58 @@ export const DocsTab = ({
       showToast('Failed to load project sources', 'error');
     }
   };
+
+  // Subscribe to real-time document events
+  useEffect(() => {
+    if (!isInRoom) return;
+
+    const subscriptions: (() => void)[] = [];
+
+    // Document created event
+    subscriptions.push(
+      subscribe('document_created', (data: { document: ProjectDoc }) => {
+        console.log('[DocsTab] Document created:', data);
+        setDocuments(prev => {
+          // Check if document already exists (prevent duplicates from our own emit)
+          if (prev.some(doc => doc.id === data.document.id)) {
+            return prev;
+          }
+          return [...prev, data.document];
+        });
+      })
+    );
+
+    // Document updated event
+    subscriptions.push(
+      subscribe('document_updated', (data: { document: ProjectDoc }) => {
+        console.log('[DocsTab] Document updated:', data);
+        setDocuments(prev => prev.map(doc => 
+          doc.id === data.document.id ? data.document : doc
+        ));
+        // Update selected document if it's the one being updated
+        setSelectedDocument(prev => 
+          prev?.id === data.document.id ? data.document : prev
+        );
+      })
+    );
+
+    // Document deleted event
+    subscriptions.push(
+      subscribe('document_deleted', (data: { document_id: string }) => {
+        console.log('[DocsTab] Document deleted:', data);
+        setDocuments(prev => prev.filter(doc => doc.id !== data.document_id));
+        // Clear selection if deleted document was selected
+        setSelectedDocument(prev => 
+          prev?.id === data.document_id ? null : prev
+        );
+      })
+    );
+
+    // Cleanup subscriptions
+    return () => {
+      subscriptions.forEach(unsub => unsub());
+    };
+  }, [isInRoom, subscribe]);
 
   // Load knowledge items and documents on mount
   useEffect(() => {
@@ -947,6 +1041,12 @@ export const DocsTab = ({
                     if (selectedDocument?.id === docId) {
                       setSelectedDocument(documents.find(d => d.id !== docId) || null);
                     }
+                    
+                    // Emit socket event for real-time sync
+                    if (isInRoom) {
+                      emitToRoom('document_deleted', { document_id: docId });
+                    }
+                    
                     showToast('Document deleted', 'success');
                   } catch (error) {
                     console.error('Failed to delete document:', error);
@@ -981,25 +1081,45 @@ export const DocsTab = ({
               document={selectedDocument}
               isDarkMode={isDarkMode}
               onSave={async (updatedDocument) => {
+                if (!project?.id) {
+                  showToast('No project ID available', 'error');
+                  return;
+                }
+                
                 try {
                   setIsSaving(true);
                   
-                  // Update document with timestamp
-                  const docWithTimestamp = {
-                    ...updatedDocument,
-                    updated_at: new Date().toISOString()
-                  };
+                  // ACTUALLY CALL THE FUCKING API
+                  const savedDocument = await projectService.updateDocument(
+                    project.id,
+                    updatedDocument.id,
+                    {
+                      title: updatedDocument.title,
+                      content: updatedDocument.content,
+                      document_type: updatedDocument.document_type
+                    }
+                  );
                   
-                  // Update local state
-                  setSelectedDocument(docWithTimestamp);
+                  // Only update UI after successful API response
+                  setSelectedDocument(savedDocument);
                   setDocuments(prev => prev.map(doc => 
-                    doc.id === updatedDocument.id ? docWithTimestamp : doc
+                    doc.id === updatedDocument.id ? savedDocument : doc
                   ));
                   
-                  console.log('Document saved via MilkdownEditor');
+                  // Emit socket event for real-time sync to other clients
+                  if (isInRoom) {
+                    emitToRoom('document_updated', { 
+                      document: savedDocument,
+                      project_id: project.id 
+                    });
+                  }
+                  
+                  // Only show success after API confirms
                   showToast('Document saved successfully', 'success');
+                  
                 } catch (error) {
                   console.error('Failed to save document:', error);
+                  // Show the actual error from the API
                   showToast(
                     error instanceof Error ? error.message : 'Failed to save document',
                     'error'

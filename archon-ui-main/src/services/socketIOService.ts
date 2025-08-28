@@ -1,18 +1,22 @@
 /**
- * Socket.IO WebSocket Service
+ * Socket.IO WebSocket Service - Enhanced with centralized socket management
  * 
  * Features:
- * - Socket.IO for better reliability and reconnection
- * - Connection state management
- * - Promise-based connection establishment
- * - Automatic reconnection with exponential backoff
- * - Typed message handlers
- * - Support for dynamic endpoints
- * - Built-in heartbeat/keepalive
- * - Better error handling and recovery
+ * - Integrates with SocketManager for singleton connections
+ * - Event deduplication and echo prevention
+ * - Room-based isolation
+ * - Connection state recovery
+ * - Backward compatible interface
  */
 
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
+import { 
+  getSocketManager, 
+  ConnectionState,
+  EventDeduplicator,
+  RoomManager,
+  type SocketEventMetadata 
+} from './socket';
 
 export enum WebSocketState {
   CONNECTING = 'CONNECTING',
@@ -35,6 +39,7 @@ export interface WebSocketMessage {
   type: string;
   data?: any;
   timestamp?: string;
+  _meta?: SocketEventMetadata;
   [key: string]: any;
 }
 
@@ -42,23 +47,27 @@ type MessageHandler = (message: WebSocketMessage) => void;
 type ErrorHandler = (error: Event | Error) => void;
 type StateChangeHandler = (state: WebSocketState) => void;
 
+/**
+ * Enhanced WebSocketService using SocketManager
+ * Maintains backward compatibility while adding new features
+ */
 export class WebSocketService {
   private socket: Socket | null = null;
+  private roomManager: RoomManager | null = null;
+  private eventDeduplicator: EventDeduplicator | null = null;
   private config: Required<WebSocketConfig>;
   private sessionId: string = '';
+  private namespace: string = '/';
   
   private messageHandlers: Map<string, MessageHandler[]> = new Map();
   private errorHandlers: ErrorHandler[] = [];
   private stateChangeHandlers: StateChangeHandler[] = [];
   private connectionPromise: Promise<void> | null = null;
-  private connectionResolver: (() => void) | null = null;
-  private connectionRejector: ((error: Error) => void) | null = null;
   
   private _state: WebSocketState = WebSocketState.DISCONNECTED;
   
-  // Deduplication support
-  private lastMessages: Map<string, { data: any; timestamp: number }> = new Map();
-  private deduplicationWindow = 100; // 100ms window
+  // Track if we're using room-based communication
+  private currentRoom: string | null = null;
 
   constructor(config: WebSocketConfig = {}) {
     this.config = {
@@ -84,14 +93,23 @@ export class WebSocketService {
   }
 
   /**
-   * Connect to Socket.IO with promise-based connection establishment
+   * Connect to Socket.IO using SocketManager
    */
   async connect(endpoint: string): Promise<void> {
-    // Extract session ID from endpoint for room identification
-    const { sessionId } = this.parseEndpoint(endpoint);
+    // Parse endpoint to extract session/room info
+    const { sessionId, roomId } = this.parseEndpoint(endpoint);
     
-    // If already connected with the same session, return existing connection
+    // If socket is null but we think we're connected, reset state
+    if (!this.socket && this.state === WebSocketState.CONNECTED) {
+      this.setState(WebSocketState.DISCONNECTED);
+    }
+    
+    // If already connected to same session with a valid socket, return
     if (this.socket && this.state === WebSocketState.CONNECTED && this.sessionId === sessionId) {
+      // If room changed, switch rooms
+      if (roomId && roomId !== this.currentRoom) {
+        await this.joinRoom(roomId);
+      }
       return Promise.resolve();
     }
 
@@ -100,8 +118,8 @@ export class WebSocketService {
       return this.connectionPromise;
     }
 
-    // Disconnect if session changed
-    if (this.socket && this.sessionId !== sessionId) {
+    // Disconnect if session changed or socket is invalid
+    if ((this.socket && this.sessionId !== sessionId) || (!this.socket && this.sessionId)) {
       this.disconnect();
     }
 
@@ -109,25 +127,23 @@ export class WebSocketService {
     this.setState(WebSocketState.CONNECTING);
 
     // Create connection promise
-    this.connectionPromise = new Promise<void>((resolve, reject) => {
-      this.connectionResolver = resolve;
-      this.connectionRejector = reject;
-    });
-
+    this.connectionPromise = this.establishConnection(roomId);
+    
     try {
-      await this.establishConnection();
-      return this.connectionPromise;
-    } catch (error) {
-      this.setState(WebSocketState.FAILED);
-      throw error;
+      await this.connectionPromise;
+    } finally {
+      this.connectionPromise = null;
     }
   }
 
-  private parseEndpoint(endpoint: string): { sessionId: string } {
-    // Simplified endpoint parsing - focus on project IDs for task updates
+  private parseEndpoint(endpoint: string): { sessionId: string; roomId?: string } {
+    // Extract project ID for room-based communication
     const projectMatch = endpoint.match(/projects\/([^/]+)/);
     if (projectMatch) {
-      return { sessionId: projectMatch[1] };
+      return { 
+        sessionId: projectMatch[1],
+        roomId: `project:${projectMatch[1]}`
+      };
     }
     
     // Legacy support for other endpoint types
@@ -139,111 +155,80 @@ export class WebSocketService {
     return { sessionId };
   }
 
-  private async establishConnection(): Promise<void> {
-    // Use relative URL to go through Vite's proxy
-    const socketPath = '/socket.io/';  // Use default Socket.IO path
-    
-    // Use window.location.origin to ensure we go through the proxy
-    const connectionUrl = window.location.origin;
+  private async establishConnection(roomId?: string): Promise<void> {
+    const socketManager = getSocketManager();
     
     try {
-      console.log('🔗 Attempting Socket.IO connection to:', connectionUrl);
-      console.log('🔗 Socket.IO path:', socketPath);
-      console.log('🔗 Session ID:', this.sessionId);
+      console.log('🔗 Establishing Socket.IO connection via SocketManager');
       
-      // Connect to default namespace with explicit origin to ensure proxy usage
-      this.socket = io(connectionUrl, {
-        reconnection: this.config.enableAutoReconnect,
-        reconnectionAttempts: this.config.maxReconnectAttempts,
-        reconnectionDelay: this.config.reconnectInterval,
-        reconnectionDelayMax: 30000,
-        timeout: 10000,
-        transports: ['websocket', 'polling'],
-        path: socketPath,
-        query: {
-          session_id: this.sessionId
-        }
-      });
+      // Get socket from manager (creates if needed)
+      this.socket = await socketManager.ensureConnected(this.namespace);
       
-      console.log('🔗 Socket.IO instance created, setting up event handlers...');
+      // Get associated managers
+      this.roomManager = socketManager.getRoomManager(this.namespace);
+      this.eventDeduplicator = socketManager.getEventDeduplicator(this.namespace);
+      
+      // Setup event handlers
       this.setupEventHandlers();
-    } catch (error) {
-      console.error('❌ Failed to create Socket.IO connection:', error);
-      if (this.connectionRejector) {
-        this.connectionRejector(error as Error);
+      
+      // Join room if specified
+      if (roomId && this.roomManager) {
+        await this.joinRoom(roomId);
       }
+      
+      // Update state
+      this.setState(WebSocketState.CONNECTED);
+      
+      console.log('🔌 Socket.IO connected successfully via SocketManager');
+      
+    } catch (error) {
+      console.error('❌ Failed to establish Socket.IO connection:', error);
+      this.setState(WebSocketState.FAILED);
+      throw error;
+    }
+  }
+
+  private async joinRoom(roomId: string): Promise<void> {
+    if (!this.roomManager) {
+      console.warn('Cannot join room: RoomManager not initialized');
+      return;
+    }
+
+    try {
+      await this.roomManager.joinRoom(roomId);
+      this.currentRoom = roomId;
+      console.log(`📍 Joined room: ${roomId}`);
+    } catch (error) {
+      console.error(`Failed to join room ${roomId}:`, error);
     }
   }
 
   private setupEventHandlers(): void {
     if (!this.socket) return;
 
-    this.socket.on('connect', () => {
-      console.log('🔌 Socket.IO connected successfully! Socket ID:', this.socket?.id);
-      this.setState(WebSocketState.CONNECTED);
-      
-      // Resolve connection promise
-      if (this.connectionResolver) {
-        this.connectionResolver();
-        this.connectionResolver = null;
-        this.connectionRejector = null;
+    const socketManager = getSocketManager();
+    
+    // Listen for connection state changes
+    socketManager.onStateChange((state, namespace) => {
+      if (namespace === this.namespace) {
+        // Map ConnectionState to WebSocketState
+        const mappedState = this.mapConnectionState(state);
+        this.setState(mappedState);
       }
     });
 
-    this.socket.on('disconnect', (reason: string) => {
-      console.log(`🔌 Socket.IO disconnected. Reason: ${reason}`);
-      
-      // Socket.IO handles reconnection automatically based on the reason
-      if (reason === 'io server disconnect') {
-        // Server initiated disconnect, won't auto-reconnect
-        this.setState(WebSocketState.DISCONNECTED);
-      } else if (reason === 'transport close' || reason === 'transport error') {
-        // Network issue, will auto-reconnect
-        this.setState(WebSocketState.RECONNECTING);
-      } else {
-        // Client side disconnect, will auto-reconnect
-        this.setState(WebSocketState.RECONNECTING);
-      }
-      
-      // Don't reject connection promise for temporary disconnects
-      if (this.connectionRejector && reason === 'io server disconnect') {
-        this.connectionRejector(new Error(`Socket disconnected: ${reason}`));
-        this.connectionResolver = null;
-        this.connectionRejector = null;
+    // Listen for recovery events
+    socketManager.onRecovery((recovered, namespace) => {
+      if (namespace === this.namespace && recovered) {
+        console.log('🔄 Connection state recovered');
+        // Re-join room if needed
+        if (this.currentRoom && this.roomManager) {
+          this.joinRoom(this.currentRoom);
+        }
       }
     });
 
-    this.socket.on('connect_error', (error: Error) => {
-      console.error('❌ Socket.IO connection error:', error);
-      console.error('❌ Error type:', (error as any).type);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Socket transport:', this.socket?.io?.engine?.transport?.name);
-      this.notifyError(error);
-      
-      // Reject connection promise if still pending
-      if (this.connectionRejector) {
-        this.connectionRejector(error);
-        this.connectionResolver = null;
-        this.connectionRejector = null;
-      }
-    });
-
-    this.socket.on('reconnect', (attemptNumber: number) => {
-      // Socket.IO reconnected
-      this.setState(WebSocketState.CONNECTED);
-    });
-
-    this.socket.on('reconnect_attempt', (attemptNumber: number) => {
-      // Socket.IO reconnection attempt
-      this.setState(WebSocketState.RECONNECTING);
-    });
-
-    this.socket.on('reconnect_failed', () => {
-      console.error('Socket.IO reconnection failed');
-      this.setState(WebSocketState.FAILED);
-    });
-
-    // Handle incoming messages
+    // Handle incoming messages with deduplication
     this.socket.onAny((eventName: string, ...args: any[]) => {
       // Skip internal Socket.IO events
       if (eventName.startsWith('connect') || eventName.startsWith('disconnect') || 
@@ -251,64 +236,52 @@ export class WebSocketService {
         return;
       }
       
-      // Convert Socket.IO event to WebSocket message format
+      // Extract event data
+      const eventData = args[0];
+      
+      // Check if we should process this event
+      // Only apply deduplication to events that have our metadata structure
+      // Backend io.emit() events won't have _meta field and should always be processed
+      if (eventData && eventData._meta && this.eventDeduplicator && !this.eventDeduplicator.shouldProcessEvent(eventData)) {
+        return; // Skip duplicate or echo
+      }
+      
+      // Convert to WebSocketMessage format
       const message: WebSocketMessage = {
         type: eventName,
-        data: args[0],
-        timestamp: new Date().toISOString()
+        data: eventData,
+        timestamp: new Date().toISOString(),
+        _meta: this.eventDeduplicator?.extractMetadata(eventData) || undefined
       };
-      
-      // Handle specific message types
-      if (eventName === 'message' && args[0]) {
-        // Chat message format
-        Object.assign(message, args[0]);
-      }
       
       this.handleMessage(message);
     });
+
+    // Handle errors
+    this.socket.on('error', (error: Error) => {
+      console.error('Socket error:', error);
+      this.notifyError(error);
+    });
   }
 
-  private isDuplicateMessage(type: string, data: any): boolean {
-    const lastMessage = this.lastMessages.get(type);
-    if (!lastMessage) return false;
-    
-    const now = Date.now();
-    const timeDiff = now - lastMessage.timestamp;
-    
-    // If message arrived within deduplication window and data is identical
-    if (timeDiff < this.deduplicationWindow) {
-      const isDupe = JSON.stringify(lastMessage.data) === JSON.stringify(data);
-      if (isDupe) {
-        console.log(`[Socket] Duplicate ${type} message filtered`);
-        return true;
-      }
+  private mapConnectionState(state: ConnectionState): WebSocketState {
+    switch (state) {
+      case ConnectionState.CONNECTING:
+        return WebSocketState.CONNECTING;
+      case ConnectionState.CONNECTED:
+        return WebSocketState.CONNECTED;
+      case ConnectionState.RECONNECTING:
+        return WebSocketState.RECONNECTING;
+      case ConnectionState.DISCONNECTED:
+        return WebSocketState.DISCONNECTED;
+      case ConnectionState.ERROR:
+        return WebSocketState.FAILED;
+      default:
+        return WebSocketState.DISCONNECTED;
     }
-    
-    return false;
   }
 
   private handleMessage(message: WebSocketMessage): void {
-    // Add deduplication check
-    if (this.isDuplicateMessage(message.type, message.data)) {
-      return;
-    }
-    
-    // Store message for deduplication
-    this.lastMessages.set(message.type, {
-      data: message.data,
-      timestamp: Date.now()
-    });
-    
-    // Clean old messages periodically
-    if (this.lastMessages.size > 100) {
-      const cutoff = Date.now() - 5000;
-      for (const [key, value] of this.lastMessages.entries()) {
-        if (value.timestamp < cutoff) {
-          this.lastMessages.delete(key);
-        }
-      }
-    }
-    
     // Notify specific type handlers
     const handlers = this.messageHandlers.get(message.type) || [];
     handlers.forEach(handler => {
@@ -394,22 +367,35 @@ export class WebSocketService {
   }
 
   /**
-   * Send a message via Socket.IO
+   * Send a message via Socket.IO with event metadata
    */
   send(data: any): boolean {
-    if (!this.isConnected()) {
-      console.warn('Cannot send message: Socket.IO not connected');
+    // Check both that we're connected AND have a socket instance
+    if (!this.socket || !this.isConnected()) {
+      console.warn('Cannot send message: Socket.IO not connected or socket is null');
       return false;
     }
     
     try {
-      // For Socket.IO, we emit events based on message type
-      if (data.type) {
-        this.socket!.emit(data.type, data.data || data);
-      } else {
-        // Default message event
-        this.socket!.emit('message', data);
+      // Add event metadata if we have a deduplicator
+      let messageData = data;
+      if (this.eventDeduplicator && data.type) {
+        messageData = this.eventDeduplicator.createEventMetadata(data.type, data.data || data);
       }
+      
+      // Send to room or broadcast
+      if (this.currentRoom && this.roomManager) {
+        // Use room manager to emit (excludes self)
+        this.roomManager.emitToRoom(data.type || 'message', messageData);
+      } else {
+        // Regular emit
+        if (data.type) {
+          this.socket.emit(data.type, messageData);
+        } else {
+          this.socket.emit('message', messageData);
+        }
+      }
+      
       return true;
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -435,7 +421,8 @@ export class WebSocketService {
       }, timeout);
       
       const checkConnection = () => {
-        if (this.isConnected()) {
+        // Check both socket existence and connection state
+        if (this.socket && this.isConnected()) {
           clearTimeout(timeoutId);
           resolve();
         } else if (this.state === WebSocketState.FAILED) {
@@ -451,44 +438,60 @@ export class WebSocketService {
   }
 
   isConnected(): boolean {
-    return this.socket?.connected === true;
+    // Must have a socket instance AND be connected via SocketManager
+    if (!this.socket) {
+      return false;
+    }
+    const socketManager = getSocketManager();
+    return socketManager.isConnected(this.namespace);
   }
 
   /**
-   * Configure deduplication window (in milliseconds)
-   * @param windowMs - Time window for deduplication (default: 100ms)
+   * Get deduplication stats
    */
-  setDeduplicationWindow(windowMs: number): void {
-    this.deduplicationWindow = windowMs;
+  getDeduplicationStats(): any {
+    return this.eventDeduplicator?.getStats() || null;
+  }
+
+  /**
+   * Get room state
+   */
+  getRoomState(): any {
+    return this.roomManager?.getRoomInfo() || null;
   }
 
   disconnect(): void {
     this.setState(WebSocketState.DISCONNECTED);
     
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+    // Leave room if in one
+    if (this.currentRoom && this.roomManager) {
+      this.roomManager.leaveRoom().catch(err => 
+        console.warn('Error leaving room on disconnect:', err)
+      );
     }
     
+    // Note: We don't disconnect the socket from SocketManager
+    // as it may be used by other services
+    this.socket = null;
+    this.roomManager = null;
+    this.eventDeduplicator = null;
+    
+    // Clear handlers
     this.messageHandlers.clear();
     this.errorHandlers = [];
     this.stateChangeHandlers = [];
     this.sessionId = '';
-    this.connectionPromise = null;
-    this.connectionResolver = null;
-    this.connectionRejector = null;
-    this.lastMessages.clear(); // Clear deduplication cache
+    this.currentRoom = null;
   }
 }
 
-// Export a factory function for creating instances with specific configurations
+// Export factory function for creating instances
 export function createWebSocketService(config?: WebSocketConfig): WebSocketService {
   return new WebSocketService(config);
 }
 
-// Export singleton instances for different features
+// Export singleton instances for backward compatibility
+// These now all use the same underlying socket connection via SocketManager
 export const knowledgeSocketIO = new WebSocketService();
-
-// Export instances for backward compatibility
 export const taskUpdateSocketIO = new WebSocketService();
 export const projectListSocketIO = new WebSocketService();

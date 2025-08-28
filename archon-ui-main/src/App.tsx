@@ -8,6 +8,7 @@ import { MainLayout } from './components/layouts/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
+import { SocketProvider } from './contexts/SocketContext';
 import { ProjectPage } from './pages/ProjectPage';
 import { DisconnectScreenOverlay } from './components/DisconnectScreenOverlay';
 import { ErrorBoundaryWithBugReport } from './components/bug-report/ErrorBoundaryWithBugReport';
@@ -94,7 +95,9 @@ export function App() {
     <ThemeProvider>
       <ToastProvider>
         <SettingsProvider>
-          <AppContent />
+          <SocketProvider>
+            <AppContent />
+          </SocketProvider>
         </SettingsProvider>
       </ToastProvider>
     </ThemeProvider>

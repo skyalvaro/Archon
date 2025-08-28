@@ -16,7 +16,8 @@ export default defineConfig({
       'test/errors.test.tsx',
       'test/services/projectService.test.ts',
       'test/components/project-tasks/DocsTab.integration.test.tsx',
-      'test/config/api.test.ts'
+      'test/config/api.test.ts',
+      'test/services/socket/*.test.ts'
     ],
     exclude: ['node_modules', 'dist', '.git', '.cache', 'test.backup', '*.backup/**', 'test-backups'],
     reporters: ['dot', 'json'],

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { Check, Trash2, Edit, Tag, User, Bot, Clipboard, Save, Plus } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -195,7 +195,7 @@ interface DraggableTaskRowProps {
   style?: React.CSSProperties;
 }
 
-const DraggableTaskRow = ({ 
+const DraggableTaskRow = React.memo(({ 
   task, 
   index, 
   onTaskView, 
@@ -208,40 +208,66 @@ const DraggableTaskRow = ({
 }: DraggableTaskRowProps) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const lastReorderRef = useRef<{ taskId: string; index: number; timestamp: number } | null>(null);
   
-  const [{ isDragging }, drag] = useDrag({
+  // Memoize drag configuration
+  const dragConfig = useMemo(() => ({
     type: ItemTypes.TASK,
     item: { id: task.id, index, status: task.status },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  });
+  }), [task.id, index, task.status]);
 
-  const [{ isOver, canDrop }, drop] = useDrop({
+  const [{ isDragging }, drag] = useDrag(dragConfig);
+
+  // Memoized hover handler with debouncing
+  const handleHover = useCallback((draggedItem: { id: string; index: number; status: Task['status'] }, monitor: any) => {
+    if (!monitor.isOver({ shallow: true })) return;
+    if (draggedItem.id === task.id) return;
+    if (draggedItem.status !== task.status) return;
+    
+    const draggedIndex = draggedItem.index;
+    const hoveredIndex = index;
+    
+    if (draggedIndex === hoveredIndex) return;
+    
+    // Prevent rapid re-triggers with throttling
+    const now = Date.now();
+    if (lastReorderRef.current && 
+        lastReorderRef.current.taskId === draggedItem.id && 
+        lastReorderRef.current.index === hoveredIndex &&
+        now - lastReorderRef.current.timestamp < 100) {
+      return;
+    }
+    
+    console.log('HOVER: Moving task', draggedItem.id, 'from index', draggedIndex, 'to', hoveredIndex);
+    
+    // Record this reorder
+    lastReorderRef.current = {
+      taskId: draggedItem.id,
+      index: hoveredIndex,
+      timestamp: now
+    };
+    
+    // Move the task immediately for visual feedback
+    onTaskReorder(draggedItem.id, hoveredIndex, task.status);
+    
+    // Update the dragged item's index to prevent re-triggering
+    draggedItem.index = hoveredIndex;
+  }, [task.id, task.status, index, onTaskReorder]);
+
+  // Memoize drop configuration
+  const dropConfig = useMemo(() => ({
     accept: ItemTypes.TASK,
-    hover: (draggedItem: { id: string; index: number; status: Task['status'] }, monitor) => {
-      if (!monitor.isOver({ shallow: true })) return;
-      if (draggedItem.id === task.id) return;
-      if (draggedItem.status !== task.status) return;
-      
-      const draggedIndex = draggedItem.index;
-      const hoveredIndex = index;
-      
-      if (draggedIndex === hoveredIndex) return;
-      
-      console.log('HOVER: Moving task', draggedItem.id, 'to index', draggedIndex, 'to', hoveredIndex);
-      
-      // Move the task immediately for visual feedback
-      onTaskReorder(draggedItem.id, hoveredIndex, task.status);
-      
-      // Update the dragged item's index to prevent re-triggering
-      draggedItem.index = hoveredIndex;
-    },
-    collect: (monitor) => ({
+    hover: handleHover,
+    collect: (monitor: any) => ({
       isOver: !!monitor.isOver(),
       canDrop: !!monitor.canDrop(),
     }),
-  });
+  }), [handleHover]);
+
+  const [{ isOver, canDrop }, drop] = useDrop(dropConfig);
 
   const handleUpdateField = async (field: string, value: string) => {
     if (onTaskUpdate) {
@@ -405,7 +431,19 @@ const DraggableTaskRow = ({
       </td>
     </tr>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for React.memo - only re-render if key props change
+  return (
+    prevProps.task.id === nextProps.task.id &&
+    prevProps.task.title === nextProps.task.title &&
+    prevProps.task.status === nextProps.task.status &&
+    prevProps.task.task_order === nextProps.task.task_order &&
+    prevProps.task.assignee?.name === nextProps.task.assignee?.name &&
+    prevProps.task.feature === nextProps.task.feature &&
+    prevProps.index === nextProps.index &&
+    prevProps.style?.opacity === nextProps.style?.opacity
+  );
+});
 
 // Add Task Row Component - Always visible empty input row
 interface AddTaskRowProps {
@@ -568,6 +606,10 @@ export const TaskTableView = ({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const [scrollOpacities, setScrollOpacities] = useState<Map<string, number>>(new Map());
+  
+  // Reconciliation state to track pending updates
+  const pendingUpdatesRef = useRef<Map<string, { order: number; timestamp: number }>>(new Map());
+  const reconciliationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate opacity based on row position
   const calculateOpacity = (rowElement: HTMLElement, containerElement: HTMLElement) => {
@@ -665,6 +707,53 @@ export const TaskTableView = ({
     setShowDeleteConfirm(false);
     setTaskToDelete(null);
   }, [setShowDeleteConfirm, setTaskToDelete]);
+
+  // Memoized task reorder with reconciliation
+  const handleTaskReorder = useCallback((taskId: string, newOrder: number, status: Task['status']) => {
+    // Track pending update
+    pendingUpdatesRef.current.set(taskId, {
+      order: newOrder,
+      timestamp: Date.now()
+    });
+    
+    // Clear any existing reconciliation timeout
+    if (reconciliationTimeoutRef.current) {
+      clearTimeout(reconciliationTimeoutRef.current);
+    }
+    
+    // Set up reconciliation check after a delay
+    reconciliationTimeoutRef.current = setTimeout(() => {
+      // Clean up old pending updates (older than 5 seconds)
+      const now = Date.now();
+      pendingUpdatesRef.current.forEach((update, id) => {
+        if (now - update.timestamp > 5000) {
+          pendingUpdatesRef.current.delete(id);
+        }
+      });
+    }, 3000);
+    
+    // Call the original reorder function
+    onTaskReorder(taskId, newOrder, status);
+  }, [onTaskReorder]);
+
+  // Effect to reconcile tasks when they update from server
+  useEffect(() => {
+    // Check if any tasks have been updated that conflict with pending updates
+    tasks.forEach(task => {
+      const pending = pendingUpdatesRef.current.get(task.id);
+      if (pending) {
+        const now = Date.now();
+        // If the update is recent (within 2 seconds) and matches, remove from pending
+        if (now - pending.timestamp < 2000 && task.task_order === pending.order) {
+          pendingUpdatesRef.current.delete(task.id);
+        }
+        // If the update is old and doesn't match, also remove (server won)
+        else if (now - pending.timestamp > 2000) {
+          pendingUpdatesRef.current.delete(task.id);
+        }
+      }
+    });
+  }, [tasks]);
 
   // Group tasks by status and sort by task_order
   const getTasksByStatus = (status: Task['status']) => {
@@ -843,7 +932,7 @@ export const TaskTableView = ({
                 onTaskView={onTaskView}
                 onTaskComplete={onTaskComplete}
                 onTaskDelete={handleDeleteTask}
-                onTaskReorder={onTaskReorder}
+                onTaskReorder={handleTaskReorder}
                 onTaskUpdate={onTaskUpdate}
                 tasksInStatus={getTasksByStatus(task.status)}
                 style={{ 
