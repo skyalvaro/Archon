@@ -166,7 +166,7 @@ export const pollNewData = (params) => {
 
 2. **Backend - Add ETag support:**
 ```python
-from src.server.utils.etag_utils import generate_etag, check_etag
+from ..utils.etag_utils import generate_etag, check_etag
 
 @router.get("/api/new-endpoint")
 async def get_data(request: Request):

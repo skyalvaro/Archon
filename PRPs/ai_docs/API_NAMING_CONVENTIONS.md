@@ -60,11 +60,11 @@ GET    /api/tasks/{id}                    - Get task
 PUT    /api/tasks/{id}                    - Update task
 DELETE /api/tasks/{id}                    - Delete task
 
-GET    /api/projects/{id}/documents       - Get project documents
-POST   /api/projects/{id}/documents       - Create document
-GET    /api/projects/{id}/documents/{id}  - Get document
-PUT    /api/projects/{id}/documents/{id}  - Update document
-DELETE /api/projects/{id}/documents/{id}  - Delete document
+GET    /api/projects/{project_id}/docs         - Get project documents
+POST   /api/projects/{project_id}/docs         - Create document
+GET    /api/projects/{project_id}/docs/{doc_id} - Get document
+PUT    /api/projects/{project_id}/docs/{doc_id} - Update document
+DELETE /api/projects/{project_id}/docs/{doc_id} - Delete document
 ```
 
 ### Progress/Polling Endpoints
