@@ -18,16 +18,11 @@ from datetime import datetime
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..utils import get_supabase_client
-from ..services.storage import DocumentStorageService
-from ..services.search.rag_service import RAGService
-from ..services.knowledge import KnowledgeItemService, DatabaseMetricsService
-from ..services.crawling import CrawlOrchestrationService
-from ..services.crawler_manager import get_crawler
-
 # Import unified logging
 from ..config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
 from ..services.crawler_manager import get_crawler
+from ..services.crawling import CrawlOrchestrationService
+from ..services.knowledge import DatabaseMetricsService, KnowledgeItemService
 from ..services.search.rag_service import RAGService
 from ..services.storage import DocumentStorageService
 from ..utils import get_supabase_client
@@ -35,12 +30,10 @@ from ..utils.document_processing import extract_text_from_document
 
 # Get logger for this module
 logger = get_logger(__name__)
-# Socket.IO removed - using polling instead
 
 # Create router
 router = APIRouter(prefix="/api", tags=["knowledge"])
 
-# Socket.IO removed - using polling for progress updates
 
 # Create a semaphore to limit concurrent crawls
 # This prevents the server from becoming unresponsive during heavy crawling
@@ -87,28 +80,27 @@ class RagQueryRequest(BaseModel):
     match_count: int = 5
 
 
-@router.get("/test-socket-progress/{progress_id}")
-async def test_socket_progress(progress_id: str):
-    """Test endpoint to verify Socket.IO crawl progress is working."""
+@router.get("/crawl-progress/{progress_id}")
+async def get_crawl_progress(progress_id: str):
+    """Get crawl progress for polling.
+    
+    Returns the current state of a crawl operation.
+    Frontend should poll this endpoint to track crawl progress.
+    """
     try:
-        # Send a test progress update
-        test_data = {
-            "progressId": progress_id,
-            "status": "testing",
-            "percentage": 50,
-            "message": "Test progress update from API",
-            "currentStep": "Testing Socket.IO connection",
-            "logs": ["Test log entry 1", "Test log entry 2"],
-        }
+        from ..utils.progress.progress_tracker import ProgressTracker
 
-        # Socket.IO removed - update_crawl_progress disabled
+        # Get progress from the tracker's in-memory storage
+        progress_data = ProgressTracker.get_progress(progress_id)
+        safe_logfire_info(f"Crawl progress requested | progress_id={progress_id} | found={progress_data is not None}")
 
-        return {
-            "success": True,
-            "message": f"Test progress sent to room {progress_id}",
-            "data": test_data,
-        }
+        if not progress_data:
+            # Return 404 if no progress exists - this is correct behavior
+            raise HTTPException(status_code=404, detail={"error": f"No progress found for ID: {progress_id}"})
+
+        return progress_data
     except Exception as e:
+        safe_logfire_error(f"Failed to get crawl progress | error={str(e)} | progress_id={progress_id}")
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
 
@@ -283,8 +275,17 @@ async def refresh_knowledge_item(source_id: str):
         # Generate unique progress ID
         progress_id = str(uuid.uuid4())
 
-        # Start progress tracking with initial state
-        # Socket.IO removed - start_crawl_progress disabled
+        # Initialize progress tracker IMMEDIATELY so it's available for polling
+        from ..utils.progress.progress_tracker import ProgressTracker
+        tracker = ProgressTracker(progress_id, operation_type="crawl")
+        await tracker.start({
+            "url": url,
+            "status": "initializing",
+            "percentage": 0,
+            "log": f"Starting refresh for {url}",
+            "source_id": source_id,
+            "operation": "refresh"
+        })
 
         # Get crawler from CrawlerManager - same pattern as _perform_crawl_with_progress
         try:
@@ -365,9 +366,18 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         )
         # Generate unique progress ID
         progress_id = str(uuid.uuid4())
-        # Start progress tracking with initial state
-        # Socket.IO removed - start_crawl_progress disabled
-        # Start background task IMMEDIATELY (like the old API)
+
+        # Initialize progress tracker IMMEDIATELY so it's available for polling
+        from ..utils.progress.progress_tracker import ProgressTracker
+        tracker = ProgressTracker(progress_id, operation_type="crawl")
+        await tracker.start({
+            "url": str(request.url),
+            "status": "initializing",
+            "percentage": 0,
+            "log": f"Starting crawl for {request.url}"
+        })
+
+        # Start background task
         task = asyncio.create_task(_perform_crawl_with_progress(progress_id, request))
         # Track the task for cancellation support
         active_crawl_tasks[progress_id] = task
@@ -409,7 +419,6 @@ async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemR
                     raise Exception("Crawler not available - initialization may have failed")
             except Exception as e:
                 safe_logfire_error(f"Failed to get crawler | error={str(e)}")
-                # Socket.IO removed - error_crawl_progress disabled
                 return
 
             supabase_client = get_supabase_client()
@@ -444,7 +453,6 @@ async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemR
             )
         except asyncio.CancelledError:
             safe_logfire_info(f"Crawl cancelled | progress_id={progress_id}")
-            # Socket.IO removed - update_crawl_progress disabled
             raise
         except Exception as e:
             error_message = f"Crawling failed: {str(e)}"
@@ -461,7 +469,6 @@ async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemR
             logger.error(f"Traceback:\n{tb}")
             logger.error("=== END CRAWL ERROR ===")
             safe_logfire_error(f"Crawl exception traceback | traceback={tb}")
-            # Socket.IO removed - error_crawl_progress disabled
         finally:
             # Clean up task from registry when done (success or failure)
             if progress_id in active_crawl_tasks:
@@ -483,7 +490,7 @@ async def upload_document(
         safe_logfire_info(
             f"📋 UPLOAD: Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
         )
-        
+
         safe_logfire_info(
             f"Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
         )
@@ -501,8 +508,16 @@ async def upload_document(
             "content_type": file.content_type,
             "size": len(file_content),
         }
-        # Start progress tracking
-        # Socket.IO removed - start_crawl_progress disabled
+        
+        # Initialize progress tracker IMMEDIATELY so it's available for polling
+        from ..utils.progress.progress_tracker import ProgressTracker
+        tracker = ProgressTracker(progress_id, operation_type="upload")
+        await tracker.start({
+            "filename": file.filename,
+            "status": "initializing",
+            "percentage": 0,
+            "log": f"Starting upload for {file.filename}"
+        })
         # Start background task for processing with file content and metadata
         task = asyncio.create_task(
             _perform_upload_with_progress(
@@ -564,15 +579,13 @@ async def _perform_upload_with_progress(
 
         # Extract text from document with progress - use mapper for consistent progress
         mapped_progress = progress_mapper.map_progress("processing", 50)
-        # Socket.IO removed - update_crawl_progress disabled
 
         try:
             extracted_text = extract_text_from_document(file_content, filename, content_type)
             safe_logfire_info(
                 f"Document text extracted | filename={filename} | extracted_length={len(extracted_text)} | content_type={content_type}"
             )
-        except Exception as e:
-            # Socket.IO removed - error_crawl_progress disabled
+        except Exception:
             return
 
         # Use DocumentStorageService to handle the upload
@@ -598,7 +611,6 @@ async def _perform_upload_with_progress(
             if batch_info:
                 progress_data.update(batch_info)
 
-            # Socket.IO removed - update_crawl_progress disabled
 
         # Call the service's upload_document method
         success, result = await doc_storage_service.upload_document(
@@ -614,24 +626,20 @@ async def _perform_upload_with_progress(
         if success:
             # Complete the upload with 100% progress
             final_progress = progress_mapper.map_progress("completed", 100)
-            # Socket.IO removed - update_crawl_progress disabled
 
             # Also send the completion event with details
-            # Socket.IO removed - complete_crawl_progress disabled
 
             safe_logfire_info(
                 f"Document uploaded successfully | progress_id={progress_id} | source_id={result.get('source_id')} | chunks_stored={result.get('chunks_stored')}"
             )
         else:
             error_msg = result.get("error", "Unknown error")
-            # Socket.IO removed - error_crawl_progress disabled
 
     except Exception as e:
         error_msg = f"Upload failed: {str(e)}"
         safe_logfire_error(
             f"Document upload failed | progress_id={progress_id} | filename={file_metadata.get('filename', 'unknown')} | error={str(e)}"
         )
-        # Socket.IO removed - error_crawl_progress disabled
     finally:
         # Clean up task from registry when done (success or failure)
         if progress_id in active_crawl_tasks:
@@ -837,8 +845,7 @@ async def stop_crawl_task(progress_id: str):
     """Stop a running crawl task."""
     try:
         from ..services.crawling import get_active_orchestration, unregister_orchestration
-        
-        # Socket.IO removed - sio.emit disabled
+
 
         safe_logfire_info(f"Emitted crawl:stopping event | progress_id={progress_id}")
 
@@ -861,7 +868,6 @@ async def stop_crawl_task(progress_id: str):
         # Step 3: Remove from active orchestrations registry
         unregister_orchestration(progress_id)
 
-        # Socket.IO removed - sio.emit disabled
 
         safe_logfire_info(f"Successfully stopped crawl task | progress_id={progress_id}")
         return {

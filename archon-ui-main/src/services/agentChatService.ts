@@ -114,13 +114,21 @@ class AgentChatService {
       });
 
       if (!response.ok) {
+        // If we get a 404, the agent service is not running
+        if (response.status === 404) {
+          console.log('Agent chat service not available - service may be disabled');
+          throw new Error('Agent chat service is not available. The service may be disabled.');
+        }
         throw new Error(`Failed to create session: ${response.statusText}`);
       }
 
       const session = await response.json();
       return session;
     } catch (error) {
-      console.error('Failed to create chat session:', error);
+      // Don't log fetch errors for disabled service
+      if (error instanceof Error && !error.message.includes('not available')) {
+        console.error('Failed to create chat session:', error);
+      }
       throw error;
     }
   }
@@ -177,6 +185,17 @@ class AgentChatService {
         });
 
         if (!response.ok) {
+          // If we get a 404, the service is not available - stop polling
+          if (response.status === 404) {
+            console.log('Agent chat service not available (404) - stopping polling');
+            clearInterval(pollInterval);
+            this.pollingIntervals.delete(sessionId);
+            const errorHandler = this.errorHandlers.get(sessionId);
+            if (errorHandler) {
+              errorHandler(new Error('Agent chat service is not available'));
+            }
+            return;
+          }
           throw new Error(`Failed to fetch messages: ${response.statusText}`);
         }
 
@@ -191,7 +210,10 @@ class AgentChatService {
           }
         }
       } catch (error) {
-        console.error('Failed to poll messages:', error);
+        // Only log non-404 errors (404s are handled above)
+        if (error instanceof Error && !error.message.includes('404')) {
+          console.error('Failed to poll messages:', error);
+        }
         const errorHandler = this.errorHandlers.get(sessionId);
         if (errorHandler) {
           errorHandler(error instanceof Error ? error : new Error('Unknown error'));

@@ -59,7 +59,7 @@ class CrawlProgressService {
     // Start polling
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/progress/${progressId}`);
+        const response = await fetch(`/api/knowledge/crawl-progress/${progressId}`);
         if (response.ok) {
           const data = await response.json();
           

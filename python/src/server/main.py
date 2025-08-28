@@ -40,8 +40,6 @@ from .services.crawler_manager import cleanup_crawler, initialize_crawler
 # Import utilities and core classes
 from .services.credential_service import initialize_credentials
 
-# Socket.IO removed - using polling instead
-
 # Import missing dependencies that the modular APIs need
 try:
     from crawl4ai import AsyncWebCrawler, BrowserConfig
@@ -100,7 +98,6 @@ async def lifespan(app: FastAPI):
         # Make crawling context available to modules
         # Crawler is now managed by CrawlerManager
 
-        # Socket.IO removed - using polling for real-time updates
         api_logger.info("✅ Using polling for real-time updates")
 
         # Initialize prompt service
@@ -256,7 +253,6 @@ async def api_health_check():
     return await health_check()
 
 
-# Socket.IO removed - FastAPI app runs directly without wrapper
 # Export the app directly for uvicorn to use
 
 

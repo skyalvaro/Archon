@@ -3,7 +3,7 @@ Progress Service Module for Archon
 
 This module provides progress tracking functionality for long-running operations,
 particularly project creation with AI assistance. It manages progress states
-and broadcasts updates via Socket.IO.
+for polling-based updates.
 """
 
 # Removed direct logging import - using unified config
@@ -14,11 +14,10 @@ from ...config.logfire_config import get_logger
 
 logger = get_logger(__name__)
 
-# Socket.IO removed - using polling for progress updates
 
 
 class ProgressService:
-    """Service class for progress tracking with Socket.IO broadcasting"""
+    """Service class for progress tracking with polling updates"""
 
     def __init__(self):
         """Initialize progress tracking storage"""
@@ -49,7 +48,7 @@ class ProgressService:
 
     async def update_progress(self, progress_id: str, update_data: dict[str, Any]) -> None:
         """
-        Update operation progress and broadcast via Socket.IO.
+        Update operation progress for polling access.
 
         Args:
             progress_id: Operation identifier
@@ -152,7 +151,7 @@ class ProgressService:
 
     async def _broadcast_progress(self, progress_id: str) -> None:
         """
-        Broadcast progress update via Socket.IO.
+        Update progress state for polling access.
 
         Args:
             progress_id: Operation identifier
@@ -182,16 +181,9 @@ class ProgressService:
             elif status == "error":
                 event_type = f"{operation_type}_error"
 
-        try:
-            logger.info(
-                f"🚀 [PROGRESS] About to emit {event_type} to room {progress_id} with data: {progress_data}"
-            )
-            # await sio.emit(event_type, progress_data, room=progress_id)  # Socket.IO removed
-            logger.info(
-                f"✅ [PROGRESS] Successfully emitted {event_type} for progress {progress_id}"
-            )
-        except Exception as e:
-            logger.error(f"❌ [PROGRESS] Error broadcasting progress via Socket.IO: {e}")
+        logger.info(
+            f"✅ [PROGRESS] Updated {event_type} for progress {progress_id}"
+        )
 
 
 # Global progress service instance

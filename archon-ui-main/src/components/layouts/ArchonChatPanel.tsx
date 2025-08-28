@@ -104,13 +104,21 @@ export const ArchonChatPanel: React.FC<ArchonChatPanelProps> = props => {
           setConnectionError(null);
         } catch (error) {
           console.error('Failed to initialize chat session:', error);
-          setConnectionError('Failed to initialize chat. Server may be offline.');
+          if (error instanceof Error && error.message.includes('not available')) {
+            setConnectionError('Agent chat service is disabled. Enable it in docker-compose to use this feature.');
+          } else {
+            setConnectionError('Failed to initialize chat. Server may be offline.');
+          }
           setConnectionStatus('offline');
         }
         
       } catch (error) {
         console.error('Failed to initialize chat:', error);
-        setConnectionError('Failed to connect to agent. Server may be offline.');
+        if (error instanceof Error && error.message.includes('not available')) {
+          setConnectionError('Agent chat service is disabled. Enable it in docker-compose to use this feature.');
+        } else {
+          setConnectionError('Failed to connect to agent. Server may be offline.');
+        }
         setConnectionStatus('offline');
       }
     }, []);

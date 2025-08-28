@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 interface UsePollingOptions<T> {
   interval?: number;
@@ -49,6 +49,11 @@ export function usePolling<T>(
   const lastFetchRef = useRef<number>(0);
 
   const fetchData = useCallback(async () => {
+    // Don't fetch if URL is empty
+    if (!url) {
+      return;
+    }
+    
     // Check stale time
     if (staleTime > 0 && Date.now() - lastFetchRef.current < staleTime) {
       return; // Data is still fresh
@@ -83,6 +88,12 @@ export function usePolling<T>(
       }
 
       if (!response.ok) {
+        // For 404s, don't throw an error - just continue polling
+        // This can happen briefly during initialization
+        if (response.status === 404) {
+          console.log(`Resource not found (404), will retry: ${url}`);
+          return;
+        }
         throw new Error(`Failed to fetch: ${response.statusText}`);
       }
 
@@ -121,14 +132,18 @@ export function usePolling<T>(
         setPollInterval(0); // Stop polling when hidden
       } else {
         setPollInterval(interval); // Resume polling when visible
-        // Trigger immediate refetch
-        fetchData();
+        // Trigger immediate refetch if URL exists
+        if (url && enabled) {
+          fetchData();
+        }
       }
     };
 
     const handleFocus = () => {
-      // Immediate refetch on focus
-      fetchData();
+      // Immediate refetch on focus if URL exists
+      if (url && enabled) {
+        fetchData();
+      }
       setPollInterval(interval);
     };
 
@@ -139,7 +154,7 @@ export function usePolling<T>(
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [interval, fetchData]);
+  }, [interval, fetchData, url, enabled]);
 
   // Update polling interval when enabled changes
   useEffect(() => {
@@ -226,6 +241,46 @@ export function useProgressPolling(operationId: string | null, options?: UsePoll
     if (result.data?.status === 'completed' || result.data?.status === 'failed') {
       // Data indicates completion, no need to continue polling
       // This will be handled by the enabled flag in next render
+    }
+  }, [result.data?.status]);
+
+  return result;
+}
+
+/**
+ * Hook for polling crawl progress updates
+ */
+export function useCrawlProgressPolling(progressId: string | null, options?: UsePollingOptions<any>) {
+  const url = progressId ? `/api/crawl-progress/${progressId}` : '';
+  
+  // Track if crawl is complete to disable polling
+  const [isComplete, setIsComplete] = useState(false);
+  
+  // Reset complete state when progressId changes
+  useEffect(() => {
+    setIsComplete(false);
+  }, [progressId]);
+  
+  // Memoize the error handler to prevent recreating it on every render
+  const handleError = useCallback((error: Error) => {
+    if (!error.message.includes('404') && !error.message.includes('Not Found') && 
+        !error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+      console.error('Crawl progress error:', error);
+    }
+  }, []);
+  
+  const result = usePolling(url, {
+    interval: 1000, // 1 second for crawl progress
+    enabled: !!progressId && !isComplete,
+    staleTime: 0, // Always refetch progress
+    onError: handleError,
+  });
+
+  // Stop polling when operation is complete or failed
+  useEffect(() => {
+    const status = result.data?.status;
+    if (status === 'completed' || status === 'failed' || status === 'error' || status === 'cancelled') {
+      setIsComplete(true);
     }
   }, [result.data?.status]);
 

@@ -12,6 +12,7 @@ import { useToast } from '../contexts/ToastContext';
 import { knowledgeBaseService, KnowledgeItem, KnowledgeItemMetadata } from '../services/knowledgeBaseService';
 import { CrawlingProgressCard } from '../components/knowledge-base/CrawlingProgressCard';
 import { CrawlProgressData, crawlProgressService } from '../services/crawlProgressService';
+import { useCrawlProgressPolling } from '../hooks/usePolling';
 import { KnowledgeTable } from '../components/knowledge-base/KnowledgeTable';
 import { KnowledgeItemCard } from '../components/knowledge-base/KnowledgeItemCard';
 import { GroupedKnowledgeItemCard } from '../components/knowledge-base/GroupedKnowledgeItemCard';
@@ -65,30 +66,45 @@ export const KnowledgeBasePage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [progressItems, setProgressItems] = useState<CrawlProgressData[]>([]);
 
-  // Use polling for progress updates when there's an active operation
-  const { data: progressData } = useProgressPolling(activeProgressId, {
-    onSuccess: (data) => {
-      if (data?.status === 'completed') {
-        // Stop polling and refresh knowledge items
+  // Use polling for crawl progress updates
+  const { data: crawlProgress } = useCrawlProgressPolling(activeProgressId);
+  
+  // Update progress items when polling data changes
+  useEffect(() => {
+    if (crawlProgress && activeProgressId) {
+      setProgressItems(prev => prev.map(item => 
+        item.progressId === activeProgressId 
+          ? { ...item, ...crawlProgress }
+          : item
+      ));
+      
+      // Handle completion
+      if (crawlProgress.status === 'completed') {
         setActiveProgressId(null);
+        localStorage.removeItem('current_operation_id');
         loadKnowledgeItems();
-        showToast(
-          data.uploadType === 'document' 
-            ? `Document "${data.fileName}" uploaded successfully!`
-            : `Crawling completed!`,
-          'success'
-        );
-      } else if (data?.status === 'failed') {
+        showToast('Crawling completed successfully!', 'success');
+        
+        // Clean up after a delay
+        setTimeout(() => {
+          setProgressItems(prev => prev.filter(item => item.progressId !== activeProgressId));
+          try {
+            localStorage.removeItem(`crawl_progress_${activeProgressId}`);
+            const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+            localStorage.setItem('active_crawls', JSON.stringify(
+              activeCrawls.filter((id: string) => id !== activeProgressId)
+            ));
+          } catch (error) {
+            console.error('Failed to clean up crawl:', error);
+          }
+        }, 3000);
+      } else if (crawlProgress.status === 'error' || crawlProgress.status === 'failed') {
         setActiveProgressId(null);
-        showToast(`Operation failed: ${data.error || 'Unknown error'}`, 'error');
+        localStorage.removeItem('current_operation_id');
+        showToast(`Crawl failed: ${crawlProgress.error || 'Unknown error'}`, 'error');
       }
-    },
-    onError: (error) => {
-      console.error('Progress polling error:', error);
-      setActiveProgressId(null);
-      showToast('Failed to track progress', 'error');
     }
-  });
+  }, [crawlProgress, activeProgressId]);
   
   // Selection state
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -140,9 +156,33 @@ export const KnowledgeBasePage = () => {
 
   // Check for any active progress on mount
   useEffect(() => {
-    const activeProgressId = localStorage.getItem('current_operation_id');
+    // First check for current_operation_id
+    let activeProgressId = localStorage.getItem('current_operation_id');
+    
+    // If not found, check for any active crawls
+    if (!activeProgressId) {
+      const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+      if (activeCrawls.length > 0) {
+        // Get the most recent crawl
+        activeProgressId = activeCrawls[activeCrawls.length - 1];
+      }
+    }
+    
     if (activeProgressId) {
-      setActiveProgressId(activeProgressId);
+      // Verify the crawl still exists in localStorage
+      const crawlData = localStorage.getItem(`crawl_progress_${activeProgressId}`);
+      if (crawlData) {
+        const parsed = JSON.parse(crawlData);
+        // Only restore if not completed
+        if (parsed.status !== 'completed' && parsed.status !== 'error' && parsed.status !== 'failed') {
+          setActiveProgressId(activeProgressId);
+          // Restore progress item to state
+          setProgressItems([parsed]);
+        } else {
+          // Clean up completed crawl
+          localStorage.removeItem('current_operation_id');
+        }
+      }
     }
   }, []);
 
@@ -703,9 +743,7 @@ export const KnowledgeBasePage = () => {
   };
 
   const handleStartCrawl = async (progressId: string, initialData: Partial<CrawlProgressData>) => {
-    // handleStartCrawl called with progressId
-    // Initial data received
-    
+    // Start tracking this crawl with simple polling
     const newProgressItem: CrawlProgressData = {
       progressId,
       status: 'starting',
@@ -714,19 +752,23 @@ export const KnowledgeBasePage = () => {
       ...initialData
     };
     
-    // Adding progress item to state
+    // Add to progress items for UI display
     setProgressItems(prev => [...prev, newProgressItem]);
+    
+    // Set as active progress for polling
+    setActiveProgressId(progressId);
     
     // Store in localStorage for persistence
     try {
-      // Store the crawl data
       localStorage.setItem(`crawl_progress_${progressId}`, JSON.stringify({
         ...newProgressItem,
         startedAt: Date.now(),
         lastUpdated: Date.now()
       }));
       
-      // Add to active crawls list
+      // Save as current operation
+      localStorage.setItem('current_operation_id', progressId);
+      
       const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
       if (!activeCrawls.includes(progressId)) {
         activeCrawls.push(progressId);
@@ -736,85 +778,8 @@ export const KnowledgeBasePage = () => {
       console.error('Failed to persist crawl progress:', error);
     }
     
-    // Set up callbacks for enhanced progress tracking
-    const progressCallback = (data: CrawlProgressData) => {
-      // Progress callback called
-      
-      if (data.progressId === progressId) {
-        // Update progress first
-        handleProgressUpdate(data);
-        
-        // Then handle completion/error states
-        if (data.status === 'completed') {
-          handleProgressComplete(data);
-        } else if (data.status === 'error') {
-          handleProgressError(data.error || 'Crawling failed', progressId);
-        } else if (data.status === 'cancelled' || data.status === 'stopped') {
-          // Handle cancelled/stopped status
-          handleProgressUpdate({ ...data, status: 'cancelled' });
-          setTimeout(() => {
-            setProgressItems(prev => prev.filter(item => item.progressId !== progressId));
-            // Clean up from localStorage
-            try {
-              localStorage.removeItem(`crawl_progress_${progressId}`);
-              const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
-              const updated = activeCrawls.filter((id: string) => id !== progressId);
-              localStorage.setItem('active_crawls', JSON.stringify(updated));
-            } catch (error) {
-              console.error('Failed to clean up cancelled crawl:', error);
-            }
-            crawlProgressService.stopStreaming(progressId);
-          }, 2000); // Show cancelled status for 2 seconds before removing
-        }
-      }
-    };
-    
-    const stateChangeCallback = (state: WebSocketState) => {
-      // WebSocket state changed
-      
-      // Update UI based on connection state if needed
-      if (state === WebSocketState.FAILED) {
-        handleProgressError('Connection failed - please check your network', progressId);
-      }
-    };
-    
-    const errorCallback = (error: Error | Event) => {
-      // WebSocket error
-      const errorMessage = error instanceof Error ? error.message : 'Connection error';
-      handleProgressError(`Connection error: ${errorMessage}`, progressId);
-    };
-    
-    // Starting progress stream
-    
-    try {
-      // Use the enhanced streamProgress method with all callbacks
-      // Add new progress item for tracking
-      setProgressItems(prev => [...prev, {
-        progressId: progressId,
-        status: 'starting',
-        message: 'Starting crawl operation...'
-      }]);
-      
-      await crawlProgressService.streamProgressEnhanced(progressId, {
-        onMessage: progressCallback,
-        onStateChange: stateChangeCallback,
-        onError: errorCallback
-      }, {
-        autoReconnect: true,
-        reconnectDelay: 5000,
-        connectionTimeout: 10000
-      });
-      
-      // WebSocket connected successfully
-      
-      // Wait for connection to be fully established
-      await crawlProgressService.waitForConnection(5000);
-      
-      // Connection verified
-    } catch (error) {
-      // Failed to establish WebSocket connection
-      handleProgressError('Failed to connect to progress updates', progressId);
-    }
+    // Progress is now tracked via simple HTTP polling - no complex callbacks needed
+    // The useEffect hook above will handle progress updates automatically
   };
 
   return <div>

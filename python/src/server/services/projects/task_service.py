@@ -15,38 +15,15 @@ from ...config.logfire_config import get_logger
 
 logger = get_logger(__name__)
 
-# Socket.IO removed - using polling for real-time updates
-try:
-    # Socket.IO removed - no longer importing socketio_app
-    _sio = None
-    _broadcast_available = False
-    logger.info("✅ Using polling for real-time updates - Socket.IO removed")
+# Updates handled via polling
+_broadcast_available = False
 
-    async def broadcast_task_update(project_id: str, event_type: str, task_data: dict):
-        """Task updates handled via polling - Socket.IO removed."""
-        # await _sio.emit(event_type, task_data, room=project_id)  # Socket.IO removed
-        pass  # Updates will be picked up via polling
-        logger.info(
-            f"✅ Broadcasted {event_type} for task {task_data.get('id', 'unknown')} to project {project_id}"
-        )
-
-except ImportError as e:
-    logger.warning(f"❌ Socket.IO broadcasting not available - ImportError: {e}")
-    _broadcast_available = False
-    _sio = None
-
-    # Dummy function when broadcasting is not available
-    async def broadcast_task_update(*args, **kwargs):
-        logger.debug("Socket.IO broadcast skipped - not available")
-        pass
-
-except Exception as e:
-    logger.warning(f"❌ Socket.IO broadcasting not available - Exception: {type(e).__name__}: {e}")
-    import traceback
-
-    logger.warning(f"❌ Full traceback: {traceback.format_exc()}")
-    _broadcast_available = False
-    _sio = None
+async def broadcast_task_update(project_id: str, event_type: str, task_data: dict):
+    """Task updates handled via polling."""
+    pass  # Updates will be picked up via polling
+    logger.info(
+        f"✅ Task update: {event_type} for task {task_data.get('id', 'unknown')} in project {project_id}"
+    )
 
     # Dummy function when broadcasting is not available
     async def broadcast_task_update(*args, **kwargs):

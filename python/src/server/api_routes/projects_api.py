@@ -5,7 +5,7 @@ Handles:
 - Project management (CRUD operations)
 - Task management with hierarchical structure
 - Streaming project creation with DocumentAgent integration
-- Socket.IO progress updates for project creation
+- HTTP polling for progress updates
 """
 
 import asyncio
@@ -14,7 +14,7 @@ import secrets
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Header, Response
+from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi import status as http_status
 from pydantic import BaseModel
 
@@ -22,7 +22,7 @@ from pydantic import BaseModel
 # Set up standard logger for background tasks
 from ..config.logfire_config import get_logger, logfire
 from ..utils import get_supabase_client
-from ..utils.etag_utils import generate_etag, check_etag
+from ..utils.etag_utils import check_etag, generate_etag
 
 logger = get_logger(__name__)
 
@@ -37,7 +37,7 @@ from ..services.projects import (
 from ..services.projects.document_service import DocumentService
 from ..services.projects.versioning_service import VersioningService
 
-# Socket.IO removed - using polling instead
+# Using HTTP polling for real-time updates
 
 router = APIRouter(prefix="/api", tags=["projects"])
 
@@ -131,24 +131,24 @@ async def list_projects(
             "count": len(formatted_projects)
         }
         current_etag = generate_etag(etag_data)
-        
+
         # Generate response with timestamp for polling
         response_data = {
             "projects": formatted_projects,
             "timestamp": datetime.utcnow().isoformat(),
             "count": len(formatted_projects)
         }
-        
+
         # Check if client's ETag matches
         if check_etag(if_none_match, current_etag):
             response.status_code = http_status.HTTP_304_NOT_MODIFIED
             return None
-        
+
         # Set headers
         response.headers["ETag"] = current_etag
         response.headers["Last-Modified"] = datetime.utcnow().isoformat()
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
-        
+
         return response_data
 
     except HTTPException:
@@ -563,7 +563,7 @@ async def list_project_tasks(project_id: str, include_archived: bool = False, ex
 
 @router.post("/tasks")
 async def create_task(request: CreateTaskRequest):
-    """Create a new task with automatic reordering and real-time Socket.IO broadcasting."""
+    """Create a new task with automatic reordering."""
     try:
         # Use TaskService to create the task
         task_service = TaskService()
@@ -741,7 +741,7 @@ class RestoreVersionRequest(BaseModel):
 
 @router.put("/tasks/{task_id}")
 async def update_task(task_id: str, request: UpdateTaskRequest):
-    """Update a task with real-time Socket.IO broadcasting."""
+    """Update a task."""
     try:
         # Build update fields dictionary
         update_fields = {}
@@ -785,7 +785,7 @@ async def update_task(task_id: str, request: UpdateTaskRequest):
 
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
-    """Archive a task (soft delete) with real-time Socket.IO broadcasting."""
+    """Archive a task (soft delete)."""
     try:
         # Use TaskService to archive the task
         task_service = TaskService()
@@ -810,15 +810,12 @@ async def delete_task(task_id: str):
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
 
-# WebSocket endpoints removed - use Socket.IO events instead
-
-
-# MCP endpoints now emit Socket.IO directly - no context manager needed
+# MCP endpoints for task operations
 
 
 @router.put("/mcp/tasks/{task_id}/status")
-async def mcp_update_task_status_with_socketio(task_id: str, status: str):
-    """Update task status via MCP tools with Socket.IO broadcasting using RAG pattern."""
+async def mcp_update_task_status(task_id: str, status: str):
+    """Update task status via MCP tools."""
     try:
         logfire.info(f"MCP task status update | task_id={task_id} | status={status}")
 
@@ -838,7 +835,7 @@ async def mcp_update_task_status_with_socketio(task_id: str, status: str):
         project_id = updated_task["project_id"]
 
         logfire.info(
-            f"Task status updated with Socket.IO broadcast | task_id={task_id} | project_id={project_id} | status={status}"
+            f"Task status updated | task_id={task_id} | project_id={project_id} | status={status}"
         )
 
         return {"message": "Task status updated successfully", "task": updated_task}
@@ -847,13 +844,12 @@ async def mcp_update_task_status_with_socketio(task_id: str, status: str):
         raise
     except Exception as e:
         logfire.error(
-            f"Failed to update task status with Socket.IO | error={str(e)} | task_id={task_id}"
+            f"Failed to update task status | error={str(e)} | task_id={task_id}"
         )
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Socket.IO Event Handlers moved to socketio_handlers.py
-# The handlers are automatically registered when socketio_handlers is imported above
+# Progress tracking via HTTP polling - see /api/progress endpoints
 
 # ==================== DOCUMENT MANAGEMENT ENDPOINTS ====================
 
