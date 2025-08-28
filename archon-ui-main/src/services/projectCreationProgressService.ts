@@ -78,16 +78,25 @@ class ProjectCreationProgressService {
             this.stopStreaming(progressId);
           }
         } else if (response.status === 404) {
-          // Operation not found
+          // 404 is expected initially - operation might not exist yet
+          // Continue polling for now
+          console.log(`Progress operation ${progressId} not found yet, continuing to poll`);
+        } else {
+          // Any other non-ok status is a fatal error
+          const errorMsg = `Server error: ${response.status} ${response.statusText}`;
+          console.error(`Fatal error polling project creation progress: ${errorMsg}`);
           this.stopStreaming(progressId);
           if (callbacks.onError) {
-            callbacks.onError('Progress operation not found');
+            callbacks.onError(errorMsg);
           }
         }
       } catch (error) {
-        console.error('Error polling project creation progress:', error);
+        // Network or parsing errors are fatal
+        console.error('Fatal error polling project creation progress:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Network error';
+        this.stopStreaming(progressId);
         if (callbacks.onError) {
-          callbacks.onError(error instanceof Error ? error.message : 'Polling error');
+          callbacks.onError(errorMsg);
         }
       }
     }, 1000); // Poll every second
