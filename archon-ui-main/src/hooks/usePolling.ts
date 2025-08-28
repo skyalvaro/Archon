@@ -283,7 +283,7 @@ export function useCrawlProgressPolling(progressId: string | null, options?: Use
       console.log('🔄 Crawl polling data received:', { 
         progressId, 
         status, 
-        percentage: result.data.percentage 
+        progress: result.data.progress 
       });
     }
     if (status === 'completed' || status === 'failed' || status === 'error' || status === 'cancelled') {

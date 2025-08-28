@@ -75,7 +75,7 @@ export const KnowledgeBasePage = () => {
       console.log('📊 Crawl progress update:', { 
         progressId: activeProgressId, 
         status: crawlProgress.status,
-        percentage: crawlProgress.percentage 
+        progress: crawlProgress.progress 
       });
       
       setProgressItems(prev => {
@@ -443,7 +443,7 @@ export const KnowledgeBasePage = () => {
           currentUrl: item.url,
           totalPages: 0,
           processedPages: 0,
-          percentage: 0,
+          progress: 0,
           status: 'starting',
           message: 'Starting refresh...',
           logs: ['Starting refresh for ' + item.url],
@@ -783,7 +783,7 @@ export const KnowledgeBasePage = () => {
       // Update UI state
       setProgressItems(prev => prev.map(item => 
         item.progressId === progressId 
-          ? { ...item, status: 'cancelled', percentage: -1 }
+          ? { ...item, status: 'cancelled', progress: -1 }
           : item
       ));
       
@@ -1291,7 +1291,7 @@ const AddKnowledgeModal = ({
           // Start progress tracking
           onStartCrawl((result as any).progressId, {
             status: 'initializing',
-            percentage: 0,
+            progress: 0,
             currentStep: 'Starting crawl'
           });
           
@@ -1324,7 +1324,7 @@ const AddKnowledgeModal = ({
           // Start progress tracking for upload
           onStartCrawl(result.progressId, {
             currentUrl: `file://${selectedFile.name}`,
-            percentage: 0,
+            progress: 0,
             status: 'starting',
             logs: [`Starting upload of ${selectedFile.name}`],
             uploadType: 'document',

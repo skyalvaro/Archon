@@ -43,7 +43,7 @@ async def get_progress(
         response_data = {
             "operation_id": operation_id,
             "status": operation.get("status", "unknown"),  # "running", "completed", "failed"
-            "percentage": operation.get("percentage", 0),
+            "progress": operation.get("percentage", 0),
             "message": operation.get("step", "Processing..."),
             "metadata": operation,
             "error": operation.get("error") if operation.get("status") == "failed" else None,
@@ -107,7 +107,7 @@ async def list_active_operations():
                     "operation_id": op_id,
                     "operation_type": operation.get("type", "unknown"),
                     "status": operation.get("status"),
-                    "percentage": operation.get("percentage", 0),
+                    "progress": operation.get("percentage", 0),
                     "message": operation.get("step", "Processing..."),
                     "started_at": operation.get("start_time", datetime.utcnow()).isoformat() if operation.get("start_time") else None
                 })
