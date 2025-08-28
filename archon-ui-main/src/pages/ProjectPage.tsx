@@ -379,15 +379,33 @@ function ProjectPage({
     setIsLoadingTasks(isPollingTasks);
   }, [isPollingTasks]);
 
-  // Refresh task counts when tasks update via polling
+  // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
   useEffect(() => {
     if (tasksData?.tasks) {
+      // Update tasks for the selected project to keep UI in sync with server changes
+      if (selectedProject) {
+        const uiTasks: Task[] = tasksData.tasks.map((task: any) => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: (task.status || "todo") as Task["status"],
+          assignee: {
+            name: (task.assignee || "User") as "User" | "Archon" | "AI IDE Agent",
+            avatar: "",
+          },
+          feature: task.feature || "General",
+          featureColor: task.featureColor || "#6366f1",
+          task_order: task.task_order || 0,
+        }));
+        setTasks(uiTasks);
+      }
+      
       const projectIds = projects
         .map((p) => p.id)
         .filter((id) => !id.startsWith("temp-"));
       loadTaskCountsForAllProjects(projectIds);
     }
-  }, [tasksData?.tasks, projects]);
+  }, [tasksData?.tasks, projects, selectedProject]);
 
   // Load task counts for all projects
   const loadTaskCountsForAllProjects = useCallback(
