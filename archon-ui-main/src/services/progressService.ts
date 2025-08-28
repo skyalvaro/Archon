@@ -23,7 +23,7 @@ interface ProgressPollingOptions {
  * Service for polling operation progress
  */
 export class ProgressPollingService {
-  private intervalId: NodeJS.Timer | null = null;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
   private operationId: string | null = null;
   private onProgress?: (progress: ProgressState) => void;
   private onComplete?: (progress: ProgressState) => void;
