@@ -14,7 +14,7 @@ import secrets
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi import status as http_status
 from pydantic import BaseModel
 
@@ -524,11 +524,20 @@ async def get_project_features(project_id: str):
 
 
 @router.get("/projects/{project_id}/tasks")
-async def list_project_tasks(project_id: str, include_archived: bool = False, exclude_large_fields: bool = False):
-    """List all tasks for a specific project. By default, filters out archived tasks."""
+async def list_project_tasks(
+    project_id: str, 
+    include_archived: bool = False, 
+    exclude_large_fields: bool = False,
+    request: Request = None,
+    response: Response = None
+):
+    """List all tasks for a specific project with ETag support for efficient polling."""
     try:
+        # Get If-None-Match header for ETag comparison
+        if_none_match = request.headers.get("If-None-Match") if request else None
+        
         logfire.info(
-            f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields}"
+            f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | etag={if_none_match}"
         )
 
         # Use TaskService to list tasks
@@ -545,8 +554,36 @@ async def list_project_tasks(project_id: str, include_archived: bool = False, ex
 
         tasks = result.get("tasks", [])
 
+        # Generate ETag from task data (excluding timestamps for consistency)
+        etag_data = {
+            "tasks": [{
+                "id": task.get("id"),
+                "title": task.get("title"),
+                "status": task.get("status"),
+                "task_order": task.get("task_order"),
+                "assignee": task.get("assignee"),
+                "feature": task.get("feature")
+            } for task in tasks],
+            "project_id": project_id,
+            "count": len(tasks)
+        }
+        current_etag = generate_etag(etag_data)
+
+        # Check if client's ETag matches (304 Not Modified)
+        if response and check_etag(if_none_match, current_etag):
+            response.status_code = 304
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            logfire.info(f"Tasks unchanged, returning 304 | project_id={project_id} | etag={current_etag}")
+            return None
+
+        # Set ETag headers for successful response
+        if response:
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
         logfire.info(
-            f"Project tasks retrieved | project_id={project_id} | task_count={len(tasks)}"
+            f"Project tasks retrieved | project_id={project_id} | task_count={len(tasks)} | etag={current_etag}"
         )
 
         return tasks

@@ -61,18 +61,6 @@ export const TasksTab = ({
     loadProjectFeatures();
   }, [projectId]);
 
-  // Refresh handler for after operations
-  const onRefresh = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const freshTasks = await projectService.getTasksByProject(projectId);
-      const formattedTasks = freshTasks.map(formatTask);
-      setTasks(formattedTasks);
-      onTasksChange(formattedTasks);
-    } catch (error) {
-      console.error('Failed to refresh tasks:', error);
-    }
-  }, [projectId, onTasksChange]);
 
   const loadProjectFeatures = async () => {
     if (!projectId) return;
@@ -137,8 +125,7 @@ export const TasksTab = ({
         parentTaskId = createdTask.id;
       }
       
-      // Refresh tasks after save
-      await onRefresh();
+      // Task saved - polling will pick up changes automatically
       closeModal();
     } catch (error) {
       console.error('Failed to save task:', error);
@@ -203,8 +190,7 @@ export const TasksTab = ({
         
       } catch (error) {
         console.error('REORDER: Failed to persist task position:', error);
-        // Refresh tasks to recover state
-        await onRefresh();
+        // Polling will eventually sync the correct state
       }
     }, 800), // Slightly reduced delay for better responsiveness
     [projectId]
@@ -333,8 +319,7 @@ export const TasksTab = ({
       
       console.log(`[TasksTab] Successfully moved task ${taskId}`);
       
-      // Refresh to ensure consistency
-      await onRefresh();
+      // Task moved - polling will pick up changes automatically
       
     } catch (error) {
       console.error(`[TasksTab] Failed to move task ${taskId}:`, error);
@@ -344,8 +329,7 @@ export const TasksTab = ({
       // Show error toast
       showToast(errorMessage, 'error');
       
-      // Revert optimistic update
-      await onRefresh();
+      // Revert optimistic update - polling will sync correct state
     } finally {
       // Remove from loading set
       setMovingTaskIds(prev => {
@@ -367,8 +351,7 @@ export const TasksTab = ({
       await projectService.deleteTask(task.id);
       console.log(`[TasksTab] Task ${task.id} deleted`);
       
-      // Refresh tasks
-      await onRefresh();
+      // Task deleted - polling will pick up changes automatically
       
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -395,9 +378,8 @@ export const TasksTab = ({
       
       await projectService.createTask(createData);
       
-      // Refresh tasks after creation
-      await onRefresh();
-      console.log('[TasksTab] Task created and tasks refreshed');
+      // Task created - polling will pick up changes automatically
+      console.log('[TasksTab] Task created successfully');
       
     } catch (error) {
       console.error('Failed to create task:', error);
@@ -428,9 +410,8 @@ export const TasksTab = ({
       await projectService.updateTask(taskId, updateData);
       console.log(`[TasksTab] projectService.updateTask successful for ${taskId}.`);
       
-      // Refresh tasks after update
-      await onRefresh();
-      console.log(`[TasksTab] Task ${taskId} updated and tasks refreshed`);
+      // Task updated - polling will pick up changes automatically
+      console.log(`[TasksTab] Task ${taskId} updated successfully`);
       
     } catch (error) {
       console.error(`[TasksTab] Failed to update task ${taskId} inline:`, error);

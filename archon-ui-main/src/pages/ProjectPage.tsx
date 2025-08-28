@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../contexts/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStaggeredEntrance } from "../hooks/useStaggeredEntrance";
-import { useProjectPolling, useTaskPolling } from "../hooks/usePolling";
+import { useProjectPolling, useTaskPolling, useProgressPolling } from "../hooks/usePolling";
 import { useDatabaseMutation } from "../hooks/useDatabaseMutation";
 import { useProjectMutation } from "../hooks/useProjectMutation";
 import {
@@ -41,8 +41,7 @@ import { projectService } from "../services/projectService";
 import type { Project, CreateProjectRequest } from "../types/project";
 import type { Task } from "../components/project-tasks/TaskTableView";
 import { ProjectCreationProgressCard } from "../components/ProjectCreationProgressCard";
-import { projectCreationProgressService } from "../services/projectCreationProgressService";
-import type { ProjectCreationProgressData } from "../services/projectCreationProgressService";
+// Removed Socket.IO projectCreationProgressService - now using HTTP polling
 
 // Reusable Delete Confirmation Modal Component
 interface DeleteConfirmModalProps {
@@ -165,7 +164,7 @@ function ProjectPage({
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [isSwitchingProject, setIsSwitchingProject] = useState(false);
-  const [isLoadingDirectly, setIsLoadingDirectly] = useState(false);
+  const [currentProgressId, setCurrentProgressId] = useState<string | null>(null);
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
@@ -226,36 +225,43 @@ function ProjectPage({
       console.error("Failed to load tasks:", error);
       setTasksError(error.message);
     },
+    // Removed onSuccess callback - direct API calls handle task updates
+    // Polling now only used for ETag efficiency, not state updates
+  });
+
+  // Poll project creation progress
+  const { data: progressData } = useProgressPolling(currentProgressId, {
     onSuccess: (data) => {
-      setTasksError(null);
-      // Skip polling updates during direct API calls to prevent task jumping
-      if (isLoadingDirectly) {
-        console.log('[POLLING] Skipping polling update during direct load');
-        return;
-      }
+      if (!data || !currentProgressId) return;
       
-      // Tasks endpoint returns an array directly
-      if (Array.isArray(data)) {
-        const uiTasks: Task[] = data.map((task: any) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: (task.status || "todo") as Task["status"],
-          assignee: {
-            name: (task.assignee || "User") as
-              | "User"
-              | "Archon"
-              | "AI IDE Agent",
-            avatar: "",
-          },
-          feature: task.feature || "General",
-          featureColor: task.featureColor || "#6366f1",
-          task_order: task.task_order || 0,
-        }));
-        setTasks(uiTasks);
-        console.log('[POLLING] Updated tasks from polling');
+      console.log(`[PROJECT PROGRESS] Update received:`, data);
+      
+      // Update temp project progress
+      setTempProjects((prev) => prev.map((project) =>
+        project.creationProgress?.progressId === currentProgressId
+          ? { ...project, creationProgress: data }
+          : project
+      ));
+      
+      // Handle completion
+      if (data.status === 'completed' && data.project) {
+        console.log('[PROJECT PROGRESS] Creation completed');
+        setTimeout(() => {
+          setCurrentProgressId(null);
+          setTempProjects((prev) => prev.filter((p) => 
+            p.creationProgress?.progressId !== currentProgressId
+          ));
+          refetchProjects(); // Refresh to show the new project
+        }, 1000);
+      } else if (data.status === 'error' || data.status === 'failed') {
+        console.log('[PROJECT PROGRESS] Creation failed:', data.error);
+        setCurrentProgressId(null);
+        setTempProjects((prev) => prev.filter((p) => 
+          p.creationProgress?.progressId !== currentProgressId
+        ));
+        showToast(`Project creation failed: ${data.error || 'Unknown error'}`, 'error');
       }
-    },
+    }
   });
 
   // Project mutations
@@ -436,7 +442,6 @@ function ProjectPage({
 
   // Direct API call for immediate task loading during project switch
   const loadTasksForProject = async (projectId: string) => {
-    setIsLoadingDirectly(true);
     try {
       console.log(`[LOAD TASKS] Direct API call for project: ${projectId}`);
       const taskData = await projectService.getTasksByProject(projectId);
@@ -466,9 +471,6 @@ function ProjectPage({
       setTasksError(
         error instanceof Error ? error.message : "Failed to load tasks",
       );
-    } finally {
-      // Brief delay to ensure our direct update is processed before re-enabling polling
-      setTimeout(() => setIsLoadingDirectly(false), 100);
     }
   };
 
@@ -501,35 +503,9 @@ function ProjectPage({
     // Add temporary project to the list
     setTempProjects((prev) => [tempProject, ...prev]);
 
-    // Set up Socket.IO connection for real-time progress
-    projectCreationProgressService.streamProgress(
-      progressId,
-      (data: ProjectCreationProgressData) => {
-        console.log(
-          `🎯 [PROJECT-PAGE] Progress callback triggered for ${progressId}:`,
-          data,
-        );
-
-        // Update the temporary project's progress
-        setTempProjects((prev) => {
-          const updated = prev.map((p) =>
-            p.id === tempId ? { ...p, creationProgress: data } : p,
-          );
-          return updated;
-        });
-
-        // Handle error state
-        if (data.status === "error") {
-          console.log(
-            `🎯 [PROJECT-PAGE] Error status detected, will remove project after delay`,
-          );
-          setTimeout(() => {
-            setTempProjects((prev) => prev.filter((p) => p.id !== tempId));
-          }, 5000);
-        }
-      },
-      { autoReconnect: true, reconnectDelay: 5000 },
-    );
+    // Start HTTP polling for progress updates
+    setCurrentProgressId(progressId);
+    console.log(`[PROJECT PROGRESS] Started polling for progress: ${progressId}`);
   };
 
   const handleProjectSelect = async (project: Project) => {
@@ -748,34 +724,10 @@ function ProjectPage({
                       progressData={project.creationProgress}
                       onComplete={(completedData) => {
                         console.log(
-                          "Project creation completed - card onComplete triggered",
+                          "Project creation completed - handled by polling hook",
                           completedData,
                         );
-
-                        if (
-                          completedData.project &&
-                          completedData.status === "completed"
-                        ) {
-                          // Show success toast
-                          showToast(
-                            `Project "${completedData.project.title}" created successfully!`,
-                            "success",
-                          );
-
-                          // Show completion briefly, then refresh to show the actual project
-                          setTimeout(() => {
-                            // Disconnect Socket.IO
-                            projectCreationProgressService.disconnect();
-
-                            // Remove temp project
-                            setTempProjects((prev) =>
-                              prev.filter((p) => p.id !== project.id),
-                            );
-
-                            // The project list will be updated via polling
-                            refetchProjects();
-                          }, 1000);
-                        }
+                        // Completion logic is now handled by the progress polling hook
                       }}
                       onError={(error) => {
                         console.error("Project creation failed:", error);
