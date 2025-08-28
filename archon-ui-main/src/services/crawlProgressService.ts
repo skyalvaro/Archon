@@ -33,7 +33,7 @@ interface StreamCallbacks {
 }
 
 class CrawlProgressService {
-  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private pollingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private callbacks: Map<string, StreamCallbacks> = new Map();
   private connectionState: WebSocketState = WebSocketState.DISCONNECTED;
 
