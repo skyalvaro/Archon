@@ -5,7 +5,7 @@ Handles recursive crawling of websites by following internal links.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Awaitable
 from urllib.parse import urldefrag
 
 from crawl4ai import CacheMode, CrawlerRunConfig, MemoryAdaptiveDispatcher
@@ -38,8 +38,8 @@ class RecursiveCrawlStrategy:
         transform_url_func: Callable[[str], str],
         is_documentation_site_func: Callable[[str], bool],
         max_depth: int = 3,
-        max_concurrent: int = None,
-        progress_callback: Callable | None = None,
+        max_concurrent: int | None = None,
+        progress_callback: Callable[..., Awaitable[None]] | None = None,
         start_progress: int = 10,
         end_progress: int = 60,
     ) -> list[dict[str, Any]]:
