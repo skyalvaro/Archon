@@ -126,29 +126,6 @@ export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =
     hasMore: z.boolean()
   });
 
-// WebSocket event schemas
-export const ProjectUpdateEventSchema = z.object({
-  type: z.enum(['PROJECT_UPDATED', 'PROJECT_CREATED', 'PROJECT_DELETED']),
-  projectId: z.string().uuid(),
-  userId: z.string(),
-  timestamp: z.string().datetime(),
-  data: z.record(z.any())
-});
-
-export const TaskUpdateEventSchema = z.object({
-  type: z.enum(['TASK_MOVED', 'TASK_CREATED', 'TASK_UPDATED', 'TASK_DELETED']),
-  taskId: z.string().uuid(),
-  projectId: z.string().uuid(),
-  userId: z.string(),
-  timestamp: z.string().datetime(),
-  data: z.record(z.any())
-});
-
-export const ProjectManagementEventSchema = z.union([
-  ProjectUpdateEventSchema,
-  TaskUpdateEventSchema
-]);
-
 // Validation helper functions
 export function validateProject(data: unknown) {
   return ProjectSchema.safeParse(data);

@@ -8,8 +8,7 @@ import type {
   UpdateProjectRequest,
   CreateTaskRequest, 
   UpdateTaskRequest,
-  DatabaseTaskStatus,
-  ProjectManagementEvent
+  DatabaseTaskStatus
 } from '../types/project';
 
 import { 
@@ -40,9 +39,6 @@ export interface Document {
 // API configuration - use relative URL to go through Vite proxy
 const API_BASE_URL = '/api';
 
-// WebSocket connection for real-time updates
-let websocketConnection: WebSocket | null = null;
-const projectUpdateSubscriptions: Map<string, (event: ProjectManagementEvent) => void> = new Map();
 
 // Error classes
 export class ProjectServiceError extends Error {
@@ -124,52 +120,6 @@ async function callAPI<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 }
 
-// WebSocket management for real-time updates
-function initializeWebSocket() {
-  if (websocketConnection?.readyState === WebSocket.OPEN) {
-    return websocketConnection;
-  }
-
-  // Construct WebSocket URL based on current location
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
-  const wsUrl = `${protocol}//${host}/ws/project-updates`;
-  websocketConnection = new WebSocket(wsUrl);
-
-  websocketConnection.onopen = () => {
-    console.log('📡 Project management WebSocket connected');
-  };
-
-  websocketConnection.onmessage = (event) => {
-    try {
-      const update: ProjectManagementEvent = JSON.parse(event.data);
-      
-      // Notify all subscribers
-      projectUpdateSubscriptions.forEach((callback, projectId) => {
-        if (update.type.includes('PROJECT') && update.projectId === projectId) {
-          callback(update);
-        } else if (update.type.includes('TASK') && update.projectId === projectId) {
-          callback(update);
-        }
-      });
-    } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
-    }
-  };
-
-  websocketConnection.onclose = () => {
-    console.log('📡 Project management WebSocket disconnected');
-    // Attempt to reconnect after 3 seconds
-    setTimeout(initializeWebSocket, 3000);
-  };
-
-  websocketConnection.onerror = (error) => {
-    console.error('📡 Project management WebSocket error:', error);
-  };
-
-  return websocketConnection;
-}
-
 // Project Management Service
 export const projectService = {
   // ==================== PROJECT OPERATIONS ====================
@@ -247,8 +197,6 @@ export const projectService = {
         body: JSON.stringify(validation.data)
       });
       
-      // Broadcast creation event
-      this.broadcastProjectUpdate('PROJECT_CREATED', project.id, project);
       
       return {
         ...project,
@@ -317,8 +265,6 @@ export const projectService = {
       
       console.log(`[PROJECT SERVICE] API update response:`, project);
       
-      // Broadcast update event
-      this.broadcastProjectUpdate('PROJECT_UPDATED', project.id, updates);
       
       // Ensure pinned property is properly handled as boolean
       const processedProject = {
@@ -350,8 +296,6 @@ export const projectService = {
         method: 'DELETE'
       });
       
-      // Broadcast deletion event
-      this.broadcastProjectUpdate('PROJECT_DELETED', projectId, {});
     } catch (error) {
       console.error(`Failed to delete project ${projectId}:`, error);
       throw error;
@@ -420,8 +364,6 @@ export const projectService = {
         body: JSON.stringify(requestData)
       });
       
-      // Broadcast creation event
-      this.broadcastTaskUpdate('TASK_CREATED', task.id, task.project_id, task);
       
       return task;
     } catch (error) {
@@ -446,8 +388,6 @@ export const projectService = {
         body: JSON.stringify(validation.data)
       });
       
-      // Broadcast update event
-      this.broadcastTaskUpdate('TASK_UPDATED', task.id, task.project_id, updates);
       
       return task;
     } catch (error) {
@@ -472,8 +412,6 @@ export const projectService = {
         method: 'PUT'
       });
       
-      // Broadcast move event
-      this.broadcastTaskUpdate('TASK_MOVED', task.id, task.project_id, { status: status });
       
       return task;
     } catch (error) {
@@ -494,8 +432,6 @@ export const projectService = {
         method: 'DELETE'
       });
       
-      // Broadcast archive event  
-      this.broadcastTaskUpdate('TASK_ARCHIVED', taskId, task.project_id, {});
     } catch (error) {
       console.error(`Failed to delete task ${taskId}:`, error);
       throw error;
@@ -517,8 +453,6 @@ export const projectService = {
       
       const task = await this.updateTask(taskId, updates);
       
-      // Broadcast order change event
-      this.broadcastTaskUpdate('TASK_MOVED', task.id, task.project_id, { task_order: newOrder, status: newStatus });
       
       return task;
     } catch (error) {
@@ -662,42 +596,11 @@ export const projectService = {
         method: 'POST'
       });
       
-      // Broadcast restore event
-      this.broadcastProjectUpdate('PROJECT_UPDATED', projectId, { restored_version: versionNumber, field_name: fieldName });
       
       return response;
     } catch (error) {
       console.error(`Failed to restore version ${versionNumber} for project ${projectId}:`, error);
       throw error;
-    }
-  },
-
-  // ==================== REAL-TIME SUBSCRIPTIONS ====================
-
-  /**
-   * Subscribe to real-time project updates
-   */
-  subscribeToProjectUpdates(projectId: string, callback: (event: ProjectManagementEvent) => void): () => void {
-    // Initialize WebSocket connection if needed
-    initializeWebSocket();
-    
-    // Add subscription
-    projectUpdateSubscriptions.set(projectId, callback);
-    
-    // Return unsubscribe function
-    return () => {
-      projectUpdateSubscriptions.delete(projectId);
-    };
-  },
-
-  /**
-   * Unsubscribe from all project updates
-   */
-  unsubscribeFromUpdates(): void {
-    projectUpdateSubscriptions.clear();
-    
-    if (websocketConnection?.readyState === WebSocket.OPEN) {
-      websocketConnection.close();
     }
   },
 
@@ -717,43 +620,6 @@ export const projectService = {
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
     
     return `${Math.floor(diffInSeconds / 604800)} weeks ago`;
-  },
-
-  /**
-   * Broadcast project update event
-   */
-  broadcastProjectUpdate(type: 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'PROJECT_DELETED', projectId: string, data: any): void {
-    const event: ProjectManagementEvent = {
-      type,
-      projectId,
-      userId: 'current-user', // TODO: Get from auth context
-      timestamp: new Date().toISOString(),
-      data
-    };
-
-    // Send via WebSocket if connected
-    if (websocketConnection?.readyState === WebSocket.OPEN) {
-      websocketConnection.send(JSON.stringify(event));
-    }
-  },
-
-  /**
-   * Broadcast task update event
-   */
-  broadcastTaskUpdate(type: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_DELETED' | 'TASK_ARCHIVED', taskId: string, projectId: string, data: any): void {
-    const event: ProjectManagementEvent = {
-      type,
-      taskId,
-      projectId,
-      userId: 'current-user', // TODO: Get from auth context
-      timestamp: new Date().toISOString(),
-      data
-    };
-
-    // Send via WebSocket if connected
-    if (websocketConnection?.readyState === WebSocket.OPEN) {
-      websocketConnection.send(JSON.stringify(event));
-    }
   }
 };
 

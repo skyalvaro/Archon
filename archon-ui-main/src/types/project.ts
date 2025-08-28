@@ -141,26 +141,6 @@ export interface MCPToolResponse<T = any> {
   message?: string;
 }
 
-// WebSocket event types for real-time updates
-export interface ProjectUpdateEvent {
-  type: 'PROJECT_UPDATED' | 'PROJECT_CREATED' | 'PROJECT_DELETED';
-  projectId: string;
-  userId: string;
-  timestamp: string;
-  data: Partial<Project>;
-}
-
-export interface TaskUpdateEvent {
-  type: 'TASK_MOVED' | 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED' | 'TASK_ARCHIVED';
-  taskId: string;
-  projectId: string;
-  userId: string;
-  timestamp: string;
-  data: Partial<Task>;
-}
-
-export type ProjectManagementEvent = ProjectUpdateEvent | TaskUpdateEvent;
-
 // Utility type for paginated responses
 export interface PaginatedResponse<T> {
   items: T[];
