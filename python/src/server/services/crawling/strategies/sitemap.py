@@ -3,7 +3,6 @@ Sitemap Crawling Strategy
 
 Handles crawling of URLs from XML sitemaps.
 """
-import traceback
 from xml.etree import ElementTree
 
 import requests
@@ -42,14 +41,13 @@ class SitemapCrawlStrategy:
                 logger.info(f"Successfully extracted {len(urls)} URLs from sitemap")
 
             except ElementTree.ParseError as e:
-                logger.error(f"Error parsing sitemap XML: {e}")
+                logger.exception(f"Error parsing sitemap XML from {sitemap_url}")
             except Exception as e:
-                logger.error(f"Unexpected error parsing sitemap: {e}")
+                logger.exception(f"Unexpected error parsing sitemap from {sitemap_url}")
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Network error fetching sitemap: {e}")
+            logger.exception(f"Network error fetching sitemap from {sitemap_url}")
         except Exception as e:
-            logger.error(f"Unexpected error in sitemap parsing: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"Unexpected error in sitemap parsing for {sitemap_url}")
 
         return urls
