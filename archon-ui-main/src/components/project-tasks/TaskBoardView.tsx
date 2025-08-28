@@ -15,6 +15,7 @@ interface TaskBoardViewProps {
   onTaskDelete: (task: Task) => void;
   onTaskMove: (taskId: string, newStatus: Task['status']) => void;
   onTaskReorder: (taskId: string, targetIndex: number, status: Task['status']) => void;
+  movingTaskIds?: Set<string>;
 }
 
 interface ColumnDropZoneProps {
@@ -134,7 +135,8 @@ export const TaskBoardView = ({
   onTaskComplete,
   onTaskDelete,
   onTaskMove,
-  onTaskReorder
+  onTaskReorder,
+  movingTaskIds = new Set()
 }: TaskBoardViewProps) => {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
@@ -253,8 +255,24 @@ export const TaskBoardView = ({
       .sort((a, b) => a.task_order - b.task_order);
   };
 
+  const isAnyTaskMoving = movingTaskIds.size > 0;
+
   return (
-    <div className="flex flex-col h-full min-h-[70vh]">
+    <div className="flex flex-col h-full min-h-[70vh] relative">
+      {/* Loading overlay when tasks are being moved */}
+      {isAnyTaskMoving && (
+        <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+              <span className="text-gray-700 dark:text-gray-300 font-medium">
+                Moving task...
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Multi-select toolbar */}
       {selectedTasks.size > 0 && (
         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">

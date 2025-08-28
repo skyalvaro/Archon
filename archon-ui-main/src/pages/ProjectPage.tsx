@@ -164,6 +164,7 @@ function ProjectPage({
   >({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  const [isSwitchingProject, setIsSwitchingProject] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
@@ -502,11 +503,24 @@ function ProjectPage({
     );
   };
 
-  const handleProjectSelect = (project: Project) => {
-    setSelectedProject(project);
-    setShowProjectDetails(true);
-    setActiveTab("tasks"); // Default to tasks tab when a new project is selected
-    loadTasksForProject(project.id); // Load tasks for the selected project
+  const handleProjectSelect = async (project: Project) => {
+    // Show loading state during project switch
+    setIsSwitchingProject(true);
+    setTasksError(null);
+    
+    try {
+      setSelectedProject(project);
+      setShowProjectDetails(true);
+      setActiveTab("tasks");
+      
+      // Load tasks for the new project
+      await loadTasksForProject(project.id);
+    } catch (error) {
+      console.error('Failed to switch project:', error);
+      showToast('Failed to load project tasks', 'error');
+    } finally {
+      setIsSwitchingProject(false);
+    }
   };
 
   const handleDeleteProject = useCallback(
@@ -976,7 +990,21 @@ function ProjectPage({
 
       {/* Project Details Section */}
       {showProjectDetails && selectedProject && (
-        <motion.div variants={itemVariants}>
+        <motion.div variants={itemVariants} className="relative">
+          {/* Loading overlay when switching projects */}
+          {isSwitchingProject && (
+            <div className="absolute inset-0 bg-white/50 dark:bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center rounded-lg">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                  <span className="text-gray-700 dark:text-gray-300 font-medium">
+                    Loading project...
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <Tabs
             defaultValue="tasks"
             value={activeTab}

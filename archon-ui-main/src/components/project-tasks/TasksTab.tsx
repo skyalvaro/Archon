@@ -4,6 +4,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toggle } from '../ui/Toggle';
 import { projectService } from '../../services/projectService';
+import { useToast } from '../../contexts/ToastContext';
 
 import type { CreateTaskRequest, UpdateTaskRequest, DatabaseTaskStatus } from '../../types/project';
 import { TaskTableView, Task } from './TaskTableView';
@@ -13,19 +14,19 @@ import { EditTaskModal } from './EditTaskModal';
 // Assignee utilities
 const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
 
-// Helper function to map database task format to UI task format
-const mapDatabaseTaskToUITask = (dbTask: any): Task => {
+// Helper to format task for UI display
+const formatTask = (dbTask: any): Task => {
   return {
     id: dbTask.id,
     title: dbTask.title,
     description: dbTask.description || '',
-    status: dbTask.status as Task['status'], // Use database status directly
+    status: dbTask.status as Task['status'],
     assignee: {
       name: dbTask.assignee || 'User',
       avatar: ''
     },
     feature: dbTask.feature || 'General',
-    featureColor: '#3b82f6', // Default blue color
+    featureColor: '#3b82f6',
     task_order: dbTask.task_order || 0,
   };
 };
@@ -39,6 +40,7 @@ export const TasksTab = ({
   onTasksChange: (tasks: Task[]) => void;
   projectId: string;
 }) => {
+  const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -46,6 +48,8 @@ export const TasksTab = ({
   const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
+  const [movingTaskIds, setMovingTaskIds] = useState<Set<string>>(new Set());
+  const [taskOperationError, setTaskOperationError] = useState<string | null>(null);
   
   // Initialize tasks
   useEffect(() => {
@@ -57,100 +61,18 @@ export const TasksTab = ({
     loadProjectFeatures();
   }, [projectId]);
 
-  // Optimized socket handlers with conflict resolution
-  const handleTaskUpdated = useCallback((message: any) => {
-    const updatedTask = message.data || message;
-    const mappedTask = mapDatabaseTaskToUITask(updatedTask);
-    
-    // Skip updates while modal is open for the same task to prevent conflicts
-    if (isModalOpen && editingTask?.id === updatedTask.id) {
-      console.log('[Socket] Skipping update for task being edited:', updatedTask.id);
-      return;
+  // Refresh handler for after operations
+  const onRefresh = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const freshTasks = await projectService.getTasks(projectId);
+      const formattedTasks = freshTasks.map(formatTask);
+      setTasks(formattedTasks);
+      onTasksChange(formattedTasks);
+    } catch (error) {
+      console.error('Failed to refresh tasks:', error);
     }
-    
-    setTasks(prev => {
-      // Use server timestamp for conflict resolution
-      const existingTask = prev.find(task => task.id === updatedTask.id);
-      if (existingTask) {
-        // Check if this is a more recent update
-        const serverTimestamp = message.server_timestamp || Date.now();
-        const lastUpdate = existingTask.lastUpdate || 0;
-        
-        if (serverTimestamp <= lastUpdate) {
-          console.log('[Socket] Ignoring stale update for task:', updatedTask.id);
-          return prev;
-        }
-      }
-      
-      const updated = prev.map(task => 
-        task.id === updatedTask.id 
-          ? { ...mappedTask, lastUpdate: message.server_timestamp || Date.now() }
-          : task
-      );
-      
-      // Notify parent after state settles
-      setTimeout(() => onTasksChange(updated), 0);
-      return updated;
-    });
-  }, [onTasksChange, isModalOpen, editingTask?.id]);
-
-  const handleTaskCreated = useCallback((message: any) => {
-    const newTask = message.data || message;
-    console.log('🆕 Real-time task created:', newTask);
-    const mappedTask = mapDatabaseTaskToUITask(newTask);
-    
-    setTasks(prev => {
-      // Check if task already exists to prevent duplicates
-      if (prev.some(task => task.id === newTask.id)) {
-        console.log('Task already exists, skipping create');
-        return prev;
-      }
-      const updated = [...prev, mappedTask];
-      setTimeout(() => onTasksChange(updated), 0);
-      return updated;
-    });
-  }, [onTasksChange]);
-
-  const handleTaskDeleted = useCallback((message: any) => {
-    const deletedTask = message.data || message;
-    console.log('🗑️ Real-time task deleted:', deletedTask);
-    setTasks(prev => {
-      const updated = prev.filter(task => task.id !== deletedTask.id);
-      setTimeout(() => onTasksChange(updated), 0);
-      return updated;
-    });
-  }, [onTasksChange]);
-
-  const handleTaskArchived = useCallback((message: any) => {
-    const archivedTask = message.data || message;
-    console.log('📦 Real-time task archived:', archivedTask);
-    setTasks(prev => {
-      const updated = prev.filter(task => task.id !== archivedTask.id);
-      setTimeout(() => onTasksChange(updated), 0);
-      return updated;
-    });
-  }, [onTasksChange]);
-
-  const handleTasksReordered = useCallback((message: any) => {
-    const reorderData = message.data || message;
-    console.log('🔄 Real-time tasks reordered:', reorderData);
-    
-    // Handle bulk task reordering from server
-    if (reorderData.tasks && Array.isArray(reorderData.tasks)) {
-      const uiTasks: Task[] = reorderData.tasks.map(mapDatabaseTaskToUITask);
-      setTasks(uiTasks);
-      setTimeout(() => onTasksChange(uiTasks), 0);
-    }
-  }, [onTasksChange]);
-
-  const handleInitialTasks = useCallback((message: any) => {
-    const initialWebSocketTasks = message.data || message;
-    const uiTasks: Task[] = initialWebSocketTasks.map(mapDatabaseTaskToUITask);
-    setTasks(uiTasks);
-    onTasksChange(uiTasks);
-  }, [onTasksChange]);
-
-  // Socket connection removed - real-time updates disabled
+  }, [projectId, onTasksChange]);
 
   const loadProjectFeatures = async () => {
     if (!projectId) return;
@@ -215,7 +137,8 @@ export const TasksTab = ({
         parentTaskId = createdTask.id;
       }
       
-      // Don't reload tasks - let socket updates handle synchronization
+      // Refresh tasks after save
+      await onRefresh();
       closeModal();
     } catch (error) {
       console.error('Failed to save task:', error);
@@ -280,8 +203,8 @@ export const TasksTab = ({
         
       } catch (error) {
         console.error('REORDER: Failed to persist task position:', error);
-        // Don't reload tasks immediately - let socket handle recovery
-        console.log('REORDER: Socket will handle state recovery');
+        // Refresh tasks to recover state
+        await onRefresh();
       }
     }, 800), // Slightly reduced delay for better responsiveness
     [projectId]
@@ -377,33 +300,59 @@ export const TasksTab = ({
 
   // Task move function (for board view)
   const moveTask = async (taskId: string, newStatus: Task['status']) => {
-    console.log(`[TasksTab] Attempting to move task ${taskId} to new status: ${newStatus}`);
+    console.log(`[TasksTab] Moving task ${taskId} to ${newStatus}`);
+    
+    // Clear any previous errors
+    setTaskOperationError(null);
+    
+    // Add to loading set
+    setMovingTaskIds(prev => new Set([...prev, taskId]));
+    
     try {
       const movingTask = tasks.find(task => task.id === taskId);
       if (!movingTask) {
-        console.warn(`[TasksTab] Task ${taskId} not found for move operation.`);
-        return;
+        throw new Error('Task not found');
       }
       
       const oldStatus = movingTask.status;
       const newOrder = getNextOrderForStatus(newStatus);
 
-      console.log(`[TasksTab] Moving task ${movingTask.title} from ${oldStatus} to ${newStatus} with order ${newOrder}`);
+      // Optimistically update UI for immediate feedback
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { ...task, status: newStatus, task_order: newOrder }
+          : task
+      ));
 
-      // Update the task with new status and order
+      // Update in backend
       await projectService.updateTask(taskId, {
         status: newStatus,
         task_order: newOrder,
         client_timestamp: Date.now()
       });
-      console.log(`[TasksTab] Successfully updated task ${taskId} status in backend.`);
       
-      // Don't update local state immediately - let socket handle it
-      console.log(`[TasksTab] Waiting for socket update for task ${taskId}.`);
+      console.log(`[TasksTab] Successfully moved task ${taskId}`);
+      
+      // Refresh to ensure consistency
+      await onRefresh();
       
     } catch (error) {
       console.error(`[TasksTab] Failed to move task ${taskId}:`, error);
-      alert(`Failed to move task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to move task';
+      setTaskOperationError(errorMessage);
+      
+      // Show error toast
+      showToast(errorMessage, 'error');
+      
+      // Revert optimistic update
+      await onRefresh();
+    } finally {
+      // Remove from loading set
+      setMovingTaskIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
@@ -414,11 +363,12 @@ export const TasksTab = ({
 
   const deleteTask = async (task: Task) => {
     try {
-      // Delete the task - backend will emit socket event
+      // Delete the task
       await projectService.deleteTask(task.id);
-      console.log(`[TasksTab] Task ${task.id} deletion sent to backend`);
+      console.log(`[TasksTab] Task ${task.id} deleted`);
       
-      // Don't update local state - let socket handle it
+      // Refresh tasks
+      await onRefresh();
       
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -445,8 +395,9 @@ export const TasksTab = ({
       
       await projectService.createTask(createData);
       
-      // Don't reload tasks - let socket updates handle synchronization
-      console.log('[TasksTab] Task creation sent to backend, waiting for socket update');
+      // Refresh tasks after creation
+      await onRefresh();
+      console.log('[TasksTab] Task created and tasks refreshed');
       
     } catch (error) {
       console.error('Failed to create task:', error);
@@ -477,8 +428,9 @@ export const TasksTab = ({
       await projectService.updateTask(taskId, updateData);
       console.log(`[TasksTab] projectService.updateTask successful for ${taskId}.`);
       
-      // Don't update local state optimistically - let socket handle it
-      console.log(`[TasksTab] Waiting for socket update for task ${taskId}.`);
+      // Refresh tasks after update
+      await onRefresh();
+      console.log(`[TasksTab] Task ${taskId} updated and tasks refreshed`);
       
     } catch (error) {
       console.error(`[TasksTab] Failed to update task ${taskId} inline:`, error);
@@ -555,6 +507,7 @@ export const TasksTab = ({
               onTaskDelete={deleteTask}
               onTaskMove={moveTask}
               onTaskReorder={handleTaskReorder}
+              movingTaskIds={movingTaskIds}
             />
           )}
         </div>
