@@ -39,7 +39,7 @@ export interface TestStatus {
   exit_code?: number;
 }
 
-import { getApiUrl, getWebSocketUrl } from '../config/api';
+import { getApiUrl } from '../config/api';
 
 // Use unified API configuration
 const API_BASE_URL = getApiUrl();
@@ -361,56 +361,18 @@ class TestService {
     onError?: (error: Event) => void,
     onClose?: (event: CloseEvent) => void
   ): () => void {
-    // Clean up any existing connection
-    this.disconnectFromTestStream(executionId);
-
-    const wsUrl = getWebSocketUrl() + `/api/tests/stream/${executionId}`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      console.log(`Connected to test stream: ${executionId}`);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message: TestStreamMessage = JSON.parse(event.data);
-        onMessage(message);
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error, event.data);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error(`WebSocket error for test ${executionId}:`, error);
-      if (onError) {
-        onError(error);
-      }
-    };
-
-    ws.onclose = (event) => {
-      console.log(`WebSocket closed for test ${executionId}:`, event.code, event.reason);
-      this.wsConnections.delete(executionId);
-      if (onClose) {
-        onClose(event);
-      }
-    };
-
-    // Store the connection
-    this.wsConnections.set(executionId, ws);
-
-    // Return cleanup function
-    return () => this.disconnectFromTestStream(executionId);
+    // WebSocket streaming removed - use polling instead
+    console.warn('Test streaming via WebSocket is no longer supported. Use polling instead.');
+    
+    // Return no-op cleanup function
+    return () => {};
   }
 
   /**
-   * Disconnect from WebSocket stream
+   * Disconnect from WebSocket stream (deprecated)
    */
   disconnectFromTestStream(executionId: string): void {
-    const ws = this.wsConnections.get(executionId);
-    if (ws) {
-      ws.close();
-      this.wsConnections.delete(executionId);
-    }
+    // WebSocket connections removed - no-op
   }
 
   /**
