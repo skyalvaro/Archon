@@ -136,7 +136,7 @@ class DocumentStorageOperations:
         safe_logfire_info(f"Document storage | documents={len(crawl_results)} | chunks={len(all_contents)} | avg_chunks_per_doc={len(all_contents)/len(crawl_results):.1f}")
 
         # Call add_documents_to_supabase with the correct parameters
-        await add_documents_to_supabase(
+        storage_stats = await add_documents_to_supabase(
             client=self.supabase_client,
             urls=all_urls,  # Now has entry per chunk
             chunk_numbers=all_chunk_numbers,  # Proper chunk numbers (0, 1, 2, etc)
@@ -150,11 +150,13 @@ class DocumentStorageOperations:
             cancellation_check=cancellation_check  # Pass cancellation check
         )
 
-        # Calculate actual chunk count
+        # Calculate chunk counts
         chunk_count = len(all_contents)
+        chunks_stored = storage_stats.get("chunks_stored", 0)
 
         return {
             'chunk_count': chunk_count,
+            'chunks_stored': chunks_stored,
             'total_word_count': sum(source_word_counts.values()),
             'url_to_full_document': url_to_full_document,
             'source_id': original_source_id

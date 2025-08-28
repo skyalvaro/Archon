@@ -27,7 +27,7 @@ async def add_documents_to_supabase(
     enable_parallel_batches: bool = True,
     provider: str | None = None,
     cancellation_check: Any | None = None,
-) -> None:
+) -> dict[str, int]:
     """
     Add documents to Supabase with threading optimizations.
 
@@ -126,6 +126,7 @@ async def add_documents_to_supabase(
         # Initialize batch tracking for simplified progress
         completed_batches = 0
         total_batches = (len(contents) + batch_size - 1) // batch_size
+        total_chunks_stored = 0
 
         # Process in batches to avoid memory issues
         for batch_num, i in enumerate(range(0, len(contents), batch_size), 1):
@@ -303,6 +304,7 @@ async def add_documents_to_supabase(
 
                 try:
                     client.table("archon_crawled_pages").insert(batch_data).execute()
+                    total_chunks_stored += len(batch_data)
 
                     # Increment completed batches and report simple progress
                     completed_batches += 1
@@ -348,6 +350,7 @@ async def add_documents_to_supabase(
                             try:
                                 client.table("archon_crawled_pages").insert(record).execute()
                                 successful_inserts += 1
+                                total_chunks_stored += 1
                             except Exception as individual_error:
                                 search_logger.error(
                                     f"Failed individual insert for {record['url']}: {individual_error}"
@@ -378,3 +381,6 @@ async def add_documents_to_supabase(
 
         span.set_attribute("success", True)
         span.set_attribute("total_processed", len(contents))
+        span.set_attribute("total_stored", total_chunks_stored)
+        
+        return {"chunks_stored": total_chunks_stored}

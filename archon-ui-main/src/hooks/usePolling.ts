@@ -279,10 +279,18 @@ export function useCrawlProgressPolling(progressId: string | null, options?: Use
   // Stop polling when operation is complete or failed
   useEffect(() => {
     const status = result.data?.status;
+    if (result.data) {
+      console.log('🔄 Crawl polling data received:', { 
+        progressId, 
+        status, 
+        percentage: result.data.percentage 
+      });
+    }
     if (status === 'completed' || status === 'failed' || status === 'error' || status === 'cancelled') {
+      console.log('⏹️ Crawl polling stopping - status:', status);
       setIsComplete(true);
     }
-  }, [result.data?.status]);
+  }, [result.data?.status, progressId]);
 
   return result;
 }

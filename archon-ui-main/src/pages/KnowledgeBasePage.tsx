@@ -72,14 +72,44 @@ export const KnowledgeBasePage = () => {
   // Update progress items when polling data changes
   useEffect(() => {
     if (crawlProgress && activeProgressId) {
-      setProgressItems(prev => prev.map(item => 
-        item.progressId === activeProgressId 
-          ? { ...item, ...crawlProgress }
-          : item
-      ));
+      console.log('📊 Crawl progress update:', { 
+        progressId: activeProgressId, 
+        status: crawlProgress.status,
+        percentage: crawlProgress.percentage 
+      });
+      
+      setProgressItems(prev => {
+        // Check if the progress item exists
+        const existingIndex = prev.findIndex(item => item.progressId === activeProgressId);
+        
+        if (existingIndex >= 0) {
+          // Update existing item
+          const updated = [...prev];
+          updated[existingIndex] = { ...updated[existingIndex], ...crawlProgress };
+          console.log('📊 Updated existing progress item:', updated);
+          return updated;
+        } else {
+          // Add new item if it doesn't exist (shouldn't happen normally)
+          console.log('⚠️ Progress item not found, adding new one');
+          const newItem = { ...crawlProgress, progressId: activeProgressId };
+          return [...prev, newItem];
+        }
+      });
+      
+      // Also update localStorage with latest progress
+      try {
+        localStorage.setItem(`crawl_progress_${activeProgressId}`, JSON.stringify({
+          ...crawlProgress,
+          progressId: activeProgressId,
+          lastUpdated: Date.now()
+        }));
+      } catch (error) {
+        console.error('❌ Failed to update crawl progress in localStorage:', error);
+      }
       
       // Handle completion
       if (crawlProgress.status === 'completed') {
+        console.log('✅ Crawl completed, cleaning up');
         setActiveProgressId(null);
         localStorage.removeItem('current_operation_id');
         loadKnowledgeItems();
@@ -94,11 +124,13 @@ export const KnowledgeBasePage = () => {
             localStorage.setItem('active_crawls', JSON.stringify(
               activeCrawls.filter((id: string) => id !== activeProgressId)
             ));
+            console.log('🧹 Cleaned up completed crawl from localStorage');
           } catch (error) {
-            console.error('Failed to clean up crawl:', error);
+            console.error('❌ Failed to clean up crawl:', error);
           }
         }, 3000);
       } else if (crawlProgress.status === 'error' || crawlProgress.status === 'failed') {
+        console.log('❌ Crawl failed:', crawlProgress.error);
         setActiveProgressId(null);
         localStorage.removeItem('current_operation_id');
         showToast(`Crawl failed: ${crawlProgress.error || 'Unknown error'}`, 'error');
@@ -156,33 +188,62 @@ export const KnowledgeBasePage = () => {
 
   // Check for any active progress on mount
   useEffect(() => {
+    console.log('🔄 Checking for active crawls on mount...');
+    
     // First check for current_operation_id
     let activeProgressId = localStorage.getItem('current_operation_id');
+    console.log('📍 current_operation_id from localStorage:', activeProgressId);
     
     // If not found, check for any active crawls
     if (!activeProgressId) {
-      const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+      const activeCrawlsStr = localStorage.getItem('active_crawls');
+      console.log('📍 active_crawls raw:', activeCrawlsStr);
+      
+      const activeCrawls = JSON.parse(activeCrawlsStr || '[]');
+      console.log('📍 active_crawls parsed:', activeCrawls);
+      
       if (activeCrawls.length > 0) {
         // Get the most recent crawl
         activeProgressId = activeCrawls[activeCrawls.length - 1];
+        console.log('📍 Using most recent crawl:', activeProgressId);
       }
     }
     
     if (activeProgressId) {
       // Verify the crawl still exists in localStorage
       const crawlData = localStorage.getItem(`crawl_progress_${activeProgressId}`);
+      console.log('📍 Crawl data from localStorage:', crawlData ? 'Found' : 'Not found');
+      
       if (crawlData) {
-        const parsed = JSON.parse(crawlData);
-        // Only restore if not completed
-        if (parsed.status !== 'completed' && parsed.status !== 'error' && parsed.status !== 'failed') {
-          setActiveProgressId(activeProgressId);
-          // Restore progress item to state
-          setProgressItems([parsed]);
-        } else {
-          // Clean up completed crawl
-          localStorage.removeItem('current_operation_id');
+        try {
+          const parsed = JSON.parse(crawlData);
+          console.log('📍 Parsed crawl data status:', parsed.status);
+          console.log('📍 Full parsed crawl data:', parsed);
+          
+          // Only restore if not completed
+          if (parsed.status !== 'completed' && parsed.status !== 'error' && parsed.status !== 'failed') {
+            console.log('✅ Restoring active crawl to state');
+            setActiveProgressId(activeProgressId);
+            // Restore progress item to state - ensure it has progressId
+            const progressItem = {
+              ...parsed,
+              progressId: activeProgressId // Ensure progressId is set
+            };
+            console.log('📦 Restoring progress item:', progressItem);
+            setProgressItems([progressItem]);
+          } else {
+            console.log('⏹️ Crawl already completed, cleaning up');
+            // Clean up completed crawl
+            localStorage.removeItem('current_operation_id');
+          }
+        } catch (error) {
+          console.error('❌ Failed to parse crawl data:', error);
         }
+      } else {
+        console.log('⚠️ No crawl data found for progressId:', activeProgressId);
       }
+    } else {
+      console.log('ℹ️ No active crawls found');
     }
   }, []);
 
@@ -756,26 +817,32 @@ export const KnowledgeBasePage = () => {
     setProgressItems(prev => [...prev, newProgressItem]);
     
     // Set as active progress for polling
+    console.log('🚀 Starting crawl with progressId:', progressId);
     setActiveProgressId(progressId);
     
     // Store in localStorage for persistence
     try {
-      localStorage.setItem(`crawl_progress_${progressId}`, JSON.stringify({
+      const crawlData = {
         ...newProgressItem,
         startedAt: Date.now(),
         lastUpdated: Date.now()
-      }));
+      };
+      
+      localStorage.setItem(`crawl_progress_${progressId}`, JSON.stringify(crawlData));
+      console.log('💾 Saved crawl_progress to localStorage:', `crawl_progress_${progressId}`);
       
       // Save as current operation
       localStorage.setItem('current_operation_id', progressId);
+      console.log('💾 Saved current_operation_id:', progressId);
       
       const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
       if (!activeCrawls.includes(progressId)) {
         activeCrawls.push(progressId);
         localStorage.setItem('active_crawls', JSON.stringify(activeCrawls));
+        console.log('💾 Updated active_crawls:', activeCrawls);
       }
     } catch (error) {
-      console.error('Failed to persist crawl progress:', error);
+      console.error('❌ Failed to persist crawl progress:', error);
     }
     
     // Progress is now tracked via simple HTTP polling - no complex callbacks needed

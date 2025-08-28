@@ -375,10 +375,18 @@ class CrawlingService:
 
             # Send heartbeat after document storage
             await send_heartbeat_if_needed()
+            
+            # CRITICAL: Verify that chunks were actually stored
+            actual_chunks_stored = storage_results.get("chunks_stored", 0)
+            if storage_results["chunk_count"] > 0 and actual_chunks_stored == 0:
+                # We processed chunks but none were stored - this is a failure
+                error_msg = f"Failed to store documents: {storage_results['chunk_count']} chunks processed but 0 stored"
+                safe_logfire_error(error_msg)
+                raise Exception(error_msg)
 
             # Extract code examples if requested
             code_examples_count = 0
-            if request.get("extract_code_examples", True):
+            if request.get("extract_code_examples", True) and actual_chunks_stored > 0:
                 await update_mapped_progress("code_extraction", 0, "Starting code extraction...")
 
                 # Create progress callback for code extraction
@@ -408,7 +416,7 @@ class CrawlingService:
                 "finalization",
                 50,
                 "Finalizing crawl results...",
-                chunks_stored=storage_results["chunk_count"],
+                chunks_stored=actual_chunks_stored,
                 code_examples_found=code_examples_count,
             )
 
@@ -416,8 +424,8 @@ class CrawlingService:
             await update_mapped_progress(
                 "completed",
                 100,
-                f"Crawl completed: {storage_results['chunk_count']} chunks, {code_examples_count} code examples",
-                chunks_stored=storage_results["chunk_count"],
+                f"Crawl completed: {actual_chunks_stored} chunks, {code_examples_count} code examples",
+                chunks_stored=actual_chunks_stored,
                 code_examples_found=code_examples_count,
                 processed_pages=len(crawl_results),
                 total_pages=len(crawl_results),
@@ -426,7 +434,7 @@ class CrawlingService:
             # Mark crawl as completed
             if self.progress_tracker:
                 await self.progress_tracker.complete({
-                    "chunks_stored": storage_results["chunk_count"],
+                    "chunks_stored": actual_chunks_stored,
                     "code_examples_found": code_examples_count,
                     "processed_pages": len(crawl_results),
                     "total_pages": len(crawl_results),
@@ -460,7 +468,12 @@ class CrawlingService:
         except Exception as e:
             safe_logfire_error(f"Async crawl orchestration failed | error={str(e)}")
             await self._handle_progress_update(
-                task_id, {"status": "error", "percentage": -1, "log": f"Crawl failed: {str(e)}"}
+                task_id, {
+                    "status": "error", 
+                    "percentage": -1, 
+                    "log": f"Crawl failed: {str(e)}",
+                    "error": str(e)
+                }
             )
             # Unregister on error
             if self.progress_id:
