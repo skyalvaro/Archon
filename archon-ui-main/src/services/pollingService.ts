@@ -21,7 +21,7 @@ interface ProjectPollingOptions {
  */
 export class TaskPollingService {
   private etag: string | null = null;
-  private intervalId: NodeJS.Timer | null = null;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
   private projectId: string;
   private onTasksUpdated?: (tasks: any[]) => void;
   private onError?: (error: Error) => void;
@@ -118,7 +118,7 @@ export class TaskPollingService {
  */
 export class ProjectPollingService {
   private etag: string | null = null;
-  private intervalId: NodeJS.Timer | null = null;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
   private onProjectsUpdated?: (projects: any[]) => void;
   private onError?: (error: Error) => void;
 
