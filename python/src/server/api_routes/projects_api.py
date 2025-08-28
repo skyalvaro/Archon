@@ -570,10 +570,11 @@ async def list_project_tasks(
         current_etag = generate_etag(etag_data)
 
         # Check if client's ETag matches (304 Not Modified)
-        if response and check_etag(if_none_match, current_etag):
-            response.status_code = 304
-            response.headers["ETag"] = current_etag
-            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        if check_etag(if_none_match, current_etag):
+            if response:
+                response.status_code = 304
+                response.headers["ETag"] = current_etag
+                response.headers["Cache-Control"] = "no-cache, must-revalidate"
             logfire.info(f"Tasks unchanged, returning 304 | project_id={project_id} | etag={current_etag}")
             return None
 
