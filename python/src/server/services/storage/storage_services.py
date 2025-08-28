@@ -124,11 +124,9 @@ class DocumentStorageService(BaseStorageService):
                 url_to_full_document = {doc_url: file_content}
 
                 # Update source information
-                from ...utils import extract_source_summary, update_source_info
+                from ..source_management_service import extract_source_summary, update_source_info
 
-                source_summary = await self.threading_service.run_cpu_intensive(
-                    extract_source_summary, source_id, file_content[:5000]
-                )
+                source_summary = await extract_source_summary(source_id, file_content[:5000])
 
                 logger.info(f"Updating source info for {source_id} with knowledge_type={knowledge_type}")
                 await self.threading_service.run_io_bound(

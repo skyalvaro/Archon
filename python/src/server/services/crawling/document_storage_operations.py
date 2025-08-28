@@ -212,7 +212,7 @@ class DocumentStorageOperations:
 
             # Generate summary with fallback
             try:
-                summary = extract_source_summary(source_id, combined_content)
+                summary = await extract_source_summary(source_id, combined_content)
             except Exception as e:
                 safe_logfire_error(f"Failed to generate AI summary for '{source_id}': {str(e)}, using fallback")
                 # Fallback to simple summary
