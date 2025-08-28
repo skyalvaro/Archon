@@ -102,6 +102,7 @@ async def generate_source_title_and_metadata(
     knowledge_type: str = "technical",
     tags: list[str] | None = None,
     provider: str = None,
+    original_url: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Generate a user-friendly title and metadata for a source based on its content.
@@ -131,11 +132,43 @@ async def generate_source_title_and_metadata(
                 # Limit content for prompt
                 sample_content = content[:3000] if len(content) > 3000 else content
 
-                prompt = f"""Based on this content from {source_id}, generate a concise, descriptive title (3-6 words) that captures what this source is about:
+                # Determine source type from URL patterns
+                source_type_info = ""
+                if original_url:
+                    if "llms.txt" in original_url:
+                        source_type_info = " (detected from llms.txt file)"
+                    elif "sitemap" in original_url:
+                        source_type_info = " (detected from sitemap)"
+                    elif any(doc_indicator in original_url for doc_indicator in ["docs", "documentation", "api"]):
+                        source_type_info = " (detected from documentation site)"
+                    else:
+                        source_type_info = " (detected from website)"
 
+                prompt = f"""You are creating a title for crawled content that identifies the SERVICE NAME and SOURCE TYPE.
+
+Source ID: {source_id}
+Original URL: {original_url or 'Not provided'}
+{source_type_info}
+
+Content sample:
 {sample_content}
 
-Provide only the title, nothing else."""
+Generate a title in this format: "[Service Name] [Source Type]"
+
+Requirements:
+- Identify the service/platform name from the URL (e.g., "Anthropic", "OpenAI", "Supabase", "Mem0")
+- Identify the source type: Documentation, API Reference, llms.txt, Guide, etc.
+- Keep it concise (2-4 words total)
+- Use proper capitalization
+
+Examples:
+- "Anthropic Documentation" 
+- "OpenAI API Reference"
+- "Mem0 llms.txt"
+- "Supabase Docs"
+- "GitHub Guide"
+
+Generate only the title, nothing else."""
 
                 response = await client.chat.completions.create(
                     model=model_choice,
@@ -169,7 +202,7 @@ Provide only the title, nothing else."""
     return title, metadata
 
 
-def update_source_info(
+async def update_source_info(
     client: Client,
     source_id: str,
     summary: str,
@@ -236,8 +269,8 @@ def update_source_info(
             )
         else:
             # New source - generate title and metadata
-            title, metadata = generate_source_title_and_metadata(
-                source_id, content, knowledge_type, tags
+            title, metadata = await generate_source_title_and_metadata(
+                source_id, content, knowledge_type, tags, original_url=original_url
             )
 
             # Add update_frequency and original_url to metadata
@@ -437,7 +470,7 @@ class SourceManagementService:
             logger.error(f"Error updating source metadata: {e}")
             return False, {"error": f"Error updating source metadata: {str(e)}"}
 
-    def create_source_info(
+    async def create_source_info(
         self,
         source_id: str,
         content_sample: str,
@@ -465,10 +498,10 @@ class SourceManagementService:
                 tags = []
 
             # Generate source summary using the utility function
-            source_summary = extract_source_summary(source_id, content_sample)
+            source_summary = await extract_source_summary(source_id, content_sample)
 
             # Create the source info using the utility function
-            update_source_info(
+            await update_source_info(
                 self.supabase_client,
                 source_id,
                 source_summary,

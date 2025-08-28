@@ -129,14 +129,13 @@ class DocumentStorageService(BaseStorageService):
                 source_summary = await extract_source_summary(source_id, file_content[:5000])
 
                 logger.info(f"Updating source info for {source_id} with knowledge_type={knowledge_type}")
-                await self.threading_service.run_io_bound(
-                    update_source_info,
+                await update_source_info(
                     self.supabase_client,
                     source_id,
                     source_summary,
                     total_word_count,
                     file_content[:1000],  # content for title generation
-                    knowledge_type,      # FIX: Pass knowledge_type parameter!
+                    knowledge_type,      # Pass knowledge_type parameter!
                     tags,               # FIX: Pass tags parameter!
                 )
 
