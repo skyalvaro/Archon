@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface UseProjectMutationOptions<TData, TVariables> {
   onSuccess?: (data: TData, variables: TVariables) => void;
@@ -31,6 +31,16 @@ export function useProjectMutation<TData = unknown, TVariables = unknown>(
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [data, setData] = useState<TData | undefined>(undefined);
+  
+  // Track if component is still mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const {
     onSuccess,
@@ -40,45 +50,58 @@ export function useProjectMutation<TData = unknown, TVariables = unknown>(
   } = options;
 
   const mutateAsync = useCallback(async (variables: TVariables): Promise<TData> => {
-    setIsPending(true);
-    setIsError(false);
-    setIsSuccess(false);
-    setError(null);
+    // Only update state if still mounted
+    if (isMountedRef.current) {
+      setIsPending(true);
+      setIsError(false);
+      setIsSuccess(false);
+      setError(null);
+    }
 
     try {
       const result = await mutationFn(variables);
-      setData(result);
-      setIsSuccess(true);
+      
+      // Only update state and call callbacks if still mounted
+      if (isMountedRef.current) {
+        setData(result);
+        setIsSuccess(true);
 
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess(result, variables);
-      }
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess(result, variables);
+        }
 
-      // Show success message if available
-      if (successMessage && typeof window !== 'undefined') {
-        console.log(successMessage);
+        // Show success message if available
+        if (successMessage && typeof window !== 'undefined') {
+          console.log(successMessage);
+        }
       }
 
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
-      setError(error);
-      setIsError(true);
+      
+      // Only update state and call callbacks if still mounted
+      if (isMountedRef.current) {
+        setError(error);
+        setIsError(true);
 
-      // Call error callback if provided
-      if (onError) {
-        onError(error);
-      }
+        // Call error callback if provided
+        if (onError) {
+          onError(error);
+        }
 
-      // Show error message
-      if (typeof window !== 'undefined') {
-        console.error(`${errorMessage}:`, error);
+        // Show error message
+        if (typeof window !== 'undefined') {
+          console.error(`${errorMessage}:`, error);
+        }
       }
 
       throw error;
     } finally {
-      setIsPending(false);
+      if (isMountedRef.current) {
+        setIsPending(false);
+      }
     }
   }, [mutationFn, onSuccess, onError, successMessage, errorMessage]);
 

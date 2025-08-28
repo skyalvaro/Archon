@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface UseDatabaseMutationOptions<TData, TVariables> {
   onSuccess?: (data: TData) => void;
@@ -40,6 +40,16 @@ export function useDatabaseMutation<TData = unknown, TVariables = unknown>(
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [data, setData] = useState<TData | undefined>(undefined);
+  
+  // Track if component is still mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const {
     onSuccess,
@@ -52,61 +62,76 @@ export function useDatabaseMutation<TData = unknown, TVariables = unknown>(
   } = options;
 
   const reset = useCallback(() => {
-    setIsLoading(false);
-    setIsError(false);
-    setIsSuccess(false);
-    setError(null);
-    setData(undefined);
+    if (isMountedRef.current) {
+      setIsLoading(false);
+      setIsError(false);
+      setIsSuccess(false);
+      setError(null);
+      setData(undefined);
+    }
   }, []);
 
   const mutateAsync = useCallback(async (variables: TVariables): Promise<TData> => {
-    setIsLoading(true);
-    setIsError(false);
-    setIsSuccess(false);
-    setError(null);
+    // Only update state if still mounted
+    if (isMountedRef.current) {
+      setIsLoading(true);
+      setIsError(false);
+      setIsSuccess(false);
+      setError(null);
+    }
 
     try {
       const result = await mutationFn(variables);
-      setData(result);
-      setIsSuccess(true);
       
-      // Invalidate cache if specified
-      if (invalidateCache) {
-        invalidateCache();
-      }
+      // Only update state and call callbacks if still mounted
+      if (isMountedRef.current) {
+        setData(result);
+        setIsSuccess(true);
+        
+        // Invalidate cache if specified
+        if (invalidateCache) {
+          invalidateCache();
+        }
 
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess(result);
-      }
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess(result);
+        }
 
-      // Show success toast if enabled
-      if (showSuccessToast && typeof window !== 'undefined' && (window as any).toast) {
-        (window as any).toast.success(successMessage);
+        // Show success toast if enabled
+        if (showSuccessToast && typeof window !== 'undefined' && (window as any).toast) {
+          (window as any).toast.success(successMessage);
+        }
       }
 
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
-      setError(error);
-      setIsError(true);
+      
+      // Only update state and call callbacks if still mounted
+      if (isMountedRef.current) {
+        setError(error);
+        setIsError(true);
 
-      // Call error callback if provided
-      if (onError) {
-        onError(error);
+        // Call error callback if provided
+        if (onError) {
+          onError(error);
+        }
+
+        // Show error toast if enabled (default)
+        if (showErrorToast && typeof window !== 'undefined' && (window as any).toast) {
+          (window as any).toast.error(`${errorMessage}: ${error.message}`);
+        }
+
+        // Log for debugging in beta
+        console.error('Database operation failed:', error);
       }
-
-      // Show error toast if enabled (default)
-      if (showErrorToast && typeof window !== 'undefined' && (window as any).toast) {
-        (window as any).toast.error(`${errorMessage}: ${error.message}`);
-      }
-
-      // Log for debugging in beta
-      console.error('Database operation failed:', error);
 
       throw error;
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [mutationFn, onSuccess, onError, invalidateCache, successMessage, errorMessage, showSuccessToast, showErrorToast]);
 
@@ -137,9 +162,21 @@ export function useAsyncMutation<TData = unknown, TVariables = unknown>(
   mutationFn: (variables: TVariables) => Promise<TData>
 ) {
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Track if component is still mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const execute = useCallback(async (variables: TVariables): Promise<TData | undefined> => {
-    setIsLoading(true);
+    if (isMountedRef.current) {
+      setIsLoading(true);
+    }
     try {
       const result = await mutationFn(variables);
       return result;
@@ -147,7 +184,9 @@ export function useAsyncMutation<TData = unknown, TVariables = unknown>(
       console.error('Async mutation failed:', error);
       throw error;
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [mutationFn]);
 
