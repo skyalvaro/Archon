@@ -65,7 +65,7 @@ export const TasksTab = ({
   const onRefresh = useCallback(async () => {
     if (!projectId) return;
     try {
-      const freshTasks = await projectService.getTasks(projectId);
+      const freshTasks = await projectService.getTasksByProject(projectId);
       const formattedTasks = freshTasks.map(formatTask);
       setTasks(formattedTasks);
       onTasksChange(formattedTasks);
