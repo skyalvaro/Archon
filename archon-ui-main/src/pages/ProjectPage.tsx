@@ -294,8 +294,8 @@ function ProjectPage({
     {
       onSuccess: (data, variables) => {
         const message = variables.pinned
-          ? `Pinned "${selectedProject?.title}" to top`
-          : "Removed from pinned projects";
+          ? `Pinned "${data.title}" to top`
+          : `Removed "${data.title}" from pinned projects`;
         showToast(message, "info");
       },
       onError: (error) => {
