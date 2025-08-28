@@ -15,21 +15,21 @@ from ...config.logfire_config import get_logger
 
 logger = get_logger(__name__)
 
-# Import Socket.IO instance directly to avoid circular imports
+# Socket.IO removed - using polling for real-time updates
 try:
-    from ...socketio_app import get_socketio_instance
-    
-    _sio = get_socketio_instance()
-    _broadcast_available = True
-    logger.info("✅ Socket.IO broadcasting is AVAILABLE - real-time updates enabled")
-    
+    # Socket.IO removed - no longer importing socketio_app
+    _sio = None
+    _broadcast_available = False
+    logger.info("✅ Using polling for real-time updates - Socket.IO removed")
+
     async def broadcast_task_update(project_id: str, event_type: str, task_data: dict):
-        """Broadcast task updates to project room."""
-        await _sio.emit(event_type, task_data, room=project_id)
+        """Task updates handled via polling - Socket.IO removed."""
+        # await _sio.emit(event_type, task_data, room=project_id)  # Socket.IO removed
+        pass  # Updates will be picked up via polling
         logger.info(
             f"✅ Broadcasted {event_type} for task {task_data.get('id', 'unknown')} to project {project_id}"
         )
-        
+
 except ImportError as e:
     logger.warning(f"❌ Socket.IO broadcasting not available - ImportError: {e}")
     _broadcast_available = False
@@ -37,7 +37,7 @@ except ImportError as e:
 
     # Dummy function when broadcasting is not available
     async def broadcast_task_update(*args, **kwargs):
-        logger.debug(f"Socket.IO broadcast skipped - not available")
+        logger.debug("Socket.IO broadcast skipped - not available")
         pass
 
 except Exception as e:
@@ -50,7 +50,7 @@ except Exception as e:
 
     # Dummy function when broadcasting is not available
     async def broadcast_task_update(*args, **kwargs):
-        logger.debug(f"Socket.IO broadcast skipped - not available")
+        logger.debug("Socket.IO broadcast skipped - not available")
         pass
 
 
@@ -186,9 +186,9 @@ class TaskService:
             return False, {"error": f"Error creating task: {str(e)}"}
 
     def list_tasks(
-        self, 
-        project_id: str = None, 
-        status: str = None, 
+        self,
+        project_id: str = None,
+        status: str = None,
         include_closed: bool = False,
         exclude_large_fields: bool = False,
         include_archived: bool = False
@@ -302,7 +302,7 @@ class TaskService:
                     "updated_at": task["updated_at"],
                     "archived": task.get("archived", False),
                 }
-                
+
                 if not exclude_large_fields:
                     # Include full JSONB fields
                     task_data["sources"] = task.get("sources", [])
@@ -313,7 +313,7 @@ class TaskService:
                         "sources_count": len(task.get("sources", [])),
                         "code_examples_count": len(task.get("code_examples", []))
                     }
-                
+
                 tasks.append(task_data)
 
             filter_info = []

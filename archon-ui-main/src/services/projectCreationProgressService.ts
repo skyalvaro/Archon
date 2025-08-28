@@ -1,170 +1,140 @@
-import type { Project } from '../types/project';
-import { createWebSocketService, WebSocketService, WebSocketState } from './socketIOService';
+/**
+ * Project Creation Progress Service
+ * Handles polling for project creation progress
+ */
 
 export interface ProjectCreationProgressData {
   progressId: string;
-  status: 'starting' | 'initializing_agents' | 'generating_docs' | 'processing_requirements' | 'ai_generation' | 'finalizing_docs' | 'saving_to_database' | 'completed' | 'error';
+  projectId?: string;
+  status: 'starting' | 'analyzing' | 'creating_prp' | 'creating_tasks' | 'completed' | 'failed' | 'cancelled';
   percentage: number;
-  step?: string;
-  currentStep?: string;
-  eta?: string;
+  step: string;
+  message?: string;
   error?: string;
-  logs: string[];
-  project?: Project; // The created project when completed
-  duration?: string;
+  result?: any;
+  timestamp?: string;
 }
 
-interface StreamProgressOptions {
-  autoReconnect?: boolean;
-  reconnectDelay?: number;
+interface StreamCallbacks {
+  onMessage?: (data: ProjectCreationProgressData) => void;
+  onError?: (error: string) => void;
+  onConnect?: () => void;
+  onComplete?: (data: ProjectCreationProgressData) => void;
 }
-
-type ProgressCallback = (data: ProjectCreationProgressData) => void;
 
 class ProjectCreationProgressService {
-  private wsService: WebSocketService | null = null;
-  private currentProgressId: string | null = null;
-  private progressCallback: ProgressCallback | null = null;
-  public isReconnecting = false;
+  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private callbacks: Map<string, StreamCallbacks> = new Map();
 
   /**
-   * Stream project creation progress using Socket.IO
+   * Start polling for project creation progress
    */
   async streamProgress(
     progressId: string,
-    onMessage: ProgressCallback,
-    options: StreamProgressOptions = {}
+    callbacks: StreamCallbacks
   ): Promise<void> {
-    const { autoReconnect = true, reconnectDelay = 5000 } = options;
-
-    // Close existing connection if any
-    this.disconnect();
-
-    this.currentProgressId = progressId;
-    this.progressCallback = onMessage;
-
-    // Create new WebSocket service with Socket.IO
-    this.wsService = createWebSocketService({
-      maxReconnectAttempts: autoReconnect ? 10 : 0,
-      reconnectInterval: reconnectDelay,
-      enableAutoReconnect: autoReconnect
-    });
-
-    // Set up state change handler
-    this.wsService.addStateChangeHandler((state) => {
-      if (state === WebSocketState.CONNECTED) {
-        console.log(`🚀 Connected to project creation progress stream: ${progressId}`);
-        this.isReconnecting = false;
-        // Note: subscribe_progress is now automatically emitted by webSocketService on connect
-      } else if (state === WebSocketState.RECONNECTING) {
-        this.isReconnecting = true;
-      } else if (state === WebSocketState.DISCONNECTED || state === WebSocketState.FAILED) {
-        this.isReconnecting = false;
-      }
-    });
-
-    // Set up message handlers
-    this.wsService.addMessageHandler('project_progress', (message) => {
-      console.log(`📨 [PROGRESS] Received project_progress event:`, message);
-      if (message.data) {
-        console.log(`📨 [PROGRESS] Calling onMessage with data:`, message.data);
-        onMessage(message.data);
-      } else {
-        console.warn(`📨 [PROGRESS] project_progress event had no data:`, message);
-      }
-    });
-
-    this.wsService.addMessageHandler('project_completed', (message) => {
-      console.log(`✅ [PROGRESS] Received project_completed event:`, message);
-      if (message.data) {
-        console.log(`✅ [PROGRESS] Calling onMessage with completion data:`, message.data);
-        onMessage(message.data);
-      } else {
-        console.warn(`✅ [PROGRESS] project_completed event had no data:`, message);
-      }
-    });
-
-    this.wsService.addMessageHandler('project_error', (message) => {
-      console.log(`❌ [PROGRESS] Received project_error event:`, message);
-      if (message.data) {
-        console.log(`❌ [PROGRESS] Calling onMessage with error data:`, message.data);
-        onMessage(message.data);
-      } else {
-        console.warn(`❌ [PROGRESS] project_error event had no data:`, message);
-      }
-    });
-
-    // Set up error handler
-    this.wsService.addErrorHandler((error) => {
-      console.error('Project creation progress Socket.IO error:', error);
-    });
-
-    // Connect to the default namespace and join progress room
-    try {
-      console.log(`📡 [PROGRESS] Connecting to Socket.IO for progress: ${progressId}`);
-      await this.wsService.connect('/');
-      console.log(`📡 [PROGRESS] Connected! Sending subscribe_progress event for: ${progressId}`);
-      
-      // Subscribe to progress updates for this specific progress ID
-      this.wsService.send({
-        type: 'subscribe_progress',
-        data: { progress_id: progressId }
-      });
-      console.log(`📡 [PROGRESS] Sent subscribe_progress event, now listening for project_progress/project_completed/project_error events`);
-    } catch (error) {
-      console.error('Failed to connect to project creation progress:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Disconnect from progress stream
-   */
-  disconnect(): void {
-    if (this.wsService) {
-      // Unsubscribe if connected
-      if (this.currentProgressId && this.wsService.isConnected()) {
-        this.wsService.send({
-          type: 'unsubscribe_progress',
-          data: { progress_id: this.currentProgressId }
-        });
-      }
-      
-      this.wsService.disconnect();
-      this.wsService = null;
-    }
+    // Store callbacks
+    this.callbacks.set(progressId, callbacks);
     
-    this.currentProgressId = null;
-    this.progressCallback = null;
-    this.isReconnecting = false;
+    // Notify connected
+    if (callbacks.onConnect) {
+      callbacks.onConnect();
+    }
+
+    // Start polling
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/progress/${progressId}`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Transform to expected format
+          const progressData: ProjectCreationProgressData = {
+            progressId: data.operation_id,
+            projectId: data.metadata?.project_id,
+            status: this.mapStatus(data.status),
+            percentage: data.percentage,
+            step: data.message || data.metadata?.step || 'Processing...',
+            message: data.message,
+            error: data.error,
+            result: data.metadata?.result,
+            timestamp: data.timestamp
+          };
+
+          if (callbacks.onMessage) {
+            callbacks.onMessage(progressData);
+          }
+
+          // Handle completion
+          if (data.status === 'completed') {
+            if (callbacks.onComplete) {
+              callbacks.onComplete(progressData);
+            }
+            this.stopStreaming(progressId);
+          } else if (data.status === 'failed' || data.status === 'error') {
+            if (callbacks.onError) {
+              callbacks.onError(data.error || 'Operation failed');
+            }
+            this.stopStreaming(progressId);
+          }
+        } else if (response.status === 404) {
+          // Operation not found
+          this.stopStreaming(progressId);
+          if (callbacks.onError) {
+            callbacks.onError('Progress operation not found');
+          }
+        }
+      } catch (error) {
+        console.error('Error polling project creation progress:', error);
+        if (callbacks.onError) {
+          callbacks.onError(error instanceof Error ? error.message : 'Polling error');
+        }
+      }
+    }, 1000); // Poll every second
+
+    this.pollingIntervals.set(progressId, pollInterval);
   }
 
   /**
-   * Check if currently connected to a progress stream
+   * Stop polling for a specific progress ID
    */
-  isConnected(): boolean {
-    return this.wsService?.isConnected() ?? false;
+  stopStreaming(progressId: string) {
+    const interval = this.pollingIntervals.get(progressId);
+    if (interval) {
+      clearInterval(interval);
+      this.pollingIntervals.delete(progressId);
+    }
+    this.callbacks.delete(progressId);
   }
 
-  // Backward compatibility methods - now just wrappers around streamProgress
-  connect(progressId: string): void {
-    // This method is kept for backward compatibility but does nothing
-    // Use streamProgress instead
-    console.warn('projectCreationProgressService.connect() is deprecated. Use streamProgress() instead.');
+  /**
+   * Disconnect all polling
+   */
+  disconnect() {
+    // Stop all polling intervals
+    this.pollingIntervals.forEach((interval) => {
+      clearInterval(interval);
+    });
+    this.pollingIntervals.clear();
+    this.callbacks.clear();
   }
 
-  onProgress(callback: ProgressCallback): void {
-    console.warn('projectCreationProgressService.onProgress() is deprecated. Pass callback to streamProgress() instead.');
-  }
-
-  onCompleted(callback: ProgressCallback): void {
-    console.warn('projectCreationProgressService.onCompleted() is deprecated. Pass callback to streamProgress() instead.');
-  }
-
-  onError(callback: (error: Error) => void): void {
-    console.warn('projectCreationProgressService.onError() is deprecated. Pass callback to streamProgress() instead.');
+  /**
+   * Map backend status to expected format
+   */
+  private mapStatus(status: string): ProjectCreationProgressData['status'] {
+    switch (status) {
+      case 'running':
+        return 'analyzing';
+      case 'completed':
+        return 'completed';
+      case 'failed':
+      case 'error':
+        return 'failed';
+      default:
+        return 'starting';
+    }
   }
 }
 
-// Export singleton instance
-export const projectCreationProgressService = new ProjectCreationProgressService(); 
+export const projectCreationProgressService = new ProjectCreationProgressService();

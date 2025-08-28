@@ -124,7 +124,7 @@ class ProjectService:
                     docs_count = len(project.get("docs", []))
                     features_count = len(project.get("features", []))
                     has_data = bool(project.get("data", []))
-                    
+
                     # Return only metadata + stats, excluding large JSONB fields
                     projects.append({
                         "id": project["id"],

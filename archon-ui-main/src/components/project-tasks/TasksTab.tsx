@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Table, LayoutGrid, Plus, Wifi, WifiOff, List } from 'lucide-react';
+import { Table, LayoutGrid, Plus, List } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toggle } from '../ui/Toggle';
 import { projectService } from '../../services/projectService';
 
-import { useTaskSocket } from '../../hooks/useTaskSocket';
 import type { CreateTaskRequest, UpdateTaskRequest, DatabaseTaskStatus } from '../../types/project';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
@@ -14,34 +13,13 @@ import { EditTaskModal } from './EditTaskModal';
 // Assignee utilities
 const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
 
-// Mapping functions for status conversion
-const mapUIStatusToDBStatus = (uiStatus: Task['status']): DatabaseTaskStatus => {
-  switch (uiStatus) {
-    case 'backlog': return 'todo';
-    case 'in-progress': return 'doing';
-    case 'review': return 'review'; // Map UI 'review' to database 'review'
-    case 'complete': return 'done';
-    default: return 'todo';
-  }
-};
-
-const mapDBStatusToUIStatus = (dbStatus: DatabaseTaskStatus): Task['status'] => {
-  switch (dbStatus) {
-    case 'todo': return 'backlog';
-    case 'doing': return 'in-progress';
-    case 'review': return 'review'; // Map database 'review' to UI 'review'
-    case 'done': return 'complete';
-    default: return 'backlog';
-  }
-};
-
 // Helper function to map database task format to UI task format
 const mapDatabaseTaskToUITask = (dbTask: any): Task => {
   return {
     id: dbTask.id,
     title: dbTask.title,
     description: dbTask.description || '',
-    status: mapDBStatusToUIStatus(dbTask.status),
+    status: dbTask.status as Task['status'], // Use database status directly
     assignee: {
       name: dbTask.assignee || 'User',
       avatar: ''
@@ -68,7 +46,6 @@ export const TasksTab = ({
   const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   
   // Initialize tasks
   useEffect(() => {
@@ -173,24 +150,7 @@ export const TasksTab = ({
     onTasksChange(uiTasks);
   }, [onTasksChange]);
 
-  // Simplified socket connection with better lifecycle management
-  const { isConnected, connectionState } = useTaskSocket({
-    projectId,
-    onTaskCreated: handleTaskCreated,
-    onTaskUpdated: handleTaskUpdated,
-    onTaskDeleted: handleTaskDeleted,
-    onTaskArchived: handleTaskArchived,
-    onTasksReordered: handleTasksReordered,
-    onInitialTasks: handleInitialTasks,
-    onConnectionStateChange: (state) => {
-      setIsWebSocketConnected(state === 'connected');
-    }
-  });
-
-  // Update connection state when hook state changes
-  useEffect(() => {
-    setIsWebSocketConnected(isConnected);
-  }, [isConnected]);
+  // Socket connection removed - real-time updates disabled
 
   const loadProjectFeatures = async () => {
     if (!projectId) return;
@@ -230,7 +190,7 @@ export const TasksTab = ({
         const updateData: UpdateTaskRequest = {
           title: task.title,
           description: task.description,
-          status: mapUIStatusToDBStatus(task.status),
+          status: task.status,
           assignee: task.assignee?.name || 'User',
           task_order: task.task_order,
           ...(task.feature && { feature: task.feature }),
@@ -244,7 +204,7 @@ export const TasksTab = ({
           project_id: projectId,
           title: task.title,
           description: task.description,
-          status: mapUIStatusToDBStatus(task.status),
+          status: task.status,
           assignee: task.assignee?.name || 'User',
           task_order: task.task_order,
           ...(task.feature && { feature: task.feature }),
@@ -432,7 +392,7 @@ export const TasksTab = ({
 
       // Update the task with new status and order
       await projectService.updateTask(taskId, {
-        status: mapUIStatusToDBStatus(newStatus),
+        status: newStatus,
         task_order: newOrder,
         client_timestamp: Date.now()
       });
@@ -449,7 +409,7 @@ export const TasksTab = ({
 
   const completeTask = (taskId: string) => {
     console.log(`[TasksTab] Calling completeTask for ${taskId}`);
-    moveTask(taskId, 'complete');
+    moveTask(taskId, 'done');
   };
 
   const deleteTask = async (task: Task) => {
@@ -476,7 +436,7 @@ export const TasksTab = ({
         project_id: projectId,
         title: newTask.title,
         description: newTask.description,
-        status: mapUIStatusToDBStatus(newTask.status),
+        status: newTask.status,
         assignee: newTask.assignee?.name || 'User',
         task_order: nextOrder,
         ...(newTask.feature && { feature: newTask.feature }),
@@ -505,9 +465,8 @@ export const TasksTab = ({
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.status !== undefined) {
-        console.log(`[TasksTab] Mapping UI status ${updates.status} to DB status.`);
-        updateData.status = mapUIStatusToDBStatus(updates.status);
-        console.log(`[TasksTab] Mapped status for ${taskId}: ${updates.status} -> ${updateData.status}`);
+        console.log(`[TasksTab] Setting status for ${taskId}: ${updates.status}`);
+        updateData.status = updates.status;
       }
       if (updates.assignee !== undefined) updateData.assignee = updates.assignee.name;
       if (updates.task_order !== undefined) updateData.task_order = updates.task_order;
@@ -603,30 +562,16 @@ export const TasksTab = ({
         {/* Fixed View Controls */}
         <div className="fixed bottom-6 left-0 right-0 flex justify-center z-50 pointer-events-none">
           <div className="flex items-center gap-4">
-            {/* WebSocket Status Indicator */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-black/90 border border-gray-200 dark:border-gray-800 rounded-lg shadow-[0_0_20px_rgba(0,0,0,0.1)] dark:shadow-[0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md pointer-events-auto">
-              {isWebSocketConnected ? (
-                <>
-                  <Wifi className="w-4 h-4 text-green-500" />
-                  <span className="text-xs text-green-600 dark:text-green-400">Live</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-4 h-4 text-red-500" />
-                  <span className="text-xs text-red-600 dark:text-red-400">Offline</span>
-                </>
-              )}
-            </div>
             
             {/* Add Task Button with Luminous Style */}
             <button 
               onClick={() => {
-                const defaultOrder = getTasksForPrioritySelection('backlog')[0]?.value || 1;
+                const defaultOrder = getTasksForPrioritySelection('todo')[0]?.value || 1;
                 setEditingTask({
                   id: '',
                   title: '',
                   description: '',
-                  status: 'backlog',
+                  status: 'todo',
                   assignee: { name: 'AI IDE Agent', avatar: '' },
                   feature: '',
                   featureColor: '#3b82f6',

@@ -233,8 +233,8 @@ Provide only the title, nothing else."""
     # Build metadata - determine source_type from source_id pattern
     source_type = "file" if source_id.startswith("file_") else "url"
     metadata = {
-        "knowledge_type": knowledge_type, 
-        "tags": tags or [], 
+        "knowledge_type": knowledge_type,
+        "tags": tags or [],
         "source_type": source_type,
         "auto_generated": True
     }

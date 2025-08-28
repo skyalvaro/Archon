@@ -4,10 +4,12 @@ Recursive Crawling Strategy
 Handles recursive crawling of websites by following internal links.
 """
 
-from typing import List, Dict, Any, Optional, Callable
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import urldefrag
 
-from crawl4ai import CrawlerRunConfig, CacheMode, MemoryAdaptiveDispatcher
+from crawl4ai import CacheMode, CrawlerRunConfig, MemoryAdaptiveDispatcher
+
 from ....config.logfire_config import get_logger
 from ...credential_service import credential_service
 from ..helpers.url_handler import URLHandler
@@ -32,15 +34,15 @@ class RecursiveCrawlStrategy:
 
     async def crawl_recursive_with_progress(
         self,
-        start_urls: List[str],
+        start_urls: list[str],
         transform_url_func: Callable[[str], str],
         is_documentation_site_func: Callable[[str], bool],
         max_depth: int = 3,
         max_concurrent: int = None,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
         start_progress: int = 10,
         end_progress: int = 60,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Recursively crawl internal links from start URLs up to a maximum depth with progress reporting.
 

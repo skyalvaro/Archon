@@ -11,16 +11,18 @@ Handles:
 import asyncio
 import json
 import secrets
-import sys
+from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Response
+from fastapi import status as http_status
 from pydantic import BaseModel
 
 # Removed direct logging import - using unified config
 # Set up standard logger for background tasks
 from ..config.logfire_config import get_logger, logfire
 from ..utils import get_supabase_client
+from ..utils.etag_utils import generate_etag, check_etag
 
 logger = get_logger(__name__)
 
@@ -35,8 +37,7 @@ from ..services.projects import (
 from ..services.projects.document_service import DocumentService
 from ..services.projects.versioning_service import VersioningService
 
-# Import Socket.IO broadcast functions from socketio_handlers
-from .socketio_handlers import broadcast_project_update
+# Socket.IO removed - using polling instead
 
 router = APIRouter(prefix="/api", tags=["projects"])
 
@@ -76,7 +77,11 @@ class CreateTaskRequest(BaseModel):
 
 
 @router.get("/projects")
-async def list_projects(include_content: bool = True):
+async def list_projects(
+    include_content: bool = True,
+    response: Response = None,
+    if_none_match: str | None = Header(None)
+):
     """
     List all projects.
     
@@ -106,13 +111,13 @@ async def list_projects(include_content: bool = True):
         # Monitor response size for optimization validation
         response_json = json.dumps(formatted_projects)
         response_size = len(response_json)
-        
+
         # Log response metrics
         logfire.info(
             f"Projects listed successfully | count={len(formatted_projects)} | "
             f"size_bytes={response_size} | include_content={include_content}"
         )
-        
+
         # Warning for large responses (>10KB)
         if response_size > 10000:
             logfire.warning(
@@ -120,7 +125,31 @@ async def list_projects(include_content: bool = True):
                 f"include_content={include_content} | project_count={len(formatted_projects)}"
             )
 
-        return formatted_projects
+        # Generate ETag from stable data (excluding timestamp)
+        etag_data = {
+            "projects": formatted_projects,
+            "count": len(formatted_projects)
+        }
+        current_etag = generate_etag(etag_data)
+        
+        # Generate response with timestamp for polling
+        response_data = {
+            "projects": formatted_projects,
+            "timestamp": datetime.utcnow().isoformat(),
+            "count": len(formatted_projects)
+        }
+        
+        # Check if client's ETag matches
+        if check_etag(if_none_match, current_etag):
+            response.status_code = http_status.HTTP_304_NOT_MODIFIED
+            return None
+        
+        # Set headers
+        response.headers["ETag"] = current_etag
+        response.headers["Last-Modified"] = datetime.utcnow().isoformat()
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        
+        return response_data
 
     except HTTPException:
         raise
@@ -165,11 +194,11 @@ async def create_project(request: CreateProjectRequest):
             f"Project creation started | progress_id={progress_id} | title={request.title}"
         )
 
-        # Return progress_id immediately so frontend can connect to Socket.IO
+        # Return progress_id immediately so frontend can poll for progress
         return {
             "progress_id": progress_id,
             "status": "started",
-            "message": "Project creation started. Connect to Socket.IO for progress updates.",
+            "message": "Project creation started. Poll /api/progress/{progress_id} for updates.",
         }
 
     except Exception as e:
@@ -419,9 +448,6 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
         # Format project response with sources using SourceLinkingService
         formatted_project = source_service.format_project_with_sources(project)
 
-        # Broadcast project list update to Socket.IO clients
-        await broadcast_project_update()
-
         logfire.info(
             f"Project updated successfully | project_id={project_id} | title={project.get('title')} | technical_sources={len(formatted_project.get('technical_sources', []))} | business_sources={len(formatted_project.get('business_sources', []))}"
         )
@@ -450,9 +476,6 @@ async def delete_project(project_id: str):
                 raise HTTPException(status_code=404, detail=result)
             else:
                 raise HTTPException(status_code=500, detail=result)
-
-        # Broadcast project list update to Socket.IO clients
-        await broadcast_project_update()
 
         logfire.info(
             f"Project deleted successfully | project_id={project_id} | deleted_tasks={result.get('deleted_tasks', 0)}"
@@ -623,24 +646,24 @@ async def list_tasks(
                 "pages": (len(tasks) + per_page - 1) // per_page,
             },
         }
-        
+
         # Monitor response size for optimization validation
         response_json = json.dumps(response)
         response_size = len(response_json)
-        
+
         # Log response metrics
         logfire.info(
             f"Tasks listed successfully | count={len(paginated_tasks)} | "
             f"size_bytes={response_size} | exclude_large_fields={exclude_large_fields}"
         )
-        
+
         # Warning for large responses (>10KB)
         if response_size > 10000:
             logfire.warning(
                 f"Large task response size | size_bytes={response_size} | "
                 f"exclude_large_fields={exclude_large_fields} | task_count={len(paginated_tasks)}"
             )
-        
+
         return response
 
     except HTTPException:

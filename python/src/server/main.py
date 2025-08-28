@@ -25,10 +25,8 @@ from .api_routes.coverage_api import router as coverage_router
 from .api_routes.internal_api import router as internal_router
 from .api_routes.knowledge_api import router as knowledge_router
 from .api_routes.mcp_api import router as mcp_router
+from .api_routes.progress_api import router as progress_router
 from .api_routes.projects_api import router as projects_router
-
-# Import Socket.IO handlers to ensure they're registered
-from .api_routes import socketio_handlers  # This registers all Socket.IO event handlers
 
 # Import modular API routers
 from .api_routes.settings_api import router as settings_router
@@ -42,8 +40,7 @@ from .services.crawler_manager import cleanup_crawler, initialize_crawler
 # Import utilities and core classes
 from .services.credential_service import initialize_credentials
 
-# Import Socket.IO integration
-from .socketio_app import create_socketio_app
+# Socket.IO removed - using polling instead
 
 # Import missing dependencies that the modular APIs need
 try:
@@ -103,12 +100,8 @@ async def lifespan(app: FastAPI):
         # Make crawling context available to modules
         # Crawler is now managed by CrawlerManager
 
-        # Initialize Socket.IO services
-        try:
-            # Import API modules to register their Socket.IO handlers
-            api_logger.info("✅ Socket.IO handlers imported from API modules")
-        except Exception as e:
-            api_logger.warning(f"Could not initialize Socket.IO services: {e}")
+        # Socket.IO removed - using polling for real-time updates
+        api_logger.info("✅ Using polling for real-time updates")
 
         # Initialize prompt service
         try:
@@ -210,6 +203,7 @@ app.include_router(mcp_router)
 # app.include_router(mcp_client_router)  # Removed - not part of new architecture
 app.include_router(knowledge_router)
 app.include_router(projects_router)
+app.include_router(progress_router)
 app.include_router(tests_router)
 app.include_router(agent_chat_router)
 app.include_router(internal_router)
@@ -262,12 +256,8 @@ async def api_health_check():
     return await health_check()
 
 
-# Create Socket.IO app wrapper
-# This wraps the FastAPI app with Socket.IO functionality
-socket_app = create_socketio_app(app)
-
-# Export the socket_app for uvicorn to use
-# The socket_app still handles all FastAPI routes, but also adds Socket.IO support
+# Socket.IO removed - FastAPI app runs directly without wrapper
+# Export the app directly for uvicorn to use
 
 
 def main():
@@ -284,7 +274,7 @@ def main():
         )
 
     uvicorn.run(
-        "src.server.main:socket_app",
+        "src.server.main:app",
         host="0.0.0.0",
         port=int(server_port),
         reload=True,

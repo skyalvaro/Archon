@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Base validation schemas
 export const DatabaseTaskStatusSchema = z.enum(['todo', 'doing', 'review', 'done']);
-export const UITaskStatusSchema = z.enum(['backlog', 'in-progress', 'review', 'complete']);
+// Using database status values directly - no UI mapping needed
 export const TaskPrioritySchema = z.enum(['low', 'medium', 'high', 'critical']);
 export const ProjectColorSchema = z.enum(['cyan', 'purple', 'pink', 'blue', 'orange', 'green']);
 
@@ -99,7 +99,7 @@ export const TaskSchema = z.object({
   feature: z.string().optional(),
   featureColor: z.string().optional(),
   priority: TaskPrioritySchema.optional(),
-  uiStatus: UITaskStatusSchema.optional()
+  // No UI-specific status mapping needed
 });
 
 // Update task status schema (for drag & drop operations)

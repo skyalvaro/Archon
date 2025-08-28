@@ -9,7 +9,6 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Select } from '../ui/Select';
 import { CrawlProgressData, crawlProgressService } from '../../services/crawlProgressService';
-import { WebSocketState } from '../../services/socketIOService';
 import { MilkdownEditor } from './MilkdownEditor';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { PRPViewer } from '../prp';

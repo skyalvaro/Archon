@@ -9,7 +9,6 @@ import type {
   CreateTaskRequest, 
   UpdateTaskRequest,
   DatabaseTaskStatus,
-  UITaskStatus,
   ProjectManagementEvent
 } from '../types/project';
 
@@ -22,7 +21,7 @@ import {
   formatValidationErrors
 } from '../lib/projectSchemas';
 
-import { dbTaskToUITask, uiStatusToDBStatus } from '../types/project';
+// No status mapping needed - using database values directly
 
 // Document interface for type safety
 export interface Document {
@@ -382,7 +381,7 @@ export const projectService = {
       const tasks = await callAPI<Task[]>(`/api/projects/${projectId}/tasks`);
       
       // Convert database tasks to UI tasks with status mapping
-      return tasks.map((task: Task) => dbTaskToUITask(task));
+      return tasks;
     } catch (error) {
       console.error(`Failed to get tasks for project ${projectId}:`, error);
       throw error;
@@ -395,7 +394,7 @@ export const projectService = {
   async getTask(taskId: string): Promise<Task> {
     try {
       const task = await callAPI<Task>(`/api/tasks/${taskId}`);
-      return dbTaskToUITask(task);
+      return task;
     } catch (error) {
       console.error(`Failed to get task ${taskId}:`, error);
       throw error;
@@ -424,7 +423,7 @@ export const projectService = {
       // Broadcast creation event
       this.broadcastTaskUpdate('TASK_CREATED', task.id, task.project_id, task);
       
-      return dbTaskToUITask(task);
+      return task;
     } catch (error) {
       console.error('Failed to create task:', error);
       throw error;
@@ -450,7 +449,7 @@ export const projectService = {
       // Broadcast update event
       this.broadcastTaskUpdate('TASK_UPDATED', task.id, task.project_id, updates);
       
-      return dbTaskToUITask(task);
+      return task;
     } catch (error) {
       console.error(`Failed to update task ${taskId}:`, error);
       throw error;
@@ -460,26 +459,23 @@ export const projectService = {
   /**
    * Update task status (for drag & drop operations)
    */
-  async updateTaskStatus(taskId: string, uiStatus: UITaskStatus): Promise<Task> {
-    // Convert UI status to database status
-    const dbStatus = uiStatusToDBStatus(uiStatus);
-    
+  async updateTaskStatus(taskId: string, status: DatabaseTaskStatus): Promise<Task> {
     // Validate input
-    const validation = validateUpdateTaskStatus({ task_id: taskId, status: dbStatus });
+    const validation = validateUpdateTaskStatus({ task_id: taskId, status: status });
     if (!validation.success) {
       throw new ValidationError(formatValidationErrors(validation.error));
     }
 
     try {
       // Use the standard update task endpoint with status parameter
-      const task = await callAPI<Task>(`/api/tasks/${taskId}?status=${dbStatus}`, {
+      const task = await callAPI<Task>(`/api/tasks/${taskId}?status=${status}`, {
         method: 'PUT'
       });
       
       // Broadcast move event
-      this.broadcastTaskUpdate('TASK_MOVED', task.id, task.project_id, { status: dbStatus });
+      this.broadcastTaskUpdate('TASK_MOVED', task.id, task.project_id, { status: status });
       
-      return dbTaskToUITask(task);
+      return task;
     } catch (error) {
       console.error(`Failed to update task status ${taskId}:`, error);
       throw error;

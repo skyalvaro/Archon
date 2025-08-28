@@ -68,13 +68,13 @@ const ColumnDropZone = ({
   // Get column header color based on status
   const getColumnColor = () => {
     switch (status) {
-      case 'backlog':
+      case 'todo':
         return 'text-gray-600 dark:text-gray-400';
-      case 'in-progress':
+      case 'doing':
         return 'text-blue-600 dark:text-blue-400';
       case 'review':
         return 'text-purple-600 dark:text-purple-400';
-      case 'complete':
+      case 'done':
         return 'text-green-600 dark:text-green-400';
     }
   };
@@ -82,13 +82,13 @@ const ColumnDropZone = ({
   // Get column header glow based on status
   const getColumnGlow = () => {
     switch (status) {
-      case 'backlog':
+      case 'todo':
         return 'bg-gray-500/30';
-      case 'in-progress':
+      case 'doing':
         return 'bg-blue-500/30 shadow-[0_0_10px_2px_rgba(59,130,246,0.2)]';
       case 'review':
         return 'bg-purple-500/30 shadow-[0_0_10px_2px_rgba(168,85,247,0.2)]';
-      case 'complete':
+      case 'done':
         return 'bg-green-500/30 shadow-[0_0_10px_2px_rgba(16,185,129,0.2)]';
     }
   };
@@ -199,7 +199,7 @@ export const TaskBoardView = ({
       await Promise.all(
         tasksToUpdate.map(task => 
           projectService.updateTask(task.id, { 
-            status: mapUIStatusToDBStatus(newStatus) 
+            status: newStatus 
           })
         )
       );
@@ -214,16 +214,7 @@ export const TaskBoardView = ({
     }
   }, [selectedTasks, tasks, clearSelection, showToast]);
 
-  // Helper function to map UI status to DB status (reuse from TasksTab)
-  const mapUIStatusToDBStatus = (uiStatus: Task['status']) => {
-    switch (uiStatus) {
-      case 'backlog': return 'todo';
-      case 'in-progress': return 'doing';
-      case 'review': return 'review';
-      case 'complete': return 'done';
-      default: return 'todo';
-    }
-  };
+  // No status mapping needed - using database values directly
 
   // Handle task deletion (opens confirmation modal)
   const handleDeleteTask = useCallback((task: Task) => {
@@ -286,10 +277,10 @@ export const TaskBoardView = ({
               defaultValue=""
             >
               <option value="" disabled>Move to...</option>
-              <option value="backlog">Backlog</option>
-              <option value="in-progress">In Progress</option>
+              <option value="todo">Todo</option>
+              <option value="doing">Doing</option>
               <option value="review">Review</option>
-              <option value="complete">Complete</option>
+              <option value="done">Done</option>
             </select>
             
             {/* Mass delete button */}
@@ -314,11 +305,11 @@ export const TaskBoardView = ({
 
       {/* Board Columns */}
       <div className="grid grid-cols-4 gap-0 flex-1">
-        {/* Backlog Column */}
+        {/* Todo Column */}
         <ColumnDropZone
-          status="backlog"
-          title="Backlog"
-          tasks={getTasksByStatus('backlog')}
+          status="todo"
+          title="Todo"
+          tasks={getTasksByStatus('todo')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
@@ -331,11 +322,11 @@ export const TaskBoardView = ({
           onTaskSelect={toggleTaskSelection}
         />
         
-        {/* In Progress Column */}
+        {/* Doing Column */}
         <ColumnDropZone
-          status="in-progress"
-          title="In Process"
-          tasks={getTasksByStatus('in-progress')}
+          status="doing"
+          title="Doing"
+          tasks={getTasksByStatus('doing')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
@@ -365,11 +356,11 @@ export const TaskBoardView = ({
           onTaskSelect={toggleTaskSelection}
         />
         
-        {/* Complete Column */}
+        {/* Done Column */}
         <ColumnDropZone
-          status="complete"
-          title="Complete"
-          tasks={getTasksByStatus('complete')}
+          status="done"
+          title="Done"
+          tasks={getTasksByStatus('done')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}

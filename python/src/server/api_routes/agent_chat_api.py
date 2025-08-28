@@ -17,10 +17,8 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Import Socket.IO instance
-from ..socketio_app import get_socketio_instance
-
-sio = get_socketio_instance()
+# Socket.IO removed - using polling instead
+# sio = get_socketio_instance()  # Socket.IO removed
 
 # Create router
 router = APIRouter(prefix="/api/agent-chat", tags=["agent-chat"])
@@ -68,6 +66,14 @@ async def get_session(session_id: str):
     return sessions[session_id]
 
 
+@router.get("/sessions/{session_id}/messages")
+async def get_messages(session_id: str):
+    """Get messages for a session (for polling)."""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return sessions[session_id].get("messages", [])
+
+
 @router.post("/sessions/{session_id}/messages")
 async def send_message(session_id: str, request: dict):
     """REST endpoint for sending messages (triggers Socket.IO event internally)."""
@@ -84,7 +90,7 @@ async def send_message(session_id: str, request: dict):
     sessions[session_id]["messages"].append(user_msg)
 
     # Emit to Socket.IO room
-    await sio.emit("message", {"type": "message", "data": user_msg}, room=f"chat_{session_id}")
+    # await sio.emit("message", {"type": "message", "data": user_msg}, room=f"chat_{session_id}")  # Socket.IO removed
 
     # Trigger agent response via Socket.IO
     asyncio.create_task(
@@ -95,31 +101,31 @@ async def send_message(session_id: str, request: dict):
 
 
 # Socket.IO Event Handlers
-@sio.event
+# @sio.event  # Socket.IO removed
 async def join_chat(sid, data):
     """Join a chat room."""
     session_id = data.get("session_id")
     if session_id:
-        await sio.enter_room(sid, f"chat_{session_id}")
+        # await sio.enter_room(sid, f"chat_{session_id}")  # Socket.IO removed
         logger.info(f"Client {sid} joined chat room {session_id}")
         # Send connection confirmation
-        await sio.emit(
-            "connection_confirmed",
-            {"type": "connection_confirmed", "session_id": session_id},
-            to=sid,
-        )
+        # await sio.emit(  # Socket.IO removed
+        #     "connection_confirmed",
+        #     {"type": "connection_confirmed", "session_id": session_id},
+        #     to=sid,
+        # )
 
 
-@sio.event
+# @sio.event  # Socket.IO removed
 async def leave_chat(sid, data):
     """Leave a chat room."""
     session_id = data.get("session_id")
     if session_id:
-        await sio.leave_room(sid, f"chat_{session_id}")
+        # await sio.leave_room(sid, f"chat_{session_id}")  # Socket.IO removed
         logger.info(f"Client {sid} left chat room {session_id}")
 
 
-@sio.event
+# @sio.event  # Socket.IO removed
 async def chat_message(sid, data):
     """Handle chat message via Socket.IO."""
     session_id = data.get("session_id")
@@ -127,7 +133,7 @@ async def chat_message(sid, data):
     context = data.get("context", {})
 
     if not session_id or not message:
-        await sio.emit("error", {"type": "error", "error": "Missing session_id or message"}, to=sid)
+        # await sio.emit("error", {"type": "error", "error": "Missing session_id or message"}, to=sid)  # Socket.IO removed
         return
 
     # Store user message
@@ -141,7 +147,7 @@ async def chat_message(sid, data):
         sessions[session_id]["messages"].append(user_msg)
 
         # Echo user message to room
-        await sio.emit("message", {"type": "message", "data": user_msg}, room=f"chat_{session_id}")
+        # await sio.emit("message", {"type": "message", "data": user_msg}, room=f"chat_{session_id}")  # Socket.IO removed
 
     # Process agent response
     await process_agent_response(session_id, message, context)
@@ -157,7 +163,7 @@ async def process_agent_response(session_id: str, message: str, context: dict):
     room = f"chat_{session_id}"
 
     # Emit typing indicator
-    await sio.emit("typing", {"type": "typing", "is_typing": True}, room=room)
+    # await sio.emit("typing", {"type": "typing", "is_typing": True}, room=room)  # Socket.IO removed
 
     try:
         # Call agents service with SSE streaming
@@ -174,11 +180,11 @@ async def process_agent_response(session_id: str, message: str, context: dict):
                 json={"agent_type": agent_type, "prompt": message, "context": context},
             ) as response:
                 if response.status_code != 200:
-                    await sio.emit(
-                        "error",
-                        {"type": "error", "error": f"Agent service error: {response.status_code}"},
-                        room=room,
-                    )
+                    # await sio.emit(
+                    #     "error",
+                    #     {"type": "error", "error": f"Agent service error: {response.status_code}"},
+                    #     room=room,
+                    # )  # Socket.IO removed
                     return
 
                 # Collect chunks for complete message
@@ -195,11 +201,11 @@ async def process_agent_response(session_id: str, message: str, context: dict):
                             full_content += chunk_content
 
                             # Emit streaming chunk
-                            await sio.emit(
-                                "stream_chunk",
-                                {"type": "stream_chunk", "content": chunk_content},
-                                room=room,
-                            )
+                            # await sio.emit(
+                            #     "stream_chunk",
+                            #     {"type": "stream_chunk", "content": chunk_content},
+                            #     room=room,
+                            # )  # Socket.IO removed
 
                         except json.JSONDecodeError:
                             logger.warning(f"Failed to parse SSE chunk: {line}")
@@ -217,14 +223,15 @@ async def process_agent_response(session_id: str, message: str, context: dict):
                 sessions[session_id]["messages"].append(agent_msg)
 
                 # Emit complete message
-                await sio.emit("message", {"type": "message", "data": agent_msg}, room=room)
+                # await sio.emit("message", {"type": "message", "data": agent_msg}, room=room)  # Socket.IO removed
 
                 # Emit stream complete
-                await sio.emit("stream_complete", {"type": "stream_complete"}, room=room)
+                # await sio.emit("stream_complete", {"type": "stream_complete"}, room=room)  # Socket.IO removed
 
     except Exception as e:
         logger.error(f"Error processing agent response: {e}")
-        await sio.emit("error", {"type": "error", "error": str(e)}, room=room)
+        # await sio.emit("error", {"type": "error", "error": str(e)}, room=room)  # Socket.IO removed
     finally:
         # Stop typing indicator
-        await sio.emit("typing", {"type": "typing", "is_typing": False}, room=room)
+        # await sio.emit("typing", {"type": "typing", "is_typing": False}, room=room)  # Socket.IO removed
+        pass  # Socket.IO functionality removed

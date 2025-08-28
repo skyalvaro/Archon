@@ -1,0 +1,233 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+interface UsePollingOptions<T> {
+  interval?: number;
+  enabled?: boolean;
+  onError?: (error: Error) => void;
+  onSuccess?: (data: T) => void;
+  staleTime?: number;
+}
+
+interface UsePollingResult<T> {
+  data: T | undefined;
+  error: Error | null;
+  isLoading: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  refetch: () => Promise<void>;
+}
+
+/**
+ * Generic polling hook with visibility and focus detection
+ * 
+ * Features:
+ * - Stops polling when tab is hidden
+ * - Resumes polling when tab becomes visible
+ * - Immediate refetch on focus
+ * - ETag support for efficient polling
+ */
+export function usePolling<T>(
+  url: string,
+  options: UsePollingOptions<T> = {}
+): UsePollingResult<T> {
+  const { 
+    interval = 3000, 
+    enabled = true, 
+    onError, 
+    onSuccess,
+    staleTime = 0
+  } = options;
+
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pollInterval, setPollInterval] = useState(enabled ? interval : 0);
+  
+  const etagRef = useRef<string | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cachedDataRef = useRef<T | undefined>(undefined);
+  const lastFetchRef = useRef<number>(0);
+
+  const fetchData = useCallback(async () => {
+    // Check stale time
+    if (staleTime > 0 && Date.now() - lastFetchRef.current < staleTime) {
+      return; // Data is still fresh
+    }
+
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Include ETag if we have one for this URL
+      if (etagRef.current) {
+        headers['If-None-Match'] = etagRef.current;
+      }
+
+      const response = await fetch(url, { 
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+
+      // Handle 304 Not Modified - data hasn't changed
+      if (response.status === 304) {
+        // Return cached data
+        if (cachedDataRef.current !== undefined) {
+          setData(cachedDataRef.current);
+          if (onSuccess) {
+            onSuccess(cachedDataRef.current);
+          }
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.statusText}`);
+      }
+
+      // Store ETag for next request
+      const etag = response.headers.get('ETag');
+      if (etag) {
+        etagRef.current = etag;
+      }
+
+      const jsonData = await response.json();
+      setData(jsonData);
+      cachedDataRef.current = jsonData;
+      lastFetchRef.current = Date.now();
+      setError(null);
+      
+      // Call success callback if provided
+      if (onSuccess) {
+        onSuccess(jsonData);
+      }
+    } catch (err) {
+      console.error('Polling error:', err);
+      const error = err instanceof Error ? err : new Error('Unknown error');
+      setError(error);
+      if (onError) {
+        onError(error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [url, staleTime, onSuccess, onError]);
+
+  // Handle visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setPollInterval(0); // Stop polling when hidden
+      } else {
+        setPollInterval(interval); // Resume polling when visible
+        // Trigger immediate refetch
+        fetchData();
+      }
+    };
+
+    const handleFocus = () => {
+      // Immediate refetch on focus
+      fetchData();
+      setPollInterval(interval);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [interval, fetchData]);
+
+  // Update polling interval when enabled changes
+  useEffect(() => {
+    setPollInterval(enabled && !document.hidden ? interval : 0);
+  }, [enabled, interval]);
+
+  // Set up polling
+  useEffect(() => {
+    if (!url || !enabled) return;
+
+    // Initial fetch
+    fetchData();
+
+    // Clear existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    // Set up new interval if polling is enabled
+    if (pollInterval > 0) {
+      intervalRef.current = setInterval(fetchData, pollInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [url, pollInterval, enabled, fetchData]);
+
+  return {
+    data,
+    error,
+    isLoading,
+    isError: !!error,
+    isSuccess: !isLoading && !error && data !== undefined,
+    refetch: fetchData
+  };
+}
+
+/**
+ * Hook for polling task updates
+ */
+export function useTaskPolling(projectId: string, options?: UsePollingOptions<any>) {
+  const baseUrl = '/api/projects';
+  const url = `${baseUrl}/${projectId}/tasks`;
+  
+  return usePolling(url, {
+    interval: 3000, // 3 seconds for tasks
+    staleTime: 1000, // Consider data stale after 1 second
+    ...options,
+  });
+}
+
+/**
+ * Hook for polling project list
+ */
+export function useProjectPolling(options?: UsePollingOptions<any>) {
+  const url = '/api/projects';
+  
+  return usePolling(url, {
+    interval: 5000, // 5 seconds for project list
+    staleTime: 2000, // Consider data stale after 2 seconds
+    ...options,
+  });
+}
+
+/**
+ * Hook for polling progress updates
+ */
+export function useProgressPolling(operationId: string | null, options?: UsePollingOptions<any>) {
+  const url = operationId ? `/api/progress/${operationId}` : '';
+  
+  const result = usePolling(url, {
+    interval: 1000, // 1 second for progress updates
+    enabled: !!operationId,
+    staleTime: 0, // Always refetch progress
+    ...options,
+  });
+
+  // Stop polling when operation is complete or failed
+  useEffect(() => {
+    if (result.data?.status === 'completed' || result.data?.status === 'failed') {
+      // Data indicates completion, no need to continue polling
+      // This will be handled by the enabled flag in next render
+    }
+  }, [result.data?.status]);
+
+  return result;
+}
