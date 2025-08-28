@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../contexts/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStaggeredEntrance } from "../hooks/useStaggeredEntrance";
-import { useProjectPolling, useTaskPolling, useProgressPolling } from "../hooks/usePolling";
+import { useProjectPolling, useTaskPolling } from "../hooks/usePolling";
 import { useDatabaseMutation } from "../hooks/useDatabaseMutation";
 import { useProjectMutation } from "../hooks/useProjectMutation";
 import {
@@ -40,8 +40,6 @@ import {
 import { projectService } from "../services/projectService";
 import type { Project, CreateProjectRequest } from "../types/project";
 import type { Task } from "../components/project-tasks/TaskTableView";
-import { ProjectCreationProgressCard } from "../components/ProjectCreationProgressCard";
-// Removed Socket.IO projectCreationProgressService - now using HTTP polling
 
 // Reusable Delete Confirmation Modal Component
 interface DeleteConfirmModalProps {
@@ -164,7 +162,6 @@ function ProjectPage({
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [isSwitchingProject, setIsSwitchingProject] = useState(false);
-  const [currentProgressId, setCurrentProgressId] = useState<string | null>(null);
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
@@ -179,14 +176,6 @@ function ProjectPage({
   });
 
   // Handler for retrying project creation
-  const handleRetryProjectCreation = (progressId: string) => {
-    // Remove the failed project
-    setTempProjects((prev) =>
-      prev.filter((p) => p.id !== `temp-${progressId}`),
-    );
-    // Re-open the modal for retry
-    setIsNewProjectModalOpen(true);
-  };
 
   // State for delete confirmation modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -229,40 +218,6 @@ function ProjectPage({
     // Polling now only used for ETag efficiency, not state updates
   });
 
-  // Poll project creation progress
-  const { data: progressData } = useProgressPolling(currentProgressId, {
-    onSuccess: (data) => {
-      if (!data || !currentProgressId) return;
-      
-      console.log(`[PROJECT PROGRESS] Update received:`, data);
-      
-      // Update temp project progress
-      setTempProjects((prev) => prev.map((project) =>
-        project.creationProgress?.progressId === currentProgressId
-          ? { ...project, creationProgress: data }
-          : project
-      ));
-      
-      // Handle completion
-      if (data.status === 'completed' && data.project) {
-        console.log('[PROJECT PROGRESS] Creation completed');
-        setTimeout(() => {
-          setCurrentProgressId(null);
-          setTempProjects((prev) => prev.filter((p) => 
-            p.creationProgress?.progressId !== currentProgressId
-          ));
-          refetchProjects(); // Refresh to show the new project
-        }, 1000);
-      } else if (data.status === 'error' || data.status === 'failed') {
-        console.log('[PROJECT PROGRESS] Creation failed:', data.error);
-        setCurrentProgressId(null);
-        setTempProjects((prev) => prev.filter((p) => 
-          p.creationProgress?.progressId !== currentProgressId
-        ));
-        showToast(`Project creation failed: ${data.error || 'Unknown error'}`, 'error');
-      }
-    }
-  });
 
   // Project mutations
   const deleteProjectMutation = useProjectMutation(
@@ -309,13 +264,13 @@ function ProjectPage({
       return await projectService.createProjectWithStreaming(projectData);
     },
     {
-      successMessage: "Project creation started",
+      successMessage: "Creating project...",
       onSuccess: (response) => {
-        if (response.progress_id) {
-          handleProjectCreationProgress(response.progress_id);
-        }
         setNewProjectForm({ title: "", description: "", color: "blue" });
         setIsNewProjectModalOpen(false);
+        // Polling will pick up the new project
+        showToast("Project created successfully!", "success");
+        refetchProjects();
       },
       onError: (error) => {
         console.error("Failed to create project:", error);
@@ -323,11 +278,6 @@ function ProjectPage({
     },
   );
 
-  // Handle temp projects for creation progress
-  const [tempProjects, setTempProjects] = useState<Project[]>([]);
-
-  // Combine real projects with temp projects
-  const allProjects = [...tempProjects, ...projects];
 
   // Auto-select pinned project or first project when projects load
   useEffect(() => {
@@ -492,39 +442,6 @@ function ProjectPage({
     }
   };
 
-  // Handle project creation progress
-  const handleProjectCreationProgress = (progressId: string) => {
-    // Create a temporary project with progress tracking
-    const tempId = `temp-${progressId}`;
-    const tempProject: Project = {
-      id: tempId,
-      title: newProjectForm.title,
-      description: newProjectForm.description || "",
-      github_repo: undefined,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      docs: [],
-      features: [],
-      data: [],
-      pinned: false,
-      color: newProjectForm.color,
-      icon: "Briefcase",
-      creationProgress: {
-        progressId: progressId,
-        status: "starting",
-        percentage: 0,
-        logs: ["🚀 Starting project creation..."],
-        project: undefined,
-      },
-    };
-
-    // Add temporary project to the list
-    setTempProjects((prev) => [tempProject, ...prev]);
-
-    // Start HTTP polling for progress updates
-    setCurrentProgressId(progressId);
-    console.log(`[PROJECT PROGRESS] Started polling for progress: ${progressId}`);
-  };
 
   const handleProjectSelect = async (project: Project) => {
     // Show loading state during project switch
@@ -730,39 +647,8 @@ function ProjectPage({
         <motion.div className="relative mb-10" variants={itemVariants}>
           <div className="overflow-x-auto pb-4 scrollbar-thin">
             <div className="flex gap-4 min-w-max">
-              {projects.map((project) =>
-                project.creationProgress ? (
-                  // Show progress card for projects being created
-                  <motion.div
-                    key={project.id}
-                    variants={itemVariants}
-                    className="w-72"
-                  >
-                    <ProjectCreationProgressCard
-                      progressData={project.creationProgress}
-                      onComplete={(completedData) => {
-                        console.log(
-                          "Project creation completed - handled by polling hook",
-                          completedData,
-                        );
-                        // Completion logic is now handled by the progress polling hook
-                      }}
-                      onError={(error) => {
-                        console.error("Project creation failed:", error);
-                        showToast(
-                          `Failed to create project: ${error}`,
-                          "error",
-                        );
-                      }}
-                      onRetry={() =>
-                        handleRetryProjectCreation(
-                          project.creationProgress!.progressId,
-                        )
-                      }
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
+              {projects.map((project) => (
+                <motion.div
                     key={project.id}
                     variants={itemVariants}
                     onClick={() => handleProjectSelect(project)}
@@ -981,8 +867,7 @@ function ProjectPage({
                       </div>
                     </div>
                   </motion.div>
-                ),
-              )}
+              ))}
             </div>
           </div>
         </motion.div>
