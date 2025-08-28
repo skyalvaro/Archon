@@ -357,37 +357,36 @@ function ProjectPage({
     }
   }, [tasksData?.tasks, projects, selectedProject]);
 
-  // Load task counts for all projects
+  // Load task counts for all projects in parallel
   const loadTaskCountsForAllProjects = useCallback(
     async (projectIds: string[]) => {
       try {
-        const counts: Record<
-          string,
-          { todo: number; doing: number; done: number }
-        > = {};
-
-        for (const projectId of projectIds) {
-          try {
+        // Fetch all project tasks in parallel
+        const results = await Promise.allSettled(
+          projectIds.map(async (projectId) => {
             const tasksData = await projectService.getTasksByProject(projectId);
-            const todos = tasksData.filter(
-              (t) => t.status === "todo",
-            ).length;
+            const todos = tasksData.filter((t: any) => t.status === "todo").length;
             const doing = tasksData.filter(
-              (t) => t.status === "doing" || t.status === "review",
+              (t: any) => t.status === "doing" || t.status === "review"
             ).length;
-            const done = tasksData.filter(
-              (t) => t.status === "done",
-            ).length;
+            const done = tasksData.filter((t: any) => t.status === "done").length;
+            return { projectId, counts: { todo: todos, doing, done } };
+          })
+        );
 
-            counts[projectId] = { todo: todos, doing, done };
-          } catch (error) {
-            console.error(
-              `Failed to load tasks for project ${projectId}:`,
-              error,
-            );
+        // Process results and handle failures
+        const counts: Record<string, { todo: number; doing: number; done: number }> = {};
+        results.forEach((result) => {
+          if (result.status === "fulfilled") {
+            counts[result.value.projectId] = result.value.counts;
+          } else {
+            // Extract projectId from the original array since we can't get it from rejection
+            const failedIndex = results.indexOf(result);
+            const projectId = projectIds[failedIndex];
+            console.error(`Failed to load tasks for project ${projectId}:`, result.reason);
             counts[projectId] = { todo: 0, doing: 0, done: 0 };
           }
-        }
+        });
 
         setProjectTaskCounts(counts);
       } catch (error) {
