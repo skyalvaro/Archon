@@ -103,7 +103,9 @@ def register_project_tools(mcp: FastMCP):
                                     )
                                     list_response.raise_for_status()  # Raise on HTTP errors
 
-                                    projects = list_response.json()
+                                    response_data = list_response.json()
+                                    # Extract projects array from response
+                                    projects = response_data.get("projects", [])
                                     # Find project with matching title created recently
                                     for proj in projects:
                                         if proj.get("title") == title:
@@ -181,11 +183,12 @@ def register_project_tools(mcp: FastMCP):
                 )
 
                 if response.status_code == 200:
-                    projects = response.json()
+                    response_data = response.json()
+                    # Response already includes projects array and count
                     return json.dumps({
                         "success": True,
-                        "projects": projects,
-                        "count": len(projects),
+                        "projects": response_data,
+                        "count": response_data.get("count", 0),
                     })
                 else:
                     return MCPErrorFormatter.from_http_error(response, "list projects")
