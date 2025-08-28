@@ -15,20 +15,7 @@ from ...config.logfire_config import get_logger
 
 logger = get_logger(__name__)
 
-# Updates handled via polling
-_broadcast_available = False
-
-async def broadcast_task_update(project_id: str, event_type: str, task_data: dict):
-    """Task updates handled via polling."""
-    pass  # Updates will be picked up via polling
-    logger.info(
-        f"✅ Task update: {event_type} for task {task_data.get('id', 'unknown')} in project {project_id}"
-    )
-
-    # Dummy function when broadcasting is not available
-    async def broadcast_task_update(*args, **kwargs):
-        logger.debug("Socket.IO broadcast skipped - not available")
-        pass
+# Task updates are handled via polling - no broadcasting needed
 
 
 class TaskService:
@@ -131,17 +118,6 @@ class TaskService:
             if response.data:
                 task = response.data[0]
 
-                # Broadcast Socket.IO update for new task
-                if _broadcast_available:
-                    try:
-                        await broadcast_task_update(
-                            project_id=task["project_id"], event_type="task_created", task_data=task
-                        )
-                        logger.info(f"Socket.IO broadcast sent for new task {task['id']}")
-                    except Exception as ws_error:
-                        logger.warning(
-                            f"Failed to broadcast Socket.IO update for new task {task['id']}: {ws_error}"
-                        )
 
                 return True, {
                     "task": {
@@ -383,28 +359,6 @@ class TaskService:
             if response.data:
                 task = response.data[0]
 
-                # Broadcast Socket.IO update
-                if _broadcast_available:
-                    try:
-                        logger.info(
-                            f"Broadcasting task_updated for task {task_id} to project room {task['project_id']}"
-                        )
-                        await broadcast_task_update(
-                            project_id=task["project_id"], event_type="task_updated", task_data=task
-                        )
-                        logger.info(f"✅ Socket.IO broadcast successful for task {task_id}")
-                    except Exception as ws_error:
-                        # Don't fail the task update if Socket.IO broadcasting fails
-                        logger.error(
-                            f"❌ Failed to broadcast Socket.IO update for task {task_id}: {ws_error}"
-                        )
-                        import traceback
-
-                        logger.error(f"Traceback: {traceback.format_exc()}")
-                else:
-                    logger.warning(
-                        f"⚠️ Socket.IO broadcasting not available - task {task_id} update won't be real-time"
-                    )
 
                 return True, {"task": task, "message": "Task updated successfully"}
             else:
@@ -452,19 +406,6 @@ class TaskService:
             )
 
             if response.data:
-                # Broadcast Socket.IO update for archived task
-                if _broadcast_available:
-                    try:
-                        await broadcast_task_update(
-                            project_id=task["project_id"],
-                            event_type="task_archived",
-                            task_data={"id": task_id, "project_id": task["project_id"]},
-                        )
-                        logger.info(f"Socket.IO broadcast sent for archived task {task_id}")
-                    except Exception as ws_error:
-                        logger.warning(
-                            f"Failed to broadcast Socket.IO update for archived task {task_id}: {ws_error}"
-                        )
 
                 return True, {"task_id": task_id, "message": "Task archived successfully"}
             else:
