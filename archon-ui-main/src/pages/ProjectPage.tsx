@@ -165,6 +165,7 @@ function ProjectPage({
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [isSwitchingProject, setIsSwitchingProject] = useState(false);
+  const [isLoadingDirectly, setIsLoadingDirectly] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
@@ -227,6 +228,12 @@ function ProjectPage({
     },
     onSuccess: (data) => {
       setTasksError(null);
+      // Skip polling updates during direct API calls to prevent task jumping
+      if (isLoadingDirectly) {
+        console.log('[POLLING] Skipping polling update during direct load');
+        return;
+      }
+      
       // Tasks endpoint returns an array directly
       if (Array.isArray(data)) {
         const uiTasks: Task[] = data.map((task: any) => ({
@@ -246,6 +253,7 @@ function ProjectPage({
           task_order: task.task_order || 0,
         }));
         setTasks(uiTasks);
+        console.log('[POLLING] Updated tasks from polling');
       }
     },
   });
@@ -426,20 +434,41 @@ function ProjectPage({
     }
   };
 
-  // Manual refresh function for tasks using polling refetch
+  // Direct API call for immediate task loading during project switch
   const loadTasksForProject = async (projectId: string) => {
+    setIsLoadingDirectly(true);
     try {
-      console.log(
-        `[LOAD TASKS] Manually refreshing tasks for project: ${projectId}`,
-      );
-      if (selectedProject?.id === projectId) {
-        await refetchTasks();
-      }
+      console.log(`[LOAD TASKS] Direct API call for project: ${projectId}`);
+      const taskData = await projectService.getTasksByProject(projectId);
+      
+      // Use the same formatting logic as polling onSuccess callback
+      const uiTasks: Task[] = taskData.map((task: any) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: (task.status || "todo") as Task["status"],
+        assignee: {
+          name: (task.assignee || "User") as
+            | "User"
+            | "Archon"
+            | "AI IDE Agent",
+          avatar: "",
+        },
+        feature: task.feature || "General",
+        featureColor: task.featureColor || "#6366f1",
+        task_order: task.task_order || 0,
+      }));
+      
+      setTasks(uiTasks);
+      console.log(`[LOAD TASKS] Set ${uiTasks.length} tasks immediately`);
     } catch (error) {
-      console.error("Failed to refresh tasks:", error);
+      console.error("Failed to load tasks:", error);
       setTasksError(
         error instanceof Error ? error.message : "Failed to load tasks",
       );
+    } finally {
+      // Brief delay to ensure our direct update is processed before re-enabling polling
+      setTimeout(() => setIsLoadingDirectly(false), 100);
     }
   };
 
@@ -507,6 +536,7 @@ function ProjectPage({
     // Show loading state during project switch
     setIsSwitchingProject(true);
     setTasksError(null);
+    setTasks([]); // Clear stale tasks immediately to prevent wrong data showing
     
     try {
       setSelectedProject(project);
