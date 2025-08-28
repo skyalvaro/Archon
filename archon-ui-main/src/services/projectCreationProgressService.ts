@@ -23,7 +23,7 @@ interface StreamCallbacks {
 }
 
 class ProjectCreationProgressService {
-  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private pollingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private callbacks: Map<string, StreamCallbacks> = new Map();
 
   /**
