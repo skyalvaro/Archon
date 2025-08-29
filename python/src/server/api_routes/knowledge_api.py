@@ -652,6 +652,7 @@ async def _perform_upload_with_progress(
     except Exception as e:
         error_msg = f"Upload failed: {str(e)}"
         await tracker.error(error_msg)
+        logger.error(f"Document upload failed: {e}", exc_info=True)
         safe_logfire_error(
             f"Document upload failed | progress_id={progress_id} | filename={file_metadata.get('filename', 'unknown')} | error={str(e)}"
         )
