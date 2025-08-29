@@ -84,6 +84,8 @@ export function usePolling<T>(
             onSuccess(cachedDataRef.current);
           }
         }
+        // Update fetch time to respect staleTime
+        lastFetchRef.current = Date.now();
         return;
       }
 
