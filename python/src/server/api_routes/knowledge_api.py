@@ -508,6 +508,11 @@ async def upload_document(
             tag_list = json.loads(tags) if tags else []
             if tag_list is None:
                 tag_list = []
+            # Validate tags is a list of strings
+            if not isinstance(tag_list, list):
+                raise HTTPException(status_code=422, detail={"error": "tags must be a JSON array of strings"})
+            if not all(isinstance(tag, str) for tag in tag_list):
+                raise HTTPException(status_code=422, detail={"error": "tags must be a JSON array of strings"})
         except json.JSONDecodeError as ex:
             raise HTTPException(status_code=422, detail={"error": f"Invalid tags JSON: {str(ex)}"})
 
