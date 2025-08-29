@@ -11,7 +11,7 @@ import { useStaggeredEntrance } from '../hooks/useStaggeredEntrance';
 import { useToast } from '../contexts/ToastContext';
 import { knowledgeBaseService, KnowledgeItem, KnowledgeItemMetadata } from '../services/knowledgeBaseService';
 import { CrawlingProgressCard } from '../components/knowledge-base/CrawlingProgressCard';
-import { CrawlProgressData, crawlProgressService } from '../services/crawlProgressService';
+import { CrawlProgressData } from '../types/crawl';
 import { useCrawlProgressPolling } from '../hooks/usePolling';
 import { KnowledgeTable } from '../components/knowledge-base/KnowledgeTable';
 import { KnowledgeItemCard } from '../components/knowledge-base/KnowledgeItemCard';
@@ -180,8 +180,7 @@ export const KnowledgeBasePage = () => {
     
     return () => {
       console.log('🧹 KnowledgeBasePage: Cleaning up');
-      // Cleanup all crawl progress connections on unmount
-      crawlProgressService.disconnect();
+      // Polling cleanup happens automatically in the hook
     };
   }, []); // Only run once on mount
 
@@ -479,46 +478,24 @@ export const KnowledgeBasePage = () => {
           message: 'Starting crawl operation...'
         }]);
         
-        await crawlProgressService.streamProgressEnhanced(response.progressId, {
-          onMessage: (data: CrawlProgressData) => {
-            console.log('🔄 Refresh progress update:', data);
-            if (data.status === 'completed') {
-              handleProgressComplete(data);
-            } else if (data.error || data.status === 'error') {
-              handleProgressError(data.error || 'Refresh failed', response.progressId);
-            } else if (data.status === 'cancelled' || data.status === 'stopped') {
-              // Handle cancelled/stopped status
-              handleProgressUpdate({ ...data, status: 'cancelled' });
-              setTimeout(() => {
-                setProgressItems(prev => prev.filter(item => item.progressId !== response.progressId));
-                // Clean up from localStorage
-                try {
-                  localStorage.removeItem(`crawl_progress_${response.progressId}`);
-                  const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
-                  const updated = activeCrawls.filter((id: string) => id !== response.progressId);
-                  localStorage.setItem('active_crawls', JSON.stringify(updated));
-                } catch (error) {
-                  console.error('Failed to clean up cancelled crawl:', error);
-                }
-                crawlProgressService.stopStreaming(response.progressId);
-              }, 2000); // Show cancelled status for 2 seconds before removing
-            } else {
-              handleProgressUpdate(data);
-            }
-          },
-          onStateChange: (state: any) => {
-            console.log('🔄 Refresh state change:', state);
-          },
-          onError: (error: Error | Event) => {
-            const errorMessage = error instanceof Error ? error.message : 'Connection error';
-            console.error('❌ Refresh error:', errorMessage);
-            handleProgressError(errorMessage, response.progressId);
+        // Start polling for this progress ID
+        setActiveProgressId(response.progressId);
+        
+        // Store in localStorage for persistence
+        try {
+          const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+          if (!activeCrawls.includes(response.progressId)) {
+            activeCrawls.push(response.progressId);
+            localStorage.setItem('active_crawls', JSON.stringify(activeCrawls));
           }
-        }, {
-          autoReconnect: true,
-          reconnectDelay: 5000,
-          connectionTimeout: 10000
-        });
+          localStorage.setItem(`crawl_progress_${response.progressId}`, JSON.stringify({
+            progressId: response.progressId,
+            status: 'starting',
+            message: 'Starting crawl operation...'
+          }));
+        } catch (error) {
+          console.error('Failed to store progress in localStorage:', error);
+        }
       }
     } catch (error) {
       console.error('Failed to refresh knowledge item:', error);
@@ -580,8 +557,7 @@ export const KnowledgeBasePage = () => {
       console.error('Failed to clean up completed crawl:', error);
     }
     
-    // Stop the Socket.IO streaming for this progress
-    crawlProgressService.stopStreaming(data.progressId);
+    // Polling stops automatically when component unmounts or progressId changes
     
     // Show success toast
     const message = data.uploadType === 'document' 
@@ -616,8 +592,7 @@ export const KnowledgeBasePage = () => {
         console.error('Failed to clean up failed crawl:', error);
       }
       
-      // Stop the Socket.IO streaming for this progress
-      crawlProgressService.stopStreaming(progressId);
+      // Polling stops automatically when component unmounts or progressId changes
       
       // Auto-remove failed progress items after 5 seconds to prevent UI clutter
       setTimeout(() => {

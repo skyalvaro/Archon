@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { CrawlProgressData } from '../../services/crawlProgressService';
+import { CrawlProgressData } from '../../types/crawl';
 import { useTerminalScroll } from '../../hooks/useTerminalScroll';
 import { knowledgeBaseService } from '../../services/knowledgeBaseService';
 
