@@ -339,11 +339,13 @@ class RAGService:
                     )
 
                 # Apply reranking if we have a strategy
+                reranking_applied = False
                 if self.reranking_strategy is not None and results:
                     try:
                         results = await self.reranking_strategy.rerank_results(
                             query, results, content_key="content"
                         )
+                        reranking_applied = True
                     except Exception as e:
                         logger.warning(f"Code reranking failed: {e}")
 
@@ -367,14 +369,14 @@ class RAGService:
                     "query": query,
                     "source_filter": source_id,
                     "search_mode": "hybrid" if use_hybrid_search else "vector",
-                    "reranking_applied": self.reranking_strategy is not None,
+                    "reranking_applied": reranking_applied,
                     "results": formatted_results,
                     "count": len(formatted_results),
                 }
 
                 span.set_attribute("results_found", len(formatted_results))
                 span.set_attribute("hybrid_used", use_hybrid_search)
-                span.set_attribute("reranking_used", self.reranking_strategy is not None)
+                span.set_attribute("reranking_used", reranking_applied)
 
                 return True, response_data
 

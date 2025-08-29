@@ -93,9 +93,10 @@ class EmbeddingAuthenticationError(EmbeddingError):
 
     def __init__(self, message: str, api_key_prefix: str | None = None, **kwargs):
         super().__init__(message, **kwargs)
-        self.api_key_prefix = api_key_prefix
-        if api_key_prefix:
-            self.metadata["api_key_prefix"] = api_key_prefix
+        masked = f"{api_key_prefix[:4]}…" if api_key_prefix else None
+        self.api_key_prefix = masked
+        if masked:
+            self.metadata["api_key_prefix"] = masked
 
 
 class EmbeddingAPIError(EmbeddingError):
