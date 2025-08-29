@@ -1,40 +1,66 @@
 ---
 title: Archon CodeRabbit Helper
-Description: A helper command For analysing coderabbit code review comments that will help you understand the suggestion, analyse if its a valid suggestion and list options and tradeoffs.
+description: Analyze CodeRabbit suggestions, assess validity, and provide actionable options with tradeoffs
+argument-hint: Paste the CodeRabbit suggestion here
 ---
 
-## Start
+# CodeRabbit Review Analysis
 
-This is a code review suggestion posted by coderabbit on the current branch related to recent changes.
+**Review:** $ARGUMENTS
 
-The review suggestions from code rabbit: $ARGUMENTS
+## Instructions
 
-## Step 1
+Analyze this CodeRabbit suggestion following these steps:
 
-- Ingest the information formt he code rabbit suggestion and deeply undesrtand it
-- Once you have a deep undestanding of the issue and why coderabbit is making this suggestion move on to step 2
+### 1. Deep Analysis
 
-## Step 2
+- Understand the technical issue being raised
+- Check if it's a real problem or false positive
+- Search the codebase for related patterns and context
+- Consider project phase (early beta) and architecture
 
-- Based on your findings during step one, explore alternative options and tradeoffs
-- We are in arly Beta with this product and we prefer simple pragmatic approaches following KISS principles while following existing codebase patterns unless specifically specified otherwise
+### 2. Context Assessment
 
-## Step 3
+- We're in early beta - prioritize simplicity over perfection
+- Follow KISS principles and existing codebase patterns
+- Avoid premature optimization or over-engineering
+- Consider if this affects user experience or is internal only
 
-- Provide the user with a list of options and tradeoffs for the suggested changes
+### 3. Generate Options
 
-## Format
+Think harder about the problem and potential solutions.
+Provide 2-5 practical options with clear tradeoffs
 
-Answer the user directly in the chat with
+## Response Format
 
-Why is this needed:
+### 📋 Issue Summary
 
-Should we address it as part of this PR:
+_[One sentence describing what CodeRabbit found]_
 
-```
-Option #n:
-Tradeoffs for option:
+### ✅ Is this valid?
 
-Option #n:
-Tradeoffs for option:
-```
+_[YES/NO with brief explanation]_
+
+### 🎯 Priority for this PR
+
+_[HIGH/MEDIUM/LOW/SKIP with reasoning]_
+
+### 🔧 Options & Tradeoffs
+
+**Option 1: [Name]**
+
+- What: _[Brief description]_
+- Pros: _[Benefits]_
+- Cons: _[Drawbacks]_
+- Effort: _[Low/Medium/High]_
+
+**Option 2: [Name]**
+
+- What: _[Brief description]_
+- Pros: _[Benefits]_
+- Cons: _[Drawbacks]_
+- Effort: _[Low/Medium/High]_
+
+### 💡 Recommendation
+
+_[Your recommended option with 1-2 sentence justification]_
