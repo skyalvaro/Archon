@@ -84,31 +84,34 @@ class RateLimiter:
 
     async def acquire(self, estimated_tokens: int = 8000) -> bool:
         """Acquire permission to make API call with token awareness"""
-        async with self._lock:
-            now = time.time()
+        while True:
+            async with self._lock:
+                now = time.time()
 
-            # Clean old entries
-            self._clean_old_entries(now)
+                # Clean old entries
+                self._clean_old_entries(now)
 
-            # Check if we can make the request
-            if not self._can_make_request(estimated_tokens):
+                # Check if we can make the request
+                if self._can_make_request(estimated_tokens):
+                    # Record the request
+                    self.request_times.append(now)
+                    self.token_usage.append((now, estimated_tokens))
+                    return True
+                    
                 wait_time = self._calculate_wait_time(estimated_tokens)
-                if wait_time > 0:
-                    logfire_logger.info(
-                        f"Rate limiting: waiting {wait_time:.1f}s",
-                        extra={
-                            "tokens": estimated_tokens,
-                            "current_usage": self._get_current_usage(),
-                        }
-                    )
-                    await asyncio.sleep(wait_time)
-                    return await self.acquire(estimated_tokens)
+                usage = self._get_current_usage()
+            
+            if wait_time <= 0:
                 return False
-
-            # Record the request
-            self.request_times.append(now)
-            self.token_usage.append((now, estimated_tokens))
-            return True
+                
+            logfire_logger.info(
+                f"Rate limiting: waiting {wait_time:.1f}s",
+                extra={
+                    "tokens": estimated_tokens,
+                    "current_usage": usage,
+                }
+            )
+            await asyncio.sleep(wait_time)
 
     def _can_make_request(self, estimated_tokens: int) -> bool:
         """Check if request can be made within limits"""
@@ -168,7 +171,7 @@ class MemoryAdaptiveDispatcher:
     def get_system_metrics(self) -> SystemMetrics:
         """Get current system performance metrics"""
         memory = psutil.virtual_memory()
-        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_percent = psutil.cpu_percent(interval=None)
         active_threads = threading.active_count()
 
         return SystemMetrics(
@@ -330,19 +333,44 @@ class MemoryAdaptiveDispatcher:
         # Execute with controlled concurrency
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Filter out failed results and exceptions
-        successful_results = [r for r in results if r is not None and not isinstance(r, Exception)]
+        # Process results and track failures
+        successful_results = []
+        failed_items = []
+        
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                failed_items.append({"index": idx, "error": str(result)})
+                logfire_logger.error(
+                    f"Task failed with exception for item {idx}",
+                    extra={"error": str(result), "item_index": idx}
+                )
+            elif result is None:
+                failed_items.append({"index": idx, "error": "Processing returned None"})
+            else:
+                successful_results.append(result)
 
         success_rate = len(successful_results) / len(items) * 100
-        logfire_logger.info(
-            "Adaptive processing completed",
-            extra={
-                "total_items": len(items),
-                "successful": len(successful_results),
-                "success_rate": f"{success_rate:.1f}%",
-                "workers_used": optimal_workers,
-            }
-        )
+        
+        # Log completion with detailed failure information
+        log_extra = {
+            "total_items": len(items),
+            "successful": len(successful_results),
+            "failed": len(failed_items),
+            "success_rate": f"{success_rate:.1f}%",
+            "workers_used": optimal_workers,
+        }
+        
+        if failed_items:
+            log_extra["failed_items"] = failed_items
+            logfire_logger.warning(
+                f"Adaptive processing completed with {len(failed_items)} failures",
+                extra=log_extra
+            )
+        else:
+            logfire_logger.info(
+                "Adaptive processing completed successfully",
+                extra=log_extra
+            )
 
         return successful_results
 
