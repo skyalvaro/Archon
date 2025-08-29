@@ -5,6 +5,7 @@ Handles source metadata, summaries, and management.
 Consolidates both utility functions and class-based service.
 """
 
+import os
 from typing import Any
 
 from supabase import Client
@@ -103,6 +104,7 @@ async def generate_source_title_and_metadata(
     tags: list[str] | None = None,
     provider: str = None,
     original_url: str | None = None,
+    source_display_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Generate a user-friendly title and metadata for a source based on its content.
@@ -144,10 +146,14 @@ async def generate_source_title_and_metadata(
                     else:
                         source_type_info = " (detected from website)"
 
+                # Use display name if available for better context
+                source_context = source_display_name if source_display_name else source_id
+
                 prompt = f"""You are creating a title for crawled content that identifies the SERVICE NAME and SOURCE TYPE.
 
 Source ID: {source_id}
 Original URL: {original_url or 'Not provided'}
+Display Name: {source_context}
 {source_type_info}
 
 Content sample:
@@ -190,12 +196,12 @@ Generate only the title, nothing else."""
         except Exception as e:
             search_logger.error(f"Error generating title for {source_id}: {e}")
 
-    # Build metadata - determine source_type from source_id pattern
-    source_type = "file" if source_id.startswith("file_") else "url"
+    # Build metadata - source_type will be determined by caller based on actual URL
+    # Default to "url" but this should be overridden by the caller
     metadata = {
         "knowledge_type": knowledge_type,
         "tags": tags or [],
-        "source_type": source_type,
+        "source_type": "url",  # Default, should be overridden by caller based on actual URL
         "auto_generated": True
     }
 
@@ -212,6 +218,8 @@ async def update_source_info(
     tags: list[str] | None = None,
     update_frequency: int = 7,
     original_url: str | None = None,
+    source_url: str | None = None,
+    source_display_name: str | None = None,
 ):
     """
     Update or insert source information in the sources table.
@@ -239,7 +247,14 @@ async def update_source_info(
             search_logger.info(f"Preserving existing title for {source_id}: {existing_title}")
 
             # Update metadata while preserving title
-            source_type = "file" if source_id.startswith("file_") else "url"
+            # Determine source_type based on source_url or original_url
+            if source_url and source_url.startswith("file://"):
+                source_type = "file"
+            elif original_url and original_url.startswith("file://"):
+                source_type = "file"
+            else:
+                source_type = "url"
+            
             metadata = {
                 "knowledge_type": knowledge_type,
                 "tags": tags or [],
@@ -252,14 +267,22 @@ async def update_source_info(
                 metadata["original_url"] = original_url
 
             # Update existing source (preserving title)
+            update_data = {
+                "summary": summary,
+                "total_word_count": word_count,
+                "metadata": metadata,
+                "updated_at": "now()",
+            }
+            
+            # Add new fields if provided
+            if source_url:
+                update_data["source_url"] = source_url
+            if source_display_name:
+                update_data["source_display_name"] = source_display_name
+            
             result = (
                 client.table("archon_sources")
-                .update({
-                    "summary": summary,
-                    "total_word_count": word_count,
-                    "metadata": metadata,
-                    "updated_at": "now()",
-                })
+                .update(update_data)
                 .eq("source_id", source_id)
                 .execute()
             )
@@ -268,10 +291,38 @@ async def update_source_info(
                 f"Updated source {source_id} while preserving title: {existing_title}"
             )
         else:
-            # New source - generate title and metadata
-            title, metadata = await generate_source_title_and_metadata(
-                source_id, content, knowledge_type, tags, original_url=original_url
-            )
+            # New source - use display name as title if available, otherwise generate
+            if source_display_name:
+                # Use the display name directly as the title (truncated to prevent DB issues)
+                title = source_display_name[:100].strip()
+                
+                # Determine source_type based on source_url or original_url
+                if source_url and source_url.startswith("file://"):
+                    source_type = "file"
+                elif original_url and original_url.startswith("file://"):
+                    source_type = "file"
+                else:
+                    source_type = "url"
+                
+                metadata = {
+                    "knowledge_type": knowledge_type,
+                    "tags": tags or [],
+                    "source_type": source_type,
+                    "auto_generated": False,
+                }
+            else:
+                # Fallback to AI generation only if no display name
+                title, metadata = await generate_source_title_and_metadata(
+                    source_id, content, knowledge_type, tags, original_url, source_display_name
+                )
+                
+                # Override the source_type from AI with actual URL-based determination
+                if source_url and source_url.startswith("file://"):
+                    metadata["source_type"] = "file"
+                elif original_url and original_url.startswith("file://"):
+                    metadata["source_type"] = "file"
+                else:
+                    metadata["source_type"] = "url"
 
             # Add update_frequency and original_url to metadata
             metadata["update_frequency"] = update_frequency
@@ -279,15 +330,23 @@ async def update_source_info(
                 metadata["original_url"] = original_url
 
             search_logger.info(f"Creating new source {source_id} with knowledge_type={knowledge_type}")
-            # Insert new source
-            client.table("archon_sources").insert({
+            # Use upsert to avoid race conditions with concurrent crawls
+            upsert_data = {
                 "source_id": source_id,
                 "title": title,
                 "summary": summary,
                 "total_word_count": word_count,
                 "metadata": metadata,
-            }).execute()
-            search_logger.info(f"Created new source {source_id} with title: {title}")
+            }
+            
+            # Add new fields if provided
+            if source_url:
+                upsert_data["source_url"] = source_url
+            if source_display_name:
+                upsert_data["source_display_name"] = source_display_name
+            
+            client.table("archon_sources").upsert(upsert_data).execute()
+            search_logger.info(f"Created/updated source {source_id} with title: {title}")
 
     except Exception as e:
         search_logger.error(f"Error updating source {source_id}: {e}")

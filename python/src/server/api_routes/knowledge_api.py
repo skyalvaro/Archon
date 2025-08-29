@@ -483,10 +483,6 @@ async def upload_document(
             f"📋 UPLOAD: Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
         )
 
-        safe_logfire_info(
-            f"Starting document upload | filename={file.filename} | content_type={file.content_type} | knowledge_type={knowledge_type}"
-        )
-
         # Generate unique progress ID
         progress_id = str(uuid.uuid4())
 
@@ -809,7 +805,22 @@ async def get_database_metrics():
 
 @router.get("/health")
 async def knowledge_health():
-    """Knowledge API health check."""
+    """Knowledge API health check with migration detection."""
+    # Check for database migration needs
+    from ..main import _check_database_schema
+    
+    schema_status = await _check_database_schema()
+    if not schema_status["valid"]:
+        return {
+            "status": "migration_required",
+            "service": "knowledge-api", 
+            "timestamp": datetime.now().isoformat(),
+            "ready": False,
+            "migration_required": True,
+            "message": schema_status["message"],
+            "migration_instructions": "Open Supabase Dashboard → SQL Editor → Run: migration/add_source_url_display_name.sql"
+        }
+    
     # Removed health check logging to reduce console noise
     result = {
         "status": "healthy",
