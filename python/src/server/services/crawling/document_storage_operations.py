@@ -227,12 +227,10 @@ class DocumentStorageOperations:
                 else:
                     break
 
-            # Generate summary with fallback (run in thread to avoid blocking async loop)
+            # Generate summary with fallback
             try:
-                # Run synchronous extract_source_summary in a thread pool
-                summary = await asyncio.to_thread(
-                    extract_source_summary, source_id, combined_content
-                )
+                # Call async extract_source_summary directly
+                summary = await extract_source_summary(source_id, combined_content)
             except Exception as e:
                 safe_logfire_error(
                     f"Failed to generate AI summary for '{source_id}': {str(e)}, using fallback"
@@ -245,9 +243,8 @@ class DocumentStorageOperations:
                 f"About to create/update source record for '{source_id}' (word count: {source_id_word_counts[source_id]})"
             )
             try:
-                # Run synchronous update_source_info in a thread pool
-                await asyncio.to_thread(
-                    update_source_info,
+                # Call async update_source_info directly
+                await update_source_info(
                     client=self.supabase_client,
                     source_id=source_id,
                     summary=summary,
