@@ -374,7 +374,7 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         })
 
         # Start background task
-        task = asyncio.create_task(_perform_crawl_with_progress(progress_id, request))
+        task = asyncio.create_task(_perform_crawl_with_progress(progress_id, request, tracker))
         # Track the task for cancellation support
         active_crawl_tasks[progress_id] = task
         safe_logfire_info(
@@ -392,7 +392,9 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemRequest):
+async def _perform_crawl_with_progress(
+    progress_id: str, request: KnowledgeItemRequest, tracker: "ProgressTracker"
+):
     """Perform the actual crawl operation with progress tracking using service layer."""
     # Acquire semaphore to limit concurrent crawls
     async with crawl_semaphore:
@@ -411,6 +413,7 @@ async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemR
                     raise Exception("Crawler not available - initialization may have failed")
             except Exception as e:
                 safe_logfire_error(f"Failed to get crawler | error={str(e)}")
+                await tracker.error(f"Failed to initialize crawler: {str(e)}")
                 return
 
             supabase_client = get_supabase_client()
@@ -461,6 +464,11 @@ async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemR
             logger.error(f"Traceback:\n{tb}")
             logger.error("=== END CRAWL ERROR ===")
             safe_logfire_error(f"Crawl exception traceback | traceback={tb}")
+            # Ensure clients see the failure
+            try:
+                await tracker.error(error_message)
+            except Exception:
+                pass
         finally:
             # Clean up task from registry when done (success or failure)
             if progress_id in active_crawl_tasks:
