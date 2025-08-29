@@ -317,10 +317,6 @@ async def refresh_knowledge_item(source_id: str):
         # Create a wrapped task that acquires the semaphore
         async def _perform_refresh_with_semaphore():
             try:
-                # Add a small delay to allow frontend WebSocket subscription to be established
-                # This prevents the "Room has 0 subscribers" issue
-                await asyncio.sleep(1.0)
-
                 async with crawl_semaphore:
                     safe_logfire_info(
                         f"Acquired crawl semaphore for refresh | source_id={source_id}"
@@ -398,10 +394,6 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
 
 async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemRequest):
     """Perform the actual crawl operation with progress tracking using service layer."""
-    # Add a small delay to allow frontend WebSocket subscription to be established
-    # This prevents the "Room has 0 subscribers" issue
-    await asyncio.sleep(1.0)
-
     # Acquire semaphore to limit concurrent crawls
     async with crawl_semaphore:
         safe_logfire_info(
@@ -860,7 +852,7 @@ async def stop_crawl_task(progress_id: str):
                 task.cancel()
                 try:
                     await asyncio.wait_for(task, timeout=2.0)
-                except (TimeoutError, asyncio.CancelledError):
+                except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
             del active_crawl_tasks[progress_id]
 
