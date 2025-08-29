@@ -5,7 +5,7 @@ Handles batch crawling of multiple URLs in parallel.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional, Awaitable
 
 from crawl4ai import CacheMode, CrawlerRunConfig, MemoryAdaptiveDispatcher
 
@@ -34,8 +34,8 @@ class BatchCrawlStrategy:
         urls: list[str],
         transform_url_func: Callable[[str], str],
         is_documentation_site_func: Callable[[str], bool],
-        max_concurrent: int = None,
-        progress_callback: Callable | None = None,
+        max_concurrent: int | None = None,
+        progress_callback: Callable[..., Awaitable[None]] | None = None,
         start_progress: int = 15,
         end_progress: int = 60,
         cancellation_check: Callable[[], None] | None = None,

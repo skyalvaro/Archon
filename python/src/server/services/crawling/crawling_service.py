@@ -8,8 +8,7 @@ batch crawling, recursive crawling, and overall orchestration with progress trac
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Awaitable
 from urllib.parse import urlparse
 
 from ...config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
@@ -168,7 +167,7 @@ class CrawlingService:
         )
 
     async def crawl_markdown_file(
-        self, url: str, progress_callback=None, start_progress: int = 10, end_progress: int = 20
+        self, url: str, progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None, start_progress: int = 10, end_progress: int = 20
     ) -> list[dict[str, Any]]:
         """Crawl a .txt or markdown file."""
         return await self.single_page_strategy.crawl_markdown_file(
@@ -186,8 +185,8 @@ class CrawlingService:
     async def crawl_batch_with_progress(
         self,
         urls: list[str],
-        max_concurrent: int = None,
-        progress_callback=None,
+        max_concurrent: Optional[int] = None,
+        progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None,
         start_progress: int = 15,
         end_progress: int = 60,
     ) -> list[dict[str, Any]]:
@@ -207,8 +206,8 @@ class CrawlingService:
         self,
         start_urls: list[str],
         max_depth: int = 3,
-        max_concurrent: int = None,
-        progress_callback=None,
+        max_concurrent: Optional[int] = None,
+        progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None,
         start_progress: int = 10,
         end_progress: int = 60,
     ) -> list[dict[str, Any]]:

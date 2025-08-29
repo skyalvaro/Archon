@@ -6,7 +6,7 @@ Handles crawling of individual web pages.
 import asyncio
 import traceback
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Awaitable
 
 from crawl4ai import CacheMode, CrawlerRunConfig
 
@@ -211,7 +211,7 @@ class SinglePageCrawlStrategy:
         self,
         url: str,
         transform_url_func: Callable[[str], str],
-        progress_callback: Callable | None = None,
+        progress_callback: Callable[..., Awaitable[None]] | None = None,
         start_progress: int = 10,
         end_progress: int = 20
     ) -> list[dict[str, Any]]:
