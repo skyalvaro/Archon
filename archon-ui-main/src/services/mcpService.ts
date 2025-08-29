@@ -106,11 +106,9 @@ const MCPResponseSchema = z.object({
 export type MCPTool = z.infer<typeof MCPToolSchema>;
 export type MCPParameter = z.infer<typeof MCPParameterSchema>;
 
-// WebSocket removed - using HTTP polling instead
 
 class MCPService {
   private baseUrl = ''; // Use relative URL to go through Vite proxy
-  // WebSocket properties removed - using HTTP polling instead
 
   // ========================================
   // SERVER MANAGEMENT (Original functionality)

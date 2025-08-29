@@ -41,7 +41,7 @@ export const ArchonChatPanel: React.FC<ArchonChatPanelProps> = props => {
   const chatPanelRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef<string | null>(null);
   /**
-   * Initialize chat session and WebSocket connection
+   * Initialize chat session and connection
    */
   const initializeChat = React.useCallback(async () => {
       try {

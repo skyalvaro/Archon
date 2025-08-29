@@ -116,7 +116,6 @@ export const DataTab = ({ project }: DataTabProps) => {
 
   const { showToast } = useToast();
 
-  // Note: Removed aggressive WebSocket cleanup to prevent interference with normal connection lifecycle
 
   // Helper function to normalize nodes to ensure required properties
   const normalizeNode = (node: any): Node => {

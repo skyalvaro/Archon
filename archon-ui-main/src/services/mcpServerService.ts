@@ -55,7 +55,6 @@ const MCPResponseSchema = z.object({
 export type MCPTool = z.infer<typeof MCPToolSchema>;
 export type MCPParameter = z.infer<typeof MCPParameterSchema>;
 
-// WebSocket imports removed - using HTTP polling instead
 
 /**
  * MCP Server Service - Handles the Archon MCP server lifecycle via FastAPI
