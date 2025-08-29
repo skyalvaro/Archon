@@ -90,7 +90,7 @@ class DocumentStorageOperations:
             url_to_full_document[doc_url] = markdown_content
 
             # CHUNK THE CONTENT
-            chunks = storage_service.smart_chunk_text(markdown_content, chunk_size=5000)
+            chunks = await storage_service.smart_chunk_text_async(markdown_content, chunk_size=5000)
 
             # Use the original source_id for all documents
             source_id = original_source_id
@@ -250,7 +250,7 @@ class DocumentStorageOperations:
                     summary=summary,
                     word_count=source_id_word_counts[source_id],
                     content=combined_content,
-                    knowledge_type=request.get("knowledge_type", "technical"),
+                    knowledge_type=request.get("knowledge_type", "documentation"),
                     tags=request.get("tags", []),
                     update_frequency=0,  # Set to 0 since we're using manual refresh
                     original_url=request.get("url"),  # Store the original crawl URL
@@ -271,7 +271,7 @@ class DocumentStorageOperations:
                         "summary": summary,
                         "total_word_count": source_id_word_counts[source_id],
                         "metadata": {
-                            "knowledge_type": request.get("knowledge_type", "technical"),
+                            "knowledge_type": request.get("knowledge_type", "documentation"),
                             "tags": request.get("tags", []),
                             "auto_generated": True,
                             "fallback_creation": True,
