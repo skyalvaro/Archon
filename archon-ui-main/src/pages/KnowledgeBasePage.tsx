@@ -400,9 +400,6 @@ export const KnowledgeBasePage = () => {
         
         // Remove the item temporarily while it's being refreshed
         setKnowledgeItems(prev => prev.filter(k => k.source_id !== sourceId));
-        
-        // Start polling for this progress ID
-        setActiveProgressId(response.progressId);
       }
     } catch (error) {
       console.error('Failed to refresh knowledge item:', error);
