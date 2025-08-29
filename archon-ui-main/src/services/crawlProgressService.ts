@@ -26,6 +26,7 @@ interface StreamCallbacks {
 class CrawlProgressService {
   private pollingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private callbacks: Map<string, StreamCallbacks> = new Map();
+  private fetchInProgress: Map<string, boolean> = new Map();
 
   /**
    * Start polling for progress updates
@@ -43,6 +44,14 @@ class CrawlProgressService {
 
     // Start polling
     const pollInterval = setInterval(async () => {
+      // Skip if a fetch is already in progress for this progressId
+      if (this.fetchInProgress.get(progressId)) {
+        return;
+      }
+
+      // Mark fetch as in progress
+      this.fetchInProgress.set(progressId, true);
+
       try {
         const response = await fetch(`/api/knowledge/crawl-progress/${progressId}`);
         if (response.ok) {
@@ -78,6 +87,9 @@ class CrawlProgressService {
         if (callbacks.onError) {
           callbacks.onError(error instanceof Error ? error.message : 'Polling error');
         }
+      } finally {
+        // Mark fetch as complete
+        this.fetchInProgress.set(progressId, false);
       }
     }, 1000); // Poll every second
 
@@ -95,6 +107,7 @@ class CrawlProgressService {
     }
     
     this.callbacks.delete(progressId);
+    this.fetchInProgress.delete(progressId);
   }
 
   /**
@@ -107,6 +120,7 @@ class CrawlProgressService {
     });
     this.pollingIntervals.clear();
     this.callbacks.clear();
+    this.fetchInProgress.clear();
   }
 
   /**
