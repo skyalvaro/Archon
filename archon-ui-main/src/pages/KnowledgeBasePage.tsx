@@ -63,9 +63,29 @@ export const KnowledgeBasePage = () => {
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [progressItems, setProgressItems] = useState<CrawlProgressData[]>([]);
+  const [progressItems, setProgressItemsRaw] = useState<CrawlProgressData[]>([]);
+  
+  // Wrapper to ensure progress items are always unique
+  const setProgressItems = (updater: CrawlProgressData[] | ((prev: CrawlProgressData[]) => CrawlProgressData[])) => {
+    setProgressItemsRaw(prev => {
+      const newItems = typeof updater === 'function' ? updater(prev) : updater;
+      // Always deduplicate before setting
+      const itemMap = new Map(newItems.map(item => [item.progressId, item]));
+      const deduplicated = Array.from(itemMap.values());
+      if (deduplicated.length !== newItems.length) {
+        console.warn('🟡 Deduplication occurred in setProgressItems:', {
+          original: newItems.length,
+          deduplicated: deduplicated.length,
+          duplicates: newItems.filter((item, index) => 
+            newItems.findIndex(i => i.progressId === item.progressId) !== index
+          )
+        });
+      }
+      return deduplicated;
+    });
+  };
 
-  // Use polling for crawl progress updates
+  // Use polling for crawl progress updates - only poll the most recent one
   const { data: crawlProgress } = useCrawlProgressPolling(activeProgressId);
   
   // Update progress items when polling data changes
@@ -78,21 +98,21 @@ export const KnowledgeBasePage = () => {
       });
       
       setProgressItems(prev => {
-        // Check if the progress item exists
-        const existingIndex = prev.findIndex(item => item.progressId === activeProgressId);
+        // Use Map to ensure uniqueness and update/add item
+        const itemMap = new Map(prev.map(item => [item.progressId, item]));
+        const existingItem = itemMap.get(activeProgressId);
         
-        if (existingIndex >= 0) {
+        if (existingItem) {
           // Update existing item
-          const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], ...crawlProgress };
-          console.log('📊 Updated existing progress item:', updated);
-          return updated;
+          itemMap.set(activeProgressId, { ...existingItem, ...crawlProgress });
+          console.log('📊 Updated existing progress item via Map');
         } else {
           // Add new item if it doesn't exist (shouldn't happen normally)
           console.log('⚠️ Progress item not found, adding new one');
-          const newItem = { ...crawlProgress, progressId: activeProgressId };
-          return [...prev, newItem];
+          itemMap.set(activeProgressId, { ...crawlProgress, progressId: activeProgressId });
         }
+        
+        return Array.from(itemMap.values());
       });
       
       // Also update localStorage with latest progress
@@ -188,57 +208,57 @@ export const KnowledgeBasePage = () => {
   useEffect(() => {
     console.log('🔄 Checking for active crawls on mount...');
     
-    // First check for current_operation_id
-    let activeProgressId = localStorage.getItem('current_operation_id');
-    console.log('📍 current_operation_id from localStorage:', activeProgressId);
+    // Get all active crawls
+    const activeCrawlsStr = localStorage.getItem('active_crawls');
+    const activeCrawls = JSON.parse(activeCrawlsStr || '[]');
+    console.log('📍 active_crawls parsed:', activeCrawls);
     
-    // If not found, check for any active crawls
-    if (!activeProgressId) {
-      const activeCrawlsStr = localStorage.getItem('active_crawls');
-      console.log('📍 active_crawls raw:', activeCrawlsStr);
+    if (activeCrawls.length > 0) {
+      const restoredItems: CrawlProgressData[] = [];
+      let mostRecentProgressId: string | null = null;
       
-      const activeCrawls = JSON.parse(activeCrawlsStr || '[]');
-      console.log('📍 active_crawls parsed:', activeCrawls);
-      
-      if (activeCrawls.length > 0) {
-        // Get the most recent crawl
-        activeProgressId = activeCrawls[activeCrawls.length - 1];
-        console.log('📍 Using most recent crawl:', activeProgressId);
-      }
-    }
-    
-    if (activeProgressId) {
-      // Verify the crawl still exists in localStorage
-      const crawlData = localStorage.getItem(`crawl_progress_${activeProgressId}`);
-      console.log('📍 Crawl data from localStorage:', crawlData ? 'Found' : 'Not found');
-      
-      if (crawlData) {
-        try {
-          const parsed = JSON.parse(crawlData);
-          console.log('📍 Parsed crawl data status:', parsed.status);
-          console.log('📍 Full parsed crawl data:', parsed);
-          
-          // Only restore if not completed
-          if (parsed.status !== 'completed' && parsed.status !== 'error' && parsed.status !== 'failed') {
-            console.log('✅ Restoring active crawl to state');
-            setActiveProgressId(activeProgressId);
-            // Restore progress item to state - ensure it has progressId
-            const progressItem = {
-              ...parsed,
-              progressId: activeProgressId // Ensure progressId is set
-            };
-            console.log('📦 Restoring progress item:', progressItem);
-            setProgressItems([progressItem]);
-          } else {
-            console.log('⏹️ Crawl already completed, cleaning up');
-            // Clean up completed crawl
-            localStorage.removeItem('current_operation_id');
+      // Restore all active crawls
+      for (const crawlId of activeCrawls) {
+        const crawlData = localStorage.getItem(`crawl_progress_${crawlId}`);
+        
+        if (crawlData) {
+          try {
+            const parsed = JSON.parse(crawlData);
+            
+            // Only restore if not completed
+            if (parsed.status !== 'completed' && parsed.status !== 'error' && parsed.status !== 'failed') {
+              const progressItem = {
+                ...parsed,
+                progressId: crawlId // Ensure progressId is set
+              };
+              restoredItems.push(progressItem);
+              // Track the most recent one for polling
+              mostRecentProgressId = crawlId;
+            } else {
+              // Clean up completed crawl from active_crawls
+              const updatedCrawls = activeCrawls.filter((id: string) => id !== crawlId);
+              localStorage.setItem('active_crawls', JSON.stringify(updatedCrawls));
+              localStorage.removeItem(`crawl_progress_${crawlId}`);
+            }
+          } catch (error) {
+            console.error('❌ Failed to parse crawl data:', error);
           }
-        } catch (error) {
-          console.error('❌ Failed to parse crawl data:', error);
         }
-      } else {
-        console.log('⚠️ No crawl data found for progressId:', activeProgressId);
+      }
+      
+      // Restore all progress items using Map to ensure uniqueness
+      if (restoredItems.length > 0) {
+        // Double-check uniqueness using Map before setting
+        const uniqueItemsMap = new Map(restoredItems.map(item => [item.progressId, item]));
+        const uniqueItems = Array.from(uniqueItemsMap.values());
+        console.log('📦 Restoring progress items:', uniqueItems);
+        setProgressItems(uniqueItems);
+        
+        // Only poll the most recent one
+        if (mostRecentProgressId) {
+          console.log('✅ Setting active progress for polling:', mostRecentProgressId);
+          setActiveProgressId(mostRecentProgressId);
+        }
       }
     } else {
       console.log('ℹ️ No active crawls found');
@@ -450,7 +470,16 @@ export const KnowledgeBasePage = () => {
           startTime: new Date()
         };
         
-        setProgressItems(prev => [...prev, progressData]);
+        setProgressItems(prev => {
+          // Use Map to ensure no duplicates
+          const itemMap = new Map(prev.map(item => [item.progressId, item]));
+          if (!itemMap.has(response.progressId)) {
+            itemMap.set(response.progressId, progressData);
+          } else {
+            console.log('⚠️ Progress item already exists in handleRefreshItem, skipping:', response.progressId);
+          }
+          return Array.from(itemMap.values());
+        });
         
         // Store in localStorage for persistence
         try {
@@ -473,22 +502,6 @@ export const KnowledgeBasePage = () => {
         
         // Start polling for this progress ID
         setActiveProgressId(response.progressId);
-        
-        // Store in localStorage for persistence
-        try {
-          const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
-          if (!activeCrawls.includes(response.progressId)) {
-            activeCrawls.push(response.progressId);
-            localStorage.setItem('active_crawls', JSON.stringify(activeCrawls));
-          }
-          localStorage.setItem(`crawl_progress_${response.progressId}`, JSON.stringify({
-            progressId: response.progressId,
-            status: 'starting',
-            message: 'Starting crawl operation...'
-          }));
-        } catch (error) {
-          console.error('Failed to store progress in localStorage:', error);
-        }
       }
     } catch (error) {
       console.error('Failed to refresh knowledge item:', error);
@@ -537,8 +550,12 @@ export const KnowledgeBasePage = () => {
   const handleProgressComplete = (data: CrawlProgressData) => {
     console.log('Crawl completed:', data);
     
-    // Remove from progress items after completion
-    setProgressItems(prev => prev.filter(item => item.progressId !== data.progressId));
+    // Remove from progress items after completion - use Map for consistency
+    setProgressItems(prev => {
+      const itemMap = new Map(prev.map(item => [item.progressId, item]));
+      itemMap.delete(data.progressId);
+      return Array.from(itemMap.values());
+    });
     
     // Clean up from localStorage immediately
     try {
@@ -560,16 +577,24 @@ export const KnowledgeBasePage = () => {
     
     // Remove from progress items after a brief delay to show completion
     setTimeout(() => {
-      setProgressItems(prev => prev.filter(item => item.progressId !== data.progressId));
+      setProgressItems(prev => {
+        const itemMap = new Map(prev.map(item => [item.progressId, item]));
+        itemMap.delete(data.progressId);
+        return Array.from(itemMap.values());
+      });
       // Reload knowledge items to show the new item
       loadKnowledgeItems();
     }, 3000); // 3 second delay to show completion state
   };
 
   const handleProgressError = (error: string, progressId?: string) => {
-    // Remove from progress items on error
+    // Remove from progress items on error - use Map for consistency
     if (progressId) {
-      setProgressItems(prev => prev.filter(item => item.progressId !== progressId));
+      setProgressItems(prev => {
+        const itemMap = new Map(prev.map(item => [item.progressId, item]));
+        itemMap.delete(progressId);
+        return Array.from(itemMap.values());
+      });
     }
     console.error('Crawl error:', error);
     showToast(`Crawling failed: ${error}`, 'error');
@@ -589,18 +614,22 @@ export const KnowledgeBasePage = () => {
       
       // Auto-remove failed progress items after 5 seconds to prevent UI clutter
       setTimeout(() => {
-        setProgressItems(prev => prev.filter(item => item.progressId !== progressId));
+        setProgressItems(prev => {
+          const itemMap = new Map(prev.map(item => [item.progressId, item]));
+          itemMap.delete(progressId);
+          return Array.from(itemMap.values());
+        });
       }, 5000);
     }
   };
 
   const handleProgressUpdate = (data: CrawlProgressData) => {
-    // Update progress item with new data
-    setProgressItems(prev => 
-      prev.map(item => 
-        item.progressId === data.progressId ? data : item
-      )
-    );
+    // Update progress item with new data - use Map to ensure uniqueness
+    setProgressItems(prev => {
+      const itemMap = new Map(prev.map(item => [item.progressId, item]));
+      itemMap.set(data.progressId, data);
+      return Array.from(itemMap.values());
+    });
     
     // Update in localStorage to keep it in sync
     try {
@@ -634,8 +663,12 @@ export const KnowledgeBasePage = () => {
     }
 
     try {
-      // Remove the failed progress item
-      setProgressItems(prev => prev.filter(item => item.progressId !== progressId));
+      // Remove the failed progress item - use Map for consistency
+      setProgressItems(prev => {
+        const itemMap = new Map(prev.map(item => [item.progressId, item]));
+        itemMap.delete(progressId);
+        return Array.from(itemMap.values());
+      });
       
       // Clean up from localStorage
       try {
@@ -746,12 +779,15 @@ export const KnowledgeBasePage = () => {
       // Call stop endpoint
       await knowledgeBaseService.stopCrawl(progressId);
       
-      // Update UI state
-      setProgressItems(prev => prev.map(item => 
-        item.progressId === progressId 
-          ? { ...item, status: 'cancelled', progress: item.progress ?? 0 }
-          : item
-      ));
+      // Update UI state - ensure no duplicates by using a Map
+      setProgressItems(prev => {
+        const itemMap = new Map(prev.map(item => [item.progressId, item]));
+        const existingItem = itemMap.get(progressId);
+        if (existingItem) {
+          itemMap.set(progressId, { ...existingItem, status: 'cancelled', progress: existingItem.progress ?? 0 });
+        }
+        return Array.from(itemMap.values());
+      });
       
       // Clean up from active crawls
       const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
@@ -779,10 +815,19 @@ export const KnowledgeBasePage = () => {
       ...initialData
     };
     
-    // Add to progress items for UI display
-    setProgressItems(prev => [...prev, newProgressItem]);
+    // Add to progress items for UI display with deduplication using Map
+    setProgressItems(prev => {
+      const itemMap = new Map(prev.map(item => [item.progressId, item]));
+      // Only add if it doesn't exist
+      if (!itemMap.has(progressId)) {
+        itemMap.set(progressId, newProgressItem);
+      } else {
+        console.log('⚠️ Progress item already exists in handleStartCrawl, skipping duplicate:', progressId);
+      }
+      return Array.from(itemMap.values());
+    });
     
-    // Set as active progress for polling
+    // Set as active progress for polling - this replaces the previous activeProgressId
     console.log('🚀 Starting crawl with progressId:', progressId);
     setActiveProgressId(progressId);
     
@@ -940,6 +985,16 @@ export const KnowledgeBasePage = () => {
                   <div className="flex gap-4">
                     {/* Left column for progress items */}
                     <div className="w-full lg:w-96 flex-shrink-0 space-y-4">
+                      {(() => {
+                        // Debug: Check for duplicates
+                        const progressIds = progressItems.map(item => item.progressId);
+                        const uniqueIds = new Set(progressIds);
+                        if (progressIds.length !== uniqueIds.size) {
+                          console.error('🔴 DUPLICATE PROGRESS IDS DETECTED:', progressIds);
+                          console.error('🔴 Full progress items:', progressItems);
+                        }
+                        return null;
+                      })()}
                       {progressItems.map(progressData => (
                         <motion.div key={progressData.progressId} variants={contentItemVariants}>
                           <CrawlingProgressCard 
@@ -1010,9 +1065,17 @@ export const KnowledgeBasePage = () => {
                   // Original layout when no progress items or in list view
                   <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'grid-cols-1 gap-3'}`}>
                     {/* Progress Items (only in table view) */}
-                    {viewMode === 'table' && progressItems.map(progressData => (
-                      <motion.div key={progressData.progressId} variants={contentItemVariants}>
-                        <CrawlingProgressCard 
+                    {viewMode === 'table' && (() => {
+                      // Debug: Check for duplicates
+                      const progressIds = progressItems.map(item => item.progressId);
+                      const uniqueIds = new Set(progressIds);
+                      if (progressIds.length !== uniqueIds.size) {
+                        console.error('🔴 TABLE VIEW - DUPLICATE PROGRESS IDS DETECTED:', progressIds);
+                        console.error('🔴 Full progress items:', progressItems);
+                      }
+                      return progressItems.map(progressData => (
+                        <motion.div key={progressData.progressId} variants={contentItemVariants}>
+                          <CrawlingProgressCard 
                           progressData={progressData}
                           onComplete={handleProgressComplete}
                           onError={(error) => handleProgressError(error, progressData.progressId)}
@@ -1034,7 +1097,8 @@ export const KnowledgeBasePage = () => {
                           onStop={() => handleStopProgress(progressData.progressId)}
                         />
                       </motion.div>
-                    ))}
+                    ));
+                    })()}
                     
                     {/* Regular Knowledge Items */}
                     {viewMode === 'grid' ? (

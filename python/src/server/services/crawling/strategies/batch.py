@@ -38,6 +38,7 @@ class BatchCrawlStrategy:
         progress_callback: Callable | None = None,
         start_progress: int = 15,
         end_progress: int = 60,
+        cancellation_check: Callable[[], None] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Batch crawl multiple URLs in parallel with progress reporting.
@@ -145,6 +146,10 @@ class BatchCrawlStrategy:
             url_mapping[transformed] = url
 
         for i in range(0, total_urls, batch_size):
+            # Check for cancellation before processing each batch
+            if cancellation_check:
+                cancellation_check()
+            
             batch_urls = transformed_urls[i : i + batch_size]
             batch_start = i
             batch_end = min(i + batch_size, total_urls)
@@ -168,6 +173,15 @@ class BatchCrawlStrategy:
 
             # Handle streaming results
             async for result in batch_results:
+                # Check for cancellation during streaming
+                if cancellation_check:
+                    try:
+                        cancellation_check()
+                    except Exception:
+                        # If cancelled, break out of the loop
+                        logger.info("Batch crawl cancelled during processing")
+                        break
+                
                 processed += 1
                 if result.success and result.markdown:
                     # Map back to original URL

@@ -181,7 +181,7 @@ class CrawlingService:
 
     def parse_sitemap(self, sitemap_url: str) -> list[str]:
         """Parse a sitemap and extract URLs."""
-        return self.sitemap_strategy.parse_sitemap(sitemap_url)
+        return self.sitemap_strategy.parse_sitemap(sitemap_url, self._check_cancellation)
 
     async def crawl_batch_with_progress(
         self,
@@ -200,6 +200,7 @@ class CrawlingService:
             progress_callback,
             start_progress,
             end_progress,
+            self._check_cancellation,  # Pass cancellation check
         )
 
     async def crawl_recursive_with_progress(
@@ -221,6 +222,7 @@ class CrawlingService:
             progress_callback,
             start_progress,
             end_progress,
+            self._check_cancellation,  # Pass cancellation check
         )
 
     # Orchestration methods

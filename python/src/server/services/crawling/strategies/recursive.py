@@ -42,6 +42,7 @@ class RecursiveCrawlStrategy:
         progress_callback: Callable[..., Awaitable[None]] | None = None,
         start_progress: int = 10,
         end_progress: int = 60,
+        cancellation_check: Callable[[], None] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Recursively crawl internal links from start URLs up to a maximum depth with progress reporting.
@@ -146,6 +147,10 @@ class RecursiveCrawlStrategy:
         total_processed = 0
 
         for depth in range(max_depth):
+            # Check for cancellation at the start of each depth level
+            if cancellation_check:
+                cancellation_check()
+            
             urls_to_crawl = [
                 normalize_url(url) for url in current_urls if normalize_url(url) not in visited
             ]
@@ -170,6 +175,10 @@ class RecursiveCrawlStrategy:
             depth_successful = 0
 
             for batch_idx in range(0, len(urls_to_crawl), batch_size):
+                # Check for cancellation before processing each batch
+                if cancellation_check:
+                    cancellation_check()
+                
                 batch_urls = urls_to_crawl[batch_idx : batch_idx + batch_size]
                 batch_end_idx = min(batch_idx + batch_size, len(urls_to_crawl))
 
@@ -201,6 +210,15 @@ class RecursiveCrawlStrategy:
                 # Handle streaming results from arun_many
                 i = 0
                 async for result in batch_results:
+                    # Check for cancellation during streaming results
+                    if cancellation_check:
+                        try:
+                            cancellation_check()
+                        except Exception:
+                            # If cancelled, break out of the loop
+                            logger.info("Crawl cancelled during batch processing")
+                            break
+                    
                     # Map back to original URL using the mapping dict
                     original_url = url_mapping.get(result.url, result.url)
 
