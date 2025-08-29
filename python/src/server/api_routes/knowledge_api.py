@@ -495,7 +495,12 @@ async def upload_document(
         progress_id = str(uuid.uuid4())
 
         # Parse tags
-        tag_list = json.loads(tags) if tags else []
+        try:
+            tag_list = json.loads(tags) if tags else []
+            if tag_list is None:
+                tag_list = []
+        except json.JSONDecodeError as ex:
+            raise HTTPException(status_code=422, detail={"error": f"Invalid tags JSON: {str(ex)}"})
 
         # Read file content immediately to avoid closed file issues
         file_content = await file.read()
@@ -862,10 +867,12 @@ async def stop_crawl_task(progress_id: str):
 
         safe_logfire_info(f"Stop crawl requested | progress_id={progress_id}")
 
+        found = False
         # Step 1: Cancel the orchestration service
         orchestration = get_active_orchestration(progress_id)
         if orchestration:
             orchestration.cancel()
+            found = True
 
         # Step 2: Cancel the asyncio task
         if progress_id in active_crawl_tasks:
@@ -877,10 +884,13 @@ async def stop_crawl_task(progress_id: str):
                 except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
             del active_crawl_tasks[progress_id]
+            found = True
 
         # Step 3: Remove from active orchestrations registry
         unregister_orchestration(progress_id)
 
+        if not found:
+            raise HTTPException(status_code=404, detail={"error": "No active task for given progress_id"})
 
         safe_logfire_info(f"Successfully stopped crawl task | progress_id={progress_id}")
         return {
