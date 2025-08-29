@@ -18,27 +18,6 @@ import { GroupedKnowledgeItemCard } from '../components/knowledge-base/GroupedKn
 import { KnowledgeGridSkeleton, KnowledgeTableSkeleton } from '../components/knowledge-base/KnowledgeItemSkeleton';
 import { GroupCreationModal } from '../components/knowledge-base/GroupCreationModal';
 
-const extractDomain = (url: string): string => {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-    
-    // Remove 'www.' prefix if present
-    const withoutWww = hostname.startsWith('www.') ? hostname.slice(4) : hostname;
-    
-    // For domains with subdomains, extract the main domain (last 2 parts)
-    const parts = withoutWww.split('.');
-    if (parts.length > 2) {
-      // Return the main domain (last 2 parts: domain.tld)
-      return parts.slice(-2).join('.');
-    }
-    
-    return withoutWww;
-  } catch {
-    return url; // Return original if URL parsing fails
-  }
-};
-
 interface GroupedKnowledgeItem {
   id: string;
   title: string;
