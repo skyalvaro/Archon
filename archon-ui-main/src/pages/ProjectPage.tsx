@@ -507,8 +507,6 @@ function ProjectPage({
     const projectData: CreateProjectRequest = {
       title: newProjectForm.title,
       description: newProjectForm.description,
-      color: newProjectForm.color,
-      icon: "Briefcase", // Default icon
       docs: [],
       features: [],
       data: [],
