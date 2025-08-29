@@ -12,22 +12,11 @@ export interface ServerResponse {
   message: string;
 }
 
-export interface LogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-}
-
 export interface ServerConfig {
   transport: string;
   host: string;
   port: number;
   model?: string;
-}
-
-interface StreamLogOptions {
-  autoReconnect?: boolean;
-  reconnectDelay?: number;
 }
 
 // Zod schemas for MCP protocol
@@ -141,35 +130,6 @@ class MCPServerService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to update configuration');
-    }
-
-    return response.json();
-  }
-
-  async getLogs(options: { limit?: number } = {}): Promise<LogEntry[]> {
-    const params = new URLSearchParams();
-    if (options.limit) {
-      params.append('limit', options.limit.toString());
-    }
-
-    const response = await fetch(`${this.baseUrl}/api/mcp/logs?${params}`);
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch logs');
-    }
-
-    const data = await response.json();
-    return data.logs || [];
-  }
-
-  async clearLogs(): Promise<ServerResponse> {
-    const response = await fetch(`${this.baseUrl}/api/mcp/logs`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to clear logs');
     }
 
     return response.json();
