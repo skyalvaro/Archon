@@ -125,7 +125,7 @@ class ServerHealthService {
 
   /**
    * Immediately trigger disconnect screen without waiting for health checks
-   * Used when WebSocket or other services detect immediate disconnection
+   * Used when services detect immediate disconnection (e.g., polling failures, fetch errors)
    */
   handleImmediateDisconnect() {
     console.log('🏥 [Health] Immediate disconnect triggered');
