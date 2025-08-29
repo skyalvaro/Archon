@@ -8,7 +8,7 @@ AI-assisted documentation generation and progress tracking.
 import os
 
 # Removed direct logging import - using unified config
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from src.server.utils import get_supabase_client
@@ -50,17 +50,15 @@ class ProjectCreationService:
             f"🏗️ [PROJECT-CREATION] Starting create_project_with_ai for progress_id: {progress_id}, title: {title}"
         )
         try:
-            # Update progress - database setup
-            logger.info("🏗️ [PROJECT-CREATION] About to call progress update: database_setup (30%)")
-            logger.info("🏗️ [PROJECT-CREATION] Completed progress update: database_setup")
+            # Database setup step
 
             # Create basic project structure
             project_data = {
                 "title": title,
                 "description": description or "",
                 "github_repo": github_repo,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 "docs": [],  # Empty docs array to start - PRD will be added here by DocumentAgent
                 "features": kwargs.get("features", {}),
                 "data": kwargs.get("data", {}),
@@ -73,18 +71,15 @@ class ProjectCreationService:
 
             # Create the project in database
             response = self.supabase_client.table("archon_projects").insert(project_data).execute()
+            if hasattr(response, "error") and response.error:
+                raise RuntimeError(f"Supabase insert failed for project '{title}': {response.error}")
             if not response.data:
-                raise Exception("Failed to create project in database")
+                raise RuntimeError(f"Insert returned no data for project '{title}'")
 
             project_id = response.data[0]["id"]
             logger.info(f"Created project {project_id} in database")
 
-            # Update progress - AI processing
-            logger.info(
-                "🏗️ [PROJECT-CREATION] About to call progress update: processing_requirements (50%)"
-            )
-
-            logger.info("🏗️ [PROJECT-CREATION] Completed progress update: processing_requirements")
+            # AI processing step
 
             # Generate AI documentation if API key is available
             ai_success = await self._generate_ai_documentation(
@@ -110,8 +105,8 @@ class ProjectCreationService:
                     "created_at": final_project["created_at"],
                     "updated_at": final_project["updated_at"],
                     "docs": final_project.get("docs", []),  # PRD documents will be here
-                    "features": final_project.get("features", []),
-                    "data": final_project.get("data", []),
+                    "features": final_project.get("features", {}),
+                    "data": final_project.get("data", {}),
                     "pinned": final_project.get("pinned", False),
                     "technical_sources": [],  # Empty initially
                     "business_sources": [],  # Empty initially
@@ -129,13 +124,10 @@ class ProjectCreationService:
                 return True, {"project_id": project_id, "ai_documentation_generated": ai_success}
 
         except Exception as e:
-            logger.error(f"🚨 [PROJECT-CREATION] Project creation failed: {str(e)}")
-            try:
-                pass
-            except Exception as progress_error:
-                logger.error(
-                    f"🚨 [PROJECT-CREATION] Failed to send error progress: {progress_error}"
-                )
+            logger.error(
+                f"🚨 [PROJECT-CREATION] Project creation failed for progress_id={progress_id}, title={title}: {e}",
+                exc_info=True,
+            )
             return False, {"error": str(e)}
 
     async def _generate_ai_documentation(
