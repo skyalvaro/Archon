@@ -343,8 +343,8 @@ const DOCUMENT_TEMPLATES = {
             database: 'Supabase PostgreSQL with proper indexing'
           },
           realtime: {
-            technology: 'Socket.IO for live updates',
-            patterns: 'Event-driven communication with proper error handling'
+            technology: 'HTTP polling for live updates',
+            patterns: 'ETag-based polling with smart pausing'
           },
           infrastructure: {
             deployment: 'Docker containers with orchestration',
@@ -355,7 +355,7 @@ const DOCUMENT_TEMPLATES = {
         data_flow: [
           'User interaction → Frontend validation → API call',
           'Backend processing → Database operations → Response',
-          'Real-time events → Socket.IO → UI updates'
+          'Real-time events → HTTP polling → UI updates'
         ],
         integration_points: [
           'External APIs and their usage patterns',

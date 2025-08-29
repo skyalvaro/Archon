@@ -7,7 +7,6 @@ These services extend the base storage functionality with specific implementatio
 
 from typing import Any
 
-from fastapi import WebSocket
 
 from ...config.logfire_config import get_logger, safe_span
 from .base_storage_service import BaseStorageService
@@ -26,7 +25,6 @@ class DocumentStorageService(BaseStorageService):
         source_id: str,
         knowledge_type: str = "documentation",
         tags: list[str] | None = None,
-        websocket: WebSocket | None = None,
         progress_callback: Any | None = None,
         cancellation_check: Any | None = None,
     ) -> tuple[bool, dict[str, Any]]:
@@ -39,7 +37,6 @@ class DocumentStorageService(BaseStorageService):
             source_id: Source identifier
             knowledge_type: Type of knowledge
             tags: Optional list of tags
-            websocket: Optional WebSocket for progress
             progress_callback: Optional callback for progress
 
         Returns:
@@ -56,16 +53,6 @@ class DocumentStorageService(BaseStorageService):
             try:
                 # Progress reporting helper
                 async def report_progress(message: str, percentage: int, batch_info: dict = None):
-                    if websocket:
-                        data = {
-                            "type": "upload_progress",
-                            "filename": filename,
-                            "progress": percentage,
-                            "message": message,
-                        }
-                        if batch_info:
-                            data.update(batch_info)
-                        await websocket.send_json(data)
                     if progress_callback:
                         await progress_callback(message, percentage, batch_info)
 
@@ -180,12 +167,7 @@ class DocumentStorageService(BaseStorageService):
                 span.set_attribute("error", str(e))
                 logger.error(f"Error uploading document: {e}")
 
-                if websocket:
-                    await websocket.send_json({
-                        "type": "upload_error",
-                        "error": str(e),
-                        "filename": filename,
-                    })
+                # Error will be handled by caller
 
                 return False, {"error": f"Error uploading document: {str(e)}"}
 
@@ -195,7 +177,7 @@ class DocumentStorageService(BaseStorageService):
 
         Args:
             documents: List of documents to store
-            **kwargs: Additional options (websocket, progress_callback, etc.)
+            **kwargs: Additional options (progress_callback, etc.)
 
         Returns:
             Storage result
@@ -208,7 +190,6 @@ class DocumentStorageService(BaseStorageService):
                 source_id=doc.get("source_id", "upload"),
                 knowledge_type=doc.get("knowledge_type", "documentation"),
                 tags=doc.get("tags"),
-                websocket=kwargs.get("websocket"),
                 progress_callback=kwargs.get("progress_callback"),
                 cancellation_check=kwargs.get("cancellation_check"),
             )

@@ -333,7 +333,7 @@ async def _check_database_schema():
         return result
 
 
-# Export the app directly for uvicorn to use (Socket.IO removed)
+# Export the app directly for uvicorn to use
 
 
 def main():

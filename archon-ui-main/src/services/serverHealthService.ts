@@ -140,10 +140,10 @@ class ServerHealthService {
   }
 
   /**
-   * Handle when WebSocket reconnects - reset state but let health check confirm
+   * Handle when connection reconnects - reset state but let health check confirm
    */
-  handleWebSocketReconnect() {
-    console.log('🏥 [Health] WebSocket reconnected, resetting missed checks');
+  handleConnectionReconnect() {
+    console.log('🏥 [Health] Connection reconnected, resetting missed checks');
     this.missedChecks = 0;
     // Don't immediately mark as connected - let health check confirm server is actually healthy
   }

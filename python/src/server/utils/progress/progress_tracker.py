@@ -2,7 +2,6 @@
 Progress Tracker Utility
 
 Tracks operation progress in memory for HTTP polling access.
-Replaces Socket.IO with simple state management.
 """
 
 from datetime import datetime
