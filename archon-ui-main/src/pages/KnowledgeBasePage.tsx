@@ -110,6 +110,23 @@ export const KnowledgeBasePage = () => {
     };
   }, []); // Only run once on mount
 
+  // Watch for when all crawls complete to refresh knowledge items
+  useEffect(() => {
+    // Only reload if we previously had active crawls that are now done
+    const hasActiveProgress = progressItems.some(item => 
+      item.status !== 'completed' && item.status !== 'failed' && item.status !== 'error' && item.status !== 'cancelled'
+    );
+    const hasCompletedProgress = progressItems.some(item => item.status === 'completed');
+    
+    // If we have completed items but no active ones, reload after a short delay
+    if (!hasActiveProgress && hasCompletedProgress) {
+      const timeoutId = setTimeout(() => {
+        loadKnowledgeItems();
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [progressItems]);
+
   // Check for any active progress on mount
   useEffect(() => {
     console.log('🔄 Checking for active crawls on mount...');
@@ -471,8 +488,11 @@ export const KnowledgeBasePage = () => {
         itemMap.delete(data.progressId);
         return Array.from(itemMap.values());
       });
-      // Reload knowledge items to show the new item
-      loadKnowledgeItems();
+      // Only reload if no other crawls are active to avoid disrupting concurrent operations
+      const remainingCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+      if (remainingCrawls.length === 0) {
+        loadKnowledgeItems();
+      }
     }, 3000); // 3 second delay to show completion state
   };
 
