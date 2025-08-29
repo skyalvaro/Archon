@@ -78,8 +78,8 @@ class CreateTaskRequest(BaseModel):
 
 @router.get("/projects")
 async def list_projects(
+    response: Response,
     include_content: bool = True,
-    response: Response = None,
     if_none_match: str | None = Header(None)
 ):
     """
@@ -142,6 +142,8 @@ async def list_projects(
         # Check if client's ETag matches
         if check_etag(if_none_match, current_etag):
             response.status_code = http_status.HTTP_304_NOT_MODIFIED
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
             return None
 
         # Set headers
@@ -525,16 +527,16 @@ async def get_project_features(project_id: str):
 
 @router.get("/projects/{project_id}/tasks")
 async def list_project_tasks(
-    project_id: str, 
+    project_id: str,
+    request: Request,
+    response: Response,
     include_archived: bool = False, 
-    exclude_large_fields: bool = False,
-    request: Request = None,
-    response: Response = None
+    exclude_large_fields: bool = False
 ):
     """List all tasks for a specific project with ETag support for efficient polling."""
     try:
         # Get If-None-Match header for ETag comparison
-        if_none_match = request.headers.get("If-None-Match") if request else None
+        if_none_match = request.headers.get("If-None-Match")
         
         logfire.info(
             f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | etag={if_none_match}"
@@ -571,17 +573,17 @@ async def list_project_tasks(
 
         # Check if client's ETag matches (304 Not Modified)
         if check_etag(if_none_match, current_etag):
-            if response:
-                response.status_code = 304
-                response.headers["ETag"] = current_etag
-                response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            response.status_code = 304
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            response.headers["Last-Modified"] = datetime.utcnow().isoformat()
             logfire.info(f"Tasks unchanged, returning 304 | project_id={project_id} | etag={current_etag}")
             return None
 
         # Set ETag headers for successful response
-        if response:
-            response.headers["ETag"] = current_etag
-            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = current_etag
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Last-Modified"] = datetime.utcnow().isoformat()
 
         logfire.info(
             f"Project tasks retrieved | project_id={project_id} | task_count={len(tasks)} | etag={current_etag}"

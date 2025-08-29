@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/progress", tags=["progress"])
 @router.get("/{operation_id}")
 async def get_progress(
     operation_id: str,
-    response: Response = None,
+    response: Response,
     if_none_match: str | None = Header(None)
 ):
     """
@@ -57,6 +57,8 @@ async def get_progress(
         # Check if client's ETag matches
         if check_etag(if_none_match, current_etag):
             response.status_code = http_status.HTTP_304_NOT_MODIFIED
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
             return None
 
         # Set headers for caching
