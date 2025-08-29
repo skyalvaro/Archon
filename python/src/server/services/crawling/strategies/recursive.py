@@ -70,6 +70,8 @@ class RecursiveCrawlStrategy:
             settings = await credential_service.get_credentials_by_category("rag_strategy")
             batch_size = int(settings.get("CRAWL_BATCH_SIZE", "50"))
             if max_concurrent is None:
+                # CRAWL_MAX_CONCURRENT: Pages to crawl in parallel within this single crawl operation
+                # (Different from server-level CONCURRENT_CRAWL_LIMIT which limits total crawl operations)
                 max_concurrent = int(settings.get("CRAWL_MAX_CONCURRENT", "10"))
             memory_threshold = float(settings.get("MEMORY_THRESHOLD_PERCENT", "80"))
             check_interval = float(settings.get("DISPATCHER_CHECK_INTERVAL", "0.5"))

@@ -35,9 +35,18 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["knowledge"])
 
 
-# Create a semaphore to limit concurrent crawls
+# Create a semaphore to limit concurrent crawl OPERATIONS (not pages within a crawl)
 # This prevents the server from becoming unresponsive during heavy crawling
-CONCURRENT_CRAWL_LIMIT = 3  # Allow max 3 concurrent crawls
+# 
+# IMPORTANT: This is different from CRAWL_MAX_CONCURRENT (configured in UI/database):
+# - CONCURRENT_CRAWL_LIMIT: Max number of separate crawl operations that can run simultaneously (server protection)
+#   Example: User A crawls site1.com, User B crawls site2.com, User C crawls site3.com = 3 operations
+# - CRAWL_MAX_CONCURRENT: Max number of pages that can be crawled in parallel within a single crawl operation
+#   Example: While crawling site1.com, fetch up to 10 pages simultaneously
+#
+# The hardcoded limit of 3 protects the server from being overwhelmed by multiple users
+# starting crawls at the same time. Each crawl can still process many pages in parallel.
+CONCURRENT_CRAWL_LIMIT = 3  # Max simultaneous crawl operations (protects server resources)
 crawl_semaphore = asyncio.Semaphore(CONCURRENT_CRAWL_LIMIT)
 
 # Track active async crawl tasks for cancellation support
