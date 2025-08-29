@@ -595,8 +595,8 @@ async def _perform_upload_with_progress(
         # Use DocumentStorageService to handle the upload
         doc_storage_service = DocumentStorageService(get_supabase_client())
 
-        # Generate source_id from filename
-        source_id = f"file_{filename.replace(' ', '_').replace('.', '_')}_{int(time.time())}"
+        # Generate source_id from filename with UUID to prevent collisions
+        source_id = f"file_{filename.replace(' ', '_').replace('.', '_')}_{uuid.uuid4().hex[:8]}"
 
         # Create progress callback for tracking document processing
         async def document_progress_callback(
