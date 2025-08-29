@@ -473,7 +473,6 @@ export const KnowledgeBasePage = () => {
         // Remove the item temporarily while it's being refreshed
         setKnowledgeItems(prev => prev.filter(k => k.source_id !== sourceId));
         
-        // Connect to crawl progress WebSocket
         // Add new progress item for tracking
         setProgressItems(prev => [...prev, {
           progressId: response.progressId,

@@ -1,6 +1,5 @@
 /**
  * Progress polling service for long-running operations
- * Replaces Socket.IO progress tracking with simple polling
  */
 
 export interface ProgressState {

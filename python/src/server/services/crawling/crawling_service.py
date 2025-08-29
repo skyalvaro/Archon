@@ -263,7 +263,7 @@ class CrawlingService:
         heartbeat_interval = 30.0  # Send heartbeat every 30 seconds
 
         async def send_heartbeat_if_needed():
-            """Send heartbeat to keep Socket.IO connection alive"""
+            """Send heartbeat to keep connection alive"""
             nonlocal last_heartbeat
             current_time = asyncio.get_event_loop().time()
             if current_time - last_heartbeat >= heartbeat_interval:

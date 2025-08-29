@@ -97,8 +97,6 @@ async function callAPI<T = any>(endpoint: string, options: RequestInit = {}): Pr
 }
 
 class TestService {
-  private wsConnections: Map<string, WebSocket> = new Map();
-
   /**
    * Execute Python tests using pytest via backend API
    */
@@ -352,46 +350,6 @@ class TestService {
     });
   }
 
-  /**
-   * Connect to WebSocket stream for real-time test output
-   */
-  connectToTestStream(
-    executionId: string,
-    onMessage: (message: TestStreamMessage) => void,
-    onError?: (error: Event) => void,
-    onClose?: (event: CloseEvent) => void
-  ): () => void {
-    // WebSocket streaming removed - use polling instead
-    console.warn('Test streaming via WebSocket is no longer supported. Use polling instead.');
-    
-    // Return no-op cleanup function
-    return () => {};
-  }
-
-  /**
-   * Disconnect from WebSocket stream (deprecated)
-   */
-  disconnectFromTestStream(executionId: string): void {
-    // WebSocket connections removed - no-op
-  }
-
-  /**
-   * Disconnect all WebSocket connections
-   */
-  disconnectAllStreams(): void {
-    this.wsConnections.forEach((ws) => {
-      ws.close();
-    });
-    this.wsConnections.clear();
-  }
-
-  /**
-   * Check if a test stream is connected
-   */
-  isStreamConnected(executionId: string): boolean {
-    const ws = this.wsConnections.get(executionId);
-    return ws ? ws.readyState === WebSocket.OPEN : false;
-  }
 }
 
 // Export singleton instance

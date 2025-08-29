@@ -45,19 +45,9 @@ export const ArchonChatPanel: React.FC<ArchonChatPanelProps> = props => {
    */
   const initializeChat = React.useCallback(async () => {
       try {
-        // Check if WebSocket is enabled
-        const enableWebSocket = import.meta.env.VITE_ENABLE_WEBSOCKET !== 'false';
-        if (!enableWebSocket) {
-          console.warn('WebSocket connection is disabled by environment configuration');
-          setConnectionError('Agent chat is currently disabled');
-          setConnectionStatus('offline');
-          setIsInitialized(true);
-          return;
-        }
-        
         setConnectionStatus('connecting');
         
-        // Add a small delay to prevent WebSocket race conditions on page refresh
+        // Add a small delay to prevent race conditions on page refresh
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Create a new chat session

@@ -575,7 +575,6 @@ async def _perform_upload_with_progress(
             f"Starting document upload with progress tracking | progress_id={progress_id} | filename={filename} | content_type={content_type}"
         )
 
-        # Socket.IO handles connection automatically - no need to wait
 
         # Extract text from document with progress - use mapper for consistent progress
         mapped_progress = progress_mapper.map_progress("processing", 50)
@@ -594,11 +593,11 @@ async def _perform_upload_with_progress(
         # Generate source_id from filename
         source_id = f"file_{filename.replace(' ', '_').replace('.', '_')}_{int(time.time())}"
 
-        # Create progress callback that emits to Socket.IO with mapped progress
+        # Create progress callback for tracking document processing
         async def document_progress_callback(
             message: str, percentage: int, batch_info: dict = None
         ):
-            """Progress callback that emits to Socket.IO with mapped progress"""
+            """Progress callback for tracking document processing"""
             # Map the document storage progress to overall progress range
             mapped_percentage = progress_mapper.map_progress("document_storage", percentage)
 

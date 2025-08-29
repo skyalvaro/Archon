@@ -1,7 +1,6 @@
 /**
  * Agent Chat Service
  * Handles communication with AI agents via REST API
- * Simplified version without WebSocket dependencies
  */
 
 import { serverHealthService } from './serverHealthService';

@@ -219,7 +219,7 @@ export const ProjectCreationProgressCard: React.FC<ProjectCreationProgressCardPr
               Progress ID: {progressData.progressId}
             </div>
             <div className="mt-1 text-xs opacity-75">
-              Check browser console for Socket.IO connection details.
+              Check browser console for details.
             </div>
           </div>
         </div>

@@ -17,17 +17,8 @@ export interface CrawlProgressData {
   timestamp?: string;
 }
 
-export enum WebSocketState {
-  CONNECTING = 'CONNECTING',
-  CONNECTED = 'CONNECTED',
-  DISCONNECTED = 'DISCONNECTED',
-  FAILED = 'FAILED',
-  RECONNECTING = 'RECONNECTING'
-}
-
 interface StreamCallbacks {
   onMessage?: (data: CrawlProgressData) => void;
-  onStateChange?: (state: WebSocketState) => void;
   onError?: (error: string) => void;
   onConnect?: () => void;
 }
@@ -35,7 +26,6 @@ interface StreamCallbacks {
 class CrawlProgressService {
   private pollingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private callbacks: Map<string, StreamCallbacks> = new Map();
-  private connectionState: WebSocketState = WebSocketState.DISCONNECTED;
 
   /**
    * Start polling for progress updates
@@ -47,11 +37,6 @@ class CrawlProgressService {
     // Store callbacks
     this.callbacks.set(progressId, callbacks);
     
-    // Notify connected state (simulating WebSocket connection)
-    this.connectionState = WebSocketState.CONNECTED;
-    if (callbacks.onStateChange) {
-      callbacks.onStateChange(WebSocketState.CONNECTED);
-    }
     if (callbacks.onConnect) {
       callbacks.onConnect();
     }
@@ -109,15 +94,11 @@ class CrawlProgressService {
       this.pollingIntervals.delete(progressId);
     }
     
-    const callbacks = this.callbacks.get(progressId);
-    if (callbacks?.onStateChange) {
-      callbacks.onStateChange(WebSocketState.DISCONNECTED);
-    }
     this.callbacks.delete(progressId);
   }
 
   /**
-   * Disconnect all polling
+   * Stop all polling
    */
   disconnect() {
     // Stop all polling intervals
@@ -125,16 +106,7 @@ class CrawlProgressService {
       clearInterval(interval);
     });
     this.pollingIntervals.clear();
-    
-    // Notify all callbacks of disconnection
-    this.callbacks.forEach((callbacks) => {
-      if (callbacks.onStateChange) {
-        callbacks.onStateChange(WebSocketState.DISCONNECTED);
-      }
-    });
     this.callbacks.clear();
-    
-    this.connectionState = WebSocketState.DISCONNECTED;
   }
 
   /**

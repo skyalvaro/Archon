@@ -286,7 +286,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
           target: `http://${host}:${port}`,
           changeOrigin: true,
           secure: false,
-          ws: true,
           configure: (proxy, options) => {
             proxy.on('error', (err, req, res) => {
               console.log('🚨 [VITE PROXY ERROR]:', err.message);
@@ -297,12 +296,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
               console.log('🔄 [VITE PROXY] Forwarding:', req.method, req.url, 'to', `http://${host}:${port}${req.url}`);
             });
           }
-        },
-        // Socket.IO specific proxy configuration
-        '/socket.io': {
-          target: `http://${host}:${port}`,
-          changeOrigin: true,
-          ws: true
         }
       },
     },

@@ -175,17 +175,6 @@ class MCPServerService {
     return response.json();
   }
 
-  streamLogs(
-    onMessage: (log: LogEntry) => void,
-    options: StreamLogOptions = {}
-  ): void {
-    // WebSocket log streaming removed - use polling instead
-    console.warn('Log streaming via WebSocket is no longer supported. Use polling with getLogs() instead.');
-  }
-
-  disconnectLogs(): void {
-    // WebSocket connections removed - no-op
-  }
 
   // ========================================
   // LEGACY ARCHON TOOL ACCESS (For backward compatibility)

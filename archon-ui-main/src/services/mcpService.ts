@@ -213,17 +213,6 @@ class MCPService {
     return response.json();
   }
 
-  streamLogs(
-    onMessage: (log: LogEntry) => void,
-    options: StreamLogOptions = {}
-  ): void {
-    // WebSocket streaming removed - use polling instead
-    console.warn('Log streaming via WebSocket is no longer supported. Use polling with getLogs() instead.');
-  }
-
-  disconnectLogs(): void {
-    // WebSocket connections removed - no-op
-  }
 
   // ========================================
   // CLIENT MANAGEMENT (New functionality)
