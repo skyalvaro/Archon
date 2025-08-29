@@ -306,6 +306,11 @@ class ProjectService:
             return True, {"features": feature_options, "count": len(feature_options)}
 
         except Exception as e:
+            # Check if it's a "no rows found" error from PostgREST
+            error_message = str(e)
+            if "The result contains 0 rows" in error_message or "PGRST116" in error_message:
+                return False, {"error": "Project not found"}
+            
             logger.error(f"Error getting project features: {e}")
             return False, {"error": f"Error getting project features: {str(e)}"}
 
