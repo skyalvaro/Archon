@@ -712,11 +712,11 @@ export const KnowledgeBasePage = () => {
   const handleStartCrawl = async (progressId: string, initialData: Partial<CrawlProgressData>) => {
     // Start tracking this crawl - each card will poll independently
     const newProgressItem: CrawlProgressData = {
+      ...initialData,
       progressId,
       status: 'starting',
       progress: 0,
-      message: 'Starting crawl...',
-      ...initialData
+      message: 'Starting crawl...'
     };
     
     // Add to progress items for UI display with deduplication using Map
