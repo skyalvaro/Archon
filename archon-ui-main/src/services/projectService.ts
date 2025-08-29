@@ -184,34 +184,6 @@ export const projectService = {
   /**
    * Create a new project
    */
-  async createProject(projectData: CreateProjectRequest): Promise<Project> {
-    // Validate input
-    const validation = validateCreateProject(projectData);
-    if (!validation.success) {
-      throw new ValidationError(formatValidationErrors(validation.error));
-    }
-
-    try {
-      const project = await callAPI<Project>('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify(validation.data)
-      });
-      
-      
-      return {
-        ...project,
-        progress: 0,
-        updated: this.formatRelativeTime(project.created_at)
-      };
-    } catch (error) {
-      console.error('Failed to create project:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Create a new project
-   */
   async createProject(projectData: CreateProjectRequest): Promise<{ project_id: string; project: any; status: string; message: string }> {
     // Validate input
     console.log('[PROJECT SERVICE] Validating project data:', projectData);
