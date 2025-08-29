@@ -5,8 +5,6 @@ This module handles the complex project creation workflow including
 AI-assisted documentation generation and progress tracking.
 """
 
-import os
-
 # Removed direct logging import - using unified config
 from datetime import datetime, timezone
 from typing import Any
@@ -145,10 +143,12 @@ class ProjectCreationService:
             True if successful, False otherwise
         """
         try:
-            api_key = os.getenv("OPENAI_API_KEY")
-
-            if not api_key:
-    
+            # Check if LLM provider is configured
+            from ..credential_service import credential_service
+            provider_config = await credential_service.get_active_provider("llm")
+            
+            if not provider_config:
+                # No LLM provider configured, skip AI documentation
                 return False
 
             # Import DocumentAgent (lazy import to avoid startup issues)
