@@ -278,6 +278,26 @@ function ProjectPage({
     },
   );
 
+  const handleProjectSelect = async (project: Project) => {
+    // Show loading state during project switch
+    setIsSwitchingProject(true);
+    setTasksError(null);
+    setTasks([]); // Clear stale tasks immediately to prevent wrong data showing
+    
+    try {
+      setSelectedProject(project);
+      setShowProjectDetails(true);
+      setActiveTab("tasks");
+      
+      // Load tasks for the new project
+      await loadTasksForProject(project.id);
+    } catch (error) {
+      console.error('Failed to switch project:', error);
+      showToast('Failed to load project tasks', 'error');
+    } finally {
+      setIsSwitchingProject(false);
+    }
+  };
 
   // Auto-select pinned project or first project when projects load
   useEffect(() => {
@@ -309,20 +329,16 @@ function ProjectPage({
       (!selectedProject || selectedProject.id !== pinnedProject.id)
     ) {
       console.log(`✅ Selecting pinned project: ${pinnedProject.title}`);
-      setSelectedProject(pinnedProject);
-      setShowProjectDetails(true);
-      setActiveTab("tasks");
+      handleProjectSelect(pinnedProject);
     } else if (!selectedProject && sortedProjects.length > 0) {
       // No pinned project, select first one
       const firstProject = sortedProjects[0];
       console.log(
         `📋 No pinned project, selecting first: ${firstProject.title}`,
       );
-      setSelectedProject(firstProject);
-      setShowProjectDetails(true);
-      setActiveTab("tasks");
+      handleProjectSelect(firstProject);
     }
-  }, [projects, selectedProject]);
+  }, [projects, selectedProject, handleProjectSelect]);
 
   // Update loading state based on polling
   useEffect(() => {
@@ -438,28 +454,6 @@ function ProjectPage({
       setTasksError(
         error instanceof Error ? error.message : "Failed to load tasks",
       );
-    }
-  };
-
-
-  const handleProjectSelect = async (project: Project) => {
-    // Show loading state during project switch
-    setIsSwitchingProject(true);
-    setTasksError(null);
-    setTasks([]); // Clear stale tasks immediately to prevent wrong data showing
-    
-    try {
-      setSelectedProject(project);
-      setShowProjectDetails(true);
-      setActiveTab("tasks");
-      
-      // Load tasks for the new project
-      await loadTasksForProject(project.id);
-    } catch (error) {
-      console.error('Failed to switch project:', error);
-      showToast('Failed to load project tasks', 'error');
-    } finally {
-      setIsSwitchingProject(false);
     }
   };
 
