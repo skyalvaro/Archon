@@ -889,6 +889,20 @@ async def stop_crawl_task(progress_id: str):
         # Step 3: Remove from active orchestrations registry
         unregister_orchestration(progress_id)
 
+        # Step 4: Update progress tracker to reflect cancellation (only if we found and cancelled something)
+        if found:
+            try:
+                from ..utils.progress.progress_tracker import ProgressTracker
+                tracker = ProgressTracker(progress_id, operation_type="crawl")
+                await tracker.update(
+                    status="cancelled",
+                    percentage=-1,
+                    log="Crawl cancelled by user"
+                )
+            except Exception:
+                # Best effort - don't fail the cancellation if tracker update fails
+                pass
+
         if not found:
             raise HTTPException(status_code=404, detail={"error": "No active task for given progress_id"})
 
