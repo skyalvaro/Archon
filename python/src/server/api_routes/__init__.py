@@ -3,7 +3,7 @@ API package for Archon - modular FastAPI endpoints
 
 This package organizes the API into logical modules:
 - settings_api: Settings and credentials management
-- mcp_api: MCP server management and WebSocket streaming
+- mcp_api: MCP server management and tool execution
 - mcp_client_api: Multi-client MCP management system
 - knowledge_api: Knowledge base, crawling, and RAG operations
 - projects_api: Project and task management with streaming

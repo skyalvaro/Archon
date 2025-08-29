@@ -6,7 +6,7 @@ This module handles all knowledge base operations including:
 - Document upload and processing
 - RAG (Retrieval Augmented Generation) queries
 - Knowledge item management and search
-- Real-time progress tracking via WebSockets
+- Progress tracking via HTTP polling
 """
 
 import asyncio

@@ -6,7 +6,7 @@ It uses a modular approach with separate API modules for different functionality
 
 Modules:
 - settings_api: Settings and credentials management
-- mcp_api: MCP server management and WebSocket streaming
+- mcp_api: MCP server management and tool execution
 - knowledge_api: Knowledge base, crawling, and RAG operations
 - projects_api: Project and task management with streaming
 """
