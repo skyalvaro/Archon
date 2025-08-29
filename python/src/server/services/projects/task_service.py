@@ -201,7 +201,7 @@ class TaskService:
             else:
                 filters_applied.append("include all tasks (including archived)")
 
-            logger.info(f"Listing tasks with filters: {', '.join(filters_applied)}")
+            logger.debug(f"Listing tasks with filters: {', '.join(filters_applied)}")
 
             # Execute query and get raw response
             response = (
@@ -226,10 +226,10 @@ class TaskService:
                     else:
                         archived_counts["false"] += 1
 
-                logger.info(
+                logger.debug(
                     f"Retrieved {len(response.data)} tasks. Status distribution: {status_counts}"
                 )
-                logger.info(f"Archived field distribution: {archived_counts}")
+                logger.debug(f"Archived field distribution: {archived_counts}")
 
                 # If we're filtering by status and getting wrong results, log sample
                 if status and len(response.data) > 0:
@@ -238,7 +238,7 @@ class TaskService:
                         f"Status filter: {status}, First task status: {first_task.get('status')}, archived: {first_task.get('archived')}"
                     )
             else:
-                logger.info("No tasks found with current filters")
+                logger.debug("No tasks found with current filters")
 
             tasks = []
             for task in response.data:

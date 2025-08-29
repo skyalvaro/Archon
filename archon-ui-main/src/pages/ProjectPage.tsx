@@ -303,7 +303,7 @@ function ProjectPage({
   useEffect(() => {
     if (!projects?.length) return;
 
-    console.log("📦 Projects loaded via polling:", projects.length);
+    // console.log("📦 Projects loaded via polling:", projects.length);
 
     // Sort projects - pinned first, then alphabetically
     const sortedProjects = [...projects].sort((a, b) => {
@@ -318,10 +318,10 @@ function ProjectPage({
 
     // Find pinned project - this is ALWAYS the default on page load
     const pinnedProject = sortedProjects.find((p) => p.pinned === true);
-    console.log(
-      `📌 Pinned project:`,
-      pinnedProject ? `${pinnedProject.title}` : "None found",
-    );
+    // console.log(
+    //   `📌 Pinned project:`,
+    //   pinnedProject ? `${pinnedProject.title}` : "None found",
+    // );
 
     // On page load, ALWAYS select pinned project if it exists
     if (

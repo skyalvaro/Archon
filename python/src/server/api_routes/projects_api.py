@@ -87,7 +87,7 @@ async def list_projects(
                         If False, returns lightweight metadata with statistics.
     """
     try:
-        logfire.info(f"Listing all projects | include_content={include_content}")
+        logfire.debug(f"Listing all projects | include_content={include_content}")
 
         # Use ProjectService to get projects with include_content parameter
         project_service = ProjectService()
@@ -110,15 +110,15 @@ async def list_projects(
         response_size = len(response_json)
 
         # Log response metrics
-        logfire.info(
+        logfire.debug(
             f"Projects listed successfully | count={len(formatted_projects)} | "
             f"size_bytes={response_size} | include_content={include_content}"
         )
 
-        # Warning for large responses (>10KB)
-        if response_size > 10000:
-            logfire.warning(
-                f"Large response size detected | size_bytes={response_size} | "
+        # Log large responses at debug level (>100KB is worth noting, but normal for project data)
+        if response_size > 100000:
+            logfire.debug(
+                f"Large response size | size_bytes={response_size} | "
                 f"include_content={include_content} | project_count={len(formatted_projects)}"
             )
 
@@ -498,7 +498,7 @@ async def list_project_tasks(
         # Get If-None-Match header for ETag comparison
         if_none_match = request.headers.get("If-None-Match")
         
-        logfire.info(
+        logfire.debug(
             f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | etag={if_none_match}"
         )
 
@@ -537,7 +537,7 @@ async def list_project_tasks(
             response.headers["ETag"] = current_etag
             response.headers["Cache-Control"] = "no-cache, must-revalidate"
             response.headers["Last-Modified"] = datetime.utcnow().isoformat()
-            logfire.info(f"Tasks unchanged, returning 304 | project_id={project_id} | etag={current_etag}")
+            logfire.debug(f"Tasks unchanged, returning 304 | project_id={project_id} | etag={current_etag}")
             return None
 
         # Set ETag headers for successful response
@@ -545,7 +545,7 @@ async def list_project_tasks(
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
         response.headers["Last-Modified"] = datetime.utcnow().isoformat()
 
-        logfire.info(
+        logfire.debug(
             f"Project tasks retrieved | project_id={project_id} | task_count={len(tasks)} | etag={current_etag}"
         )
 
