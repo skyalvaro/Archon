@@ -10,7 +10,7 @@ Think of optimistic updates as "assuming success" - update the UI immediately fo
 
 ```typescript
 // 1. Save current state (for rollback)
-const previousState = currentState;
+const previousState = currentState; // Note: Use deep clone for objects/arrays in production
 
 // 2. Update UI immediately
 setState(newState);
@@ -110,3 +110,19 @@ When implemented correctly:
 - Rollbacks are rare (< 1% of updates)
 - Error messages are clear
 - Users understand what happened when things fail
+
+## Production Considerations
+
+The examples above are simplified for clarity. Production implementations should consider:
+
+1. **Deep cloning**: Use `structuredClone()` or a deep clone utility for complex state
+   ```typescript
+   const previousState = structuredClone(currentState); // Proper deep clone
+   ```
+
+2. **Race conditions**: Handle out-of-order responses with operation IDs
+3. **Unmount safety**: Avoid setState after component unmount
+4. **Debouncing**: For rapid updates (e.g., sliders), debounce API calls
+5. **Conflict resolution**: For collaborative editing, consider operational transforms
+
+These complexities are why we recommend starting simple and only adding optimistic updates where the UX benefit is clear.

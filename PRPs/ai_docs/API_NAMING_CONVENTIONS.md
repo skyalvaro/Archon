@@ -50,15 +50,15 @@ This document defines the naming conventions used throughout the Archon V2 codeb
 ```
 GET    /api/projects                      - List all projects
 POST   /api/projects                      - Create project
-GET    /api/projects/{id}                 - Get project
-PUT    /api/projects/{id}                 - Update project
-DELETE /api/projects/{id}                 - Delete project
+GET    /api/projects/{project_id}         - Get project
+PUT    /api/projects/{project_id}         - Update project
+DELETE /api/projects/{project_id}         - Delete project
 
-GET    /api/projects/{id}/tasks           - Get project tasks
-POST   /api/tasks                         - Create task
-GET    /api/tasks/{id}                    - Get task
-PUT    /api/tasks/{id}                    - Update task
-DELETE /api/tasks/{id}                    - Delete task
+GET    /api/projects/{project_id}/tasks   - Get project tasks
+POST   /api/tasks                         - Create task (project_id in body)
+GET    /api/tasks/{task_id}               - Get task
+PUT    /api/tasks/{task_id}               - Update task
+DELETE /api/tasks/{task_id}               - Delete task
 
 GET    /api/projects/{project_id}/docs         - Get project documents
 POST   /api/projects/{project_id}/docs         - Create document
@@ -149,7 +149,7 @@ Update[Feature]Request  // e.g., UpdateTaskRequest
 ## Current Architecture Patterns
 
 ### Polling & Data Fetching
-- HTTP polling with `usePolling` and `useProgressPolling` hooks
+- HTTP polling with `usePolling` and `useCrawlProgressPolling` hooks
 - ETag-based caching for bandwidth efficiency
 - Loading state indicators (`isLoading`, `isSwitchingProject`)
 - Error toast notifications for user feedback

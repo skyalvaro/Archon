@@ -9,19 +9,17 @@ Archon V2 uses HTTP polling instead of WebSockets for real-time updates. This si
 Generic polling hook that manages periodic data fetching with smart optimizations.
 
 **Key Features:**
-- Configurable polling intervals (default: 5 seconds)
+- Configurable polling intervals (default: 3 seconds)
 - Automatic pause during browser tab inactivity
 - ETag-based caching to reduce bandwidth
-- Error retry with exponential backoff
 - Manual refresh capability
 
 **Usage:**
 ```typescript
-const { data, isLoading, error, refetch } = usePolling({
-  queryKey: ['projects'],
-  queryFn: () => projectService.getProjects(),
+const { data, isLoading, error, refetch } = usePolling('/api/projects', {
   interval: 5000,
-  enabled: true
+  enabled: true,
+  onSuccess: (data) => console.log('Projects updated:', data)
 });
 ```
 
@@ -36,10 +34,9 @@ Individual services handle specific progress tracking needs:
 
 **Polling Endpoints:**
 - `/api/projects` - Project list updates
-- `/api/projects/{id}/tasks` - Task list for active project
-- `/api/knowledge/crawl-progress/{id}` - Website crawling progress
-- `/api/progress/{id}` - Generic operation progress
-- `/api/agent-chat/sessions/{id}/messages` - Chat messages
+- `/api/projects/{project_id}/tasks` - Task list for active project
+- `/api/crawl-progress/{progress_id}` - Website crawling progress
+- `/api/agent-chat/sessions/{session_id}/messages` - Chat messages
 
 ## Backend Support
 
@@ -54,8 +51,7 @@ Server-side optimization to reduce unnecessary data transfer.
 
 ### Progress API (`python/src/server/api_routes/progress_api.py`)
 Dedicated endpoints for progress tracking:
-- `GET /api/progress/{operation_id}` - Returns operation status with ETag support
-- `GET /api/knowledge/crawl-progress/{progress_id}` - Returns crawling status
+- `GET /api/crawl-progress/{progress_id}` - Returns crawling status with ETag support
 - Includes completion percentage, current step, and error details
 
 ## State Management
@@ -151,9 +147,9 @@ async def get_data(request: Request):
     )
 ```
 
-3. **For progress tracking, use useProgressPolling:**
+3. **For progress tracking, use useCrawlProgressPolling:**
 ```typescript
-const { data, isLoading } = useProgressPolling(operationId, {
+const { data, isLoading } = useCrawlProgressPolling(operationId, {
   onSuccess: (data) => {
     if (data.status === 'completed') {
       // Handle completion
