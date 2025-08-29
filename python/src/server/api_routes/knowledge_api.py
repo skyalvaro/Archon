@@ -513,7 +513,7 @@ async def upload_document(
         # Start background task for processing with file content and metadata
         task = asyncio.create_task(
             _perform_upload_with_progress(
-                progress_id, file_content, file_metadata, tag_list, knowledge_type
+                progress_id, file_content, file_metadata, tag_list, knowledge_type, tracker
             )
         )
         # Track the task for cancellation support
@@ -541,6 +541,7 @@ async def _perform_upload_with_progress(
     file_metadata: dict,
     tag_list: list[str],
     knowledge_type: str,
+    tracker: "ProgressTracker",
 ):
     """Perform document upload with progress tracking using service layer."""
     # Add a small delay to allow frontend WebSocket subscription to be established
@@ -570,13 +571,19 @@ async def _perform_upload_with_progress(
 
         # Extract text from document with progress - use mapper for consistent progress
         mapped_progress = progress_mapper.map_progress("processing", 50)
+        await tracker.update(
+            status="processing",
+            percentage=mapped_progress,
+            log=f"Extracting text from {filename}"
+        )
 
         try:
             extracted_text = extract_text_from_document(file_content, filename, content_type)
             safe_logfire_info(
                 f"Document text extracted | filename={filename} | extracted_length={len(extracted_text)} | content_type={content_type}"
             )
-        except Exception:
+        except Exception as ex:
+            await tracker.error(f"Failed to extract text from document: {str(ex)}")
             return
 
         # Use DocumentStorageService to handle the upload
@@ -592,15 +599,14 @@ async def _perform_upload_with_progress(
             """Progress callback for tracking document processing"""
             # Map the document storage progress to overall progress range
             mapped_percentage = progress_mapper.map_progress("document_storage", percentage)
-
-            progress_data = {
-                "status": "document_storage",
-                "percentage": mapped_percentage,  # Use mapped progress to prevent backwards jumps
-                "currentUrl": f"file://{filename}",
-                "log": message,
-            }
-            if batch_info:
-                progress_data.update(batch_info)
+            
+            await tracker.update(
+                status="document_storage",
+                percentage=mapped_percentage,
+                log=message,
+                currentUrl=f"file://{filename}",
+                **(batch_info or {})
+            )
 
 
         # Call the service's upload_document method
@@ -616,18 +622,21 @@ async def _perform_upload_with_progress(
 
         if success:
             # Complete the upload with 100% progress
-            final_progress = progress_mapper.map_progress("completed", 100)
-
-            # Also send the completion event with details
-
+            await tracker.complete({
+                "log": "Document uploaded successfully!",
+                "chunks_stored": result.get("chunks_stored"),
+                "sourceId": result.get("source_id"),
+            })
             safe_logfire_info(
                 f"Document uploaded successfully | progress_id={progress_id} | source_id={result.get('source_id')} | chunks_stored={result.get('chunks_stored')}"
             )
         else:
             error_msg = result.get("error", "Unknown error")
+            await tracker.error(error_msg)
 
     except Exception as e:
         error_msg = f"Upload failed: {str(e)}"
+        await tracker.error(error_msg)
         safe_logfire_error(
             f"Document upload failed | progress_id={progress_id} | filename={file_metadata.get('filename', 'unknown')} | error={str(e)}"
         )
