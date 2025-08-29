@@ -44,7 +44,7 @@ export function usePolling<T>(
   const [pollInterval, setPollInterval] = useState(enabled ? interval : 0);
   
   const etagRef = useRef<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cachedDataRef = useRef<T | undefined>(undefined);
   const lastFetchRef = useRef<number>(0);
 
