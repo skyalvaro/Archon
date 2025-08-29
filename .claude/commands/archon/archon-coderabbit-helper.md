@@ -64,3 +64,10 @@ _[HIGH/MEDIUM/LOW/SKIP with reasoning]_
 ### 💡 Recommendation
 
 _[Your recommended option with 1-2 sentence justification]_
+
+## User feedback
+
+- When you have presented the review to the user you must ask for their feedback on the suggested changes.
+- Ask the user if they wish to discuss any of the options further
+- If the user wishes for you to explore further, provide additional options or tradeoffs.
+- If the user is ready to implement the recommended option right away

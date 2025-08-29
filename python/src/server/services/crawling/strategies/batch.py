@@ -127,8 +127,15 @@ class BatchCrawlStrategy:
         async def report_progress(percentage: int, message: str, **kwargs):
             """Helper to report progress if callback is available"""
             if progress_callback:
-                step_info = {"currentStep": message, "stepMessage": message, **kwargs}
-                await progress_callback("crawling", percentage, message, step_info=step_info)
+                # Pass step information as flattened kwargs for consistency
+                await progress_callback(
+                    "crawling", 
+                    percentage, 
+                    message, 
+                    currentStep=message,
+                    stepMessage=message,
+                    **kwargs
+                )
 
         total_urls = len(urls)
         await report_progress(start_progress, f"Starting to crawl {total_urls} URLs...")

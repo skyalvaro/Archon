@@ -13,4 +13,7 @@ export interface CrawlProgressData {
   error?: string;
   result?: any;
   timestamp?: string;
+  // Step information from backend
+  currentStep?: string;
+  stepMessage?: string;
 }

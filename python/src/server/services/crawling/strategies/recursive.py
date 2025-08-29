@@ -133,9 +133,15 @@ class RecursiveCrawlStrategy:
         async def report_progress(percentage: int, message: str, **kwargs):
             """Helper to report progress if callback is available"""
             if progress_callback:
-                # Add step information for multi-progress tracking
-                step_info = {"currentStep": message, "stepMessage": message, **kwargs}
-                await progress_callback("crawling", percentage, message, **step_info)
+                # Pass step information as flattened kwargs for consistency
+                await progress_callback(
+                    "crawling", 
+                    percentage, 
+                    message, 
+                    currentStep=message,
+                    stepMessage=message,
+                    **kwargs
+                )
 
         visited = set()
 
