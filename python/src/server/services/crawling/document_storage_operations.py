@@ -9,11 +9,13 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from ...config.logfire_config import safe_logfire_error, safe_logfire_info
+from ...config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
 from ..source_management_service import extract_source_summary, update_source_info
 from ..storage.document_storage_service import add_documents_to_supabase
 from ..storage.storage_services import DocumentStorageService
 from .code_extraction_service import CodeExtractionService
+
+logger = get_logger(__name__)
 
 
 class DocumentStorageOperations:
@@ -232,6 +234,7 @@ class DocumentStorageOperations:
                 # Call async extract_source_summary directly
                 summary = await extract_source_summary(source_id, combined_content)
             except Exception as e:
+                logger.error(f"Failed to generate AI summary for '{source_id}'", exc_info=True)
                 safe_logfire_error(
                     f"Failed to generate AI summary for '{source_id}': {str(e)}, using fallback"
                 )
@@ -259,6 +262,7 @@ class DocumentStorageOperations:
                 )
                 safe_logfire_info(f"Successfully created/updated source record for '{source_id}'")
             except Exception as e:
+                logger.error(f"Failed to create/update source record for '{source_id}'", exc_info=True)
                 safe_logfire_error(
                     f"Failed to create/update source record for '{source_id}': {str(e)}"
                 )
@@ -288,6 +292,7 @@ class DocumentStorageOperations:
                     self.supabase_client.table("archon_sources").upsert(fallback_data).execute()
                     safe_logfire_info(f"Fallback source creation succeeded for '{source_id}'")
                 except Exception as fallback_error:
+                    logger.error(f"Both source creation attempts failed for '{source_id}'", exc_info=True)
                     safe_logfire_error(
                         f"Both source creation attempts failed for '{source_id}': {str(fallback_error)}"
                     )
@@ -311,6 +316,7 @@ class DocumentStorageOperations:
                         )
                     safe_logfire_info(f"Source record verified for '{source_id}'")
                 except Exception as e:
+                    logger.error(f"Source verification failed for '{source_id}'", exc_info=True)
                     safe_logfire_error(f"Source verification failed for '{source_id}': {str(e)}")
                     raise
 
