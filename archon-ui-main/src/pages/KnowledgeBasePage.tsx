@@ -1041,8 +1041,8 @@ export const KnowledgeBasePage = () => {
                 ) : (
                   // Original layout when no progress items or in list view
                   <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'grid-cols-1 gap-3'}`}>
-                    {/* Progress Items (only in list view) */}
-                    {viewMode === 'list' && progressItems.map(progressData => (
+                    {/* Progress Items (only in table view) */}
+                    {viewMode === 'table' && progressItems.map(progressData => (
                       <motion.div key={progressData.progressId} variants={contentItemVariants}>
                         <CrawlingProgressCard 
                           progressData={progressData}
