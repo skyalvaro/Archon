@@ -89,6 +89,8 @@ class TestProjectsListPolling:
             
             assert result2 is None  # No content for 304
             assert response2.status_code == 304
+            assert response2.headers["ETag"] == etag
+            assert response2.headers["Cache-Control"] == "no-cache, must-revalidate"
 
     @pytest.mark.asyncio
     async def test_list_projects_etag_changes_with_data(self):
