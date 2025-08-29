@@ -69,8 +69,8 @@ DELETE /api/projects/{project_id}/docs/{doc_id} - Delete document
 
 ### Progress/Polling Endpoints
 ```
-GET /api/progress/crawl                   - Crawling progress
-GET /api/progress/project-creation        - Project creation progress
+GET /api/progress/{operation_id}          - Generic operation progress
+GET /api/knowledge/crawl-progress/{id}    - Crawling progress
 GET /api/agent-chat/sessions/{id}/messages - Chat messages
 ```
 
@@ -133,36 +133,31 @@ Update[Feature]Request  // e.g., UpdateTaskRequest
 
 ### Formatting/Transformation
 - `format[Feature]` - Format for display (e.g., `formatTask`)
-- `map[From]To[To]` - Transform between types (removed - use direct values)
 - `validate[Feature]` - Validate data (e.g., `validateUpdateTask`)
 
-## Common Anti-patterns to Avoid
-
-### ❌ Don't Use
-- `getTasks()` - Too generic, specify scope
-- `uiStatus` / `dbStatus` - Use single `status` field
-- Mapping functions between UI and DB values
-- Socket event handlers (use polling instead)
-- Nested callbacks without async/await
+## Best Practices
 
 ### ✅ Do Use
-- `getTasksByProject(projectId)` - Clear scope
-- `status` - Single source of truth
-- Direct database values everywhere
-- Polling with `usePolling` hook
-- Async/await with try/catch
+- `getTasksByProject(projectId)` - Clear scope with context
+- `status` - Single source of truth from database
+- Direct database values everywhere (no mapping)
+- Polling with `usePolling` hook for data fetching
+- Async/await with proper error handling
+- Optimistic updates for better UX
+- ETag headers for efficient polling
 
-## Migration Notes
+## Current Architecture Patterns
 
-### Removed Patterns
-- Socket.IO event handlers (`handle[Event]Socket`)
-- Status mapping utilities (`mapUIStatusToDBStatus`)
-- WebSocket services (`socketService`, `taskSocketService`)
-- Real-time event subscriptions
+### Polling & Data Fetching
+- HTTP polling with `usePolling` and `useProgressPolling` hooks
+- ETag-based caching for bandwidth efficiency
+- Optimistic UI updates with rollback on error
+- Loading state indicators (`isLoading`, `isSwitchingProject`)
+- Error toast notifications for user feedback
+- Manual refresh triggers via `refetch()`
 
-### New Patterns
-- HTTP polling with ETags
-- Optimistic UI updates
-- Loading state indicators
-- Error toast notifications
-- Manual refresh triggers
+### Service Architecture
+- Specialized services for different domains (`projectService`, `crawlProgressService`)
+- Direct database value usage (no UI/DB mapping)
+- Promise-based async operations
+- Typed request/response interfaces
