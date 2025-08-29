@@ -587,6 +587,7 @@ async def _perform_upload_with_progress(
                 f"Document text extracted | filename={filename} | extracted_length={len(extracted_text)} | content_type={content_type}"
             )
         except Exception as ex:
+            logger.error(f"Failed to extract text from document: {filename}", exc_info=True)
             await tracker.error(f"Failed to extract text from document: {str(ex)}")
             return
 
