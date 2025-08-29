@@ -548,10 +548,6 @@ async def _perform_upload_with_progress(
     tracker: "ProgressTracker",
 ):
     """Perform document upload with progress tracking using service layer."""
-    # Add a small delay to allow frontend WebSocket subscription to be established
-    # This prevents the "Room has 0 subscribers" issue
-    await asyncio.sleep(1.0)
-
     # Create cancellation check function for document uploads
     def check_upload_cancellation():
         """Check if upload task has been cancelled."""
@@ -794,9 +790,6 @@ async def delete_source(source_id: str):
     except Exception as e:
         safe_logfire_error(f"Failed to delete source | error={str(e)} | source_id={source_id}")
         raise HTTPException(status_code=500, detail={"error": str(e)})
-
-
-# WebSocket Endpoints
 
 
 @router.get("/database/metrics")
