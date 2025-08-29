@@ -521,10 +521,12 @@ export const KnowledgeBasePage = () => {
   };
 
   const handleProgressUpdate = (data: CrawlProgressData) => {
-    // Update progress item with new data - use Map to ensure uniqueness
+    // Update progress item with new data - merge to preserve original params
     setProgressItems(prev => {
       const itemMap = new Map(prev.map(item => [item.progressId, item]));
-      itemMap.set(data.progressId, data);
+      const existingItem = itemMap.get(data.progressId);
+      // Merge existing item with new data to preserve originalCrawlParams/originalUploadParams
+      itemMap.set(data.progressId, existingItem ? { ...existingItem, ...data } : data);
       return Array.from(itemMap.values());
     });
     
