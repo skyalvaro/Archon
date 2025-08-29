@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronDown, 
@@ -23,6 +23,7 @@ import { Button } from '../ui/Button';
 import { CrawlProgressData } from '../../types/crawl';
 import { useTerminalScroll } from '../../hooks/useTerminalScroll';
 import { knowledgeBaseService } from '../../services/knowledgeBaseService';
+import { useCrawlProgressPolling } from '../../hooks/usePolling';
 
 interface CrawlingProgressCardProps {
   progressData: CrawlProgressData;
@@ -44,7 +45,10 @@ interface ProgressStep {
 }
 
 export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
-  progressData,
+  progressData: initialProgressData,
+  onComplete,
+  onError,
+  onProgress,
   onRetry,
   onDismiss,
   onStop
@@ -52,6 +56,48 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
   const [showDetailedProgress, setShowDetailedProgress] = useState(true);
   const [showLogs, setShowLogs] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [localProgressData, setLocalProgressData] = useState<CrawlProgressData>(initialProgressData);
+  
+  // Poll for progress updates for this specific card
+  const { data: polledProgress } = useCrawlProgressPolling(
+    localProgressData.status !== 'completed' && 
+    localProgressData.status !== 'error' && 
+    localProgressData.status !== 'cancelled' ? 
+    localProgressData.progressId : null
+  );
+  
+  // Update local progress data when polling returns new data
+  useEffect(() => {
+    if (polledProgress && polledProgress.progressId === localProgressData.progressId) {
+      console.log(`📊 Card ${localProgressData.progressId}: Progress update`, {
+        status: polledProgress.status,
+        progress: polledProgress.progress
+      });
+      
+      // Merge the polled data with existing data
+      setLocalProgressData(prev => ({
+        ...prev,
+        ...polledProgress
+      }));
+      
+      // Call onProgress callback if provided
+      if (onProgress) {
+        onProgress({ ...localProgressData, ...polledProgress });
+      }
+      
+      // Handle completion
+      if (polledProgress.status === 'completed' && onComplete) {
+        console.log(`✅ Card ${localProgressData.progressId}: Crawl completed`);
+        onComplete({ ...localProgressData, ...polledProgress });
+      } else if ((polledProgress.status === 'error' || polledProgress.status === 'failed') && onError) {
+        console.log(`❌ Card ${localProgressData.progressId}: Crawl failed`);
+        onError(polledProgress.error || 'Unknown error');
+      }
+    }
+  }, [polledProgress, localProgressData.progressId, onComplete, onError, onProgress]);
+  
+  // Use local progress data for display
+  const progressData = localProgressData;
   
   // Use the terminal scroll hook for auto-scrolling logs
   const logsContainerRef = useTerminalScroll([progressData.logs], showLogs);
