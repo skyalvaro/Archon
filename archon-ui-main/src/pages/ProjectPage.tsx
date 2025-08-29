@@ -261,7 +261,7 @@ function ProjectPage({
 
   const createProjectMutation = useDatabaseMutation(
     async (projectData: CreateProjectRequest) => {
-      return await projectService.createProjectWithStreaming(projectData);
+      return await projectService.createProject(projectData);
     },
     {
       successMessage: "Creating project...",

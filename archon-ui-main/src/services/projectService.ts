@@ -210,9 +210,9 @@ export const projectService = {
   },
 
   /**
-   * Create a new project with streaming progress
+   * Create a new project
    */
-  async createProjectWithStreaming(projectData: CreateProjectRequest): Promise<{ progress_id: string; status: string; message: string }> {
+  async createProject(projectData: CreateProjectRequest): Promise<{ project_id: string; project: any; status: string; message: string }> {
     // Validate input
     console.log('[PROJECT SERVICE] Validating project data:', projectData);
     const validation = validateCreateProject(projectData);
@@ -224,7 +224,7 @@ export const projectService = {
 
     try {
       console.log('[PROJECT SERVICE] Sending project creation request:', validation.data);
-      const response = await callAPI<{ progress_id: string; status: string; message: string }>('/api/projects', {
+      const response = await callAPI<{ project_id: string; project: any; status: string; message: string }>('/api/projects', {
         method: 'POST',
         body: JSON.stringify(validation.data)
       });

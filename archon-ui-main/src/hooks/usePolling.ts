@@ -223,29 +223,6 @@ export function useProjectPolling(options?: UsePollingOptions<any>) {
   });
 }
 
-/**
- * Hook for polling progress updates
- */
-export function useProgressPolling(operationId: string | null, options?: UsePollingOptions<any>) {
-  const url = operationId ? `/api/progress/${operationId}` : '';
-  
-  const result = usePolling(url, {
-    interval: 1000, // 1 second for progress updates
-    enabled: !!operationId,
-    staleTime: 0, // Always refetch progress
-    ...options,
-  });
-
-  // Stop polling when operation is complete or failed
-  useEffect(() => {
-    if (result.data?.status === 'completed' || result.data?.status === 'failed') {
-      // Data indicates completion, no need to continue polling
-      // This will be handled by the enabled flag in next render
-    }
-  }, [result.data?.status]);
-
-  return result;
-}
 
 /**
  * Hook for polling crawl progress updates

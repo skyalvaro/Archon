@@ -18,7 +18,6 @@ import { KnowledgeItemCard } from '../components/knowledge-base/KnowledgeItemCar
 import { GroupedKnowledgeItemCard } from '../components/knowledge-base/GroupedKnowledgeItemCard';
 import { KnowledgeGridSkeleton, KnowledgeTableSkeleton } from '../components/knowledge-base/KnowledgeItemSkeleton';
 import { GroupCreationModal } from '../components/knowledge-base/GroupCreationModal';
-import { useProgressPolling } from '../hooks/usePolling';
 
 const extractDomain = (url: string): string => {
   try {
