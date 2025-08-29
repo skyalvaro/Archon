@@ -70,7 +70,7 @@ logs/
 *.ipynb
 
 .pytest_cache
-.myp_cache
+.mypy_cache
 .my_cache
 .ruff_cache
 .ruff
