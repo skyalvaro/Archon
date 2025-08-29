@@ -471,13 +471,6 @@ export const KnowledgeBasePage = () => {
         // Remove the item temporarily while it's being refreshed
         setKnowledgeItems(prev => prev.filter(k => k.source_id !== sourceId));
         
-        // Add new progress item for tracking
-        setProgressItems(prev => [...prev, {
-          progressId: response.progressId,
-          status: 'starting',
-          message: 'Starting crawl operation...'
-        }]);
-        
         // Start polling for this progress ID
         setActiveProgressId(response.progressId);
         
@@ -756,7 +749,7 @@ export const KnowledgeBasePage = () => {
       // Update UI state
       setProgressItems(prev => prev.map(item => 
         item.progressId === progressId 
-          ? { ...item, status: 'cancelled', progress: -1 }
+          ? { ...item, status: 'cancelled', progress: item.progress ?? 0 }
           : item
       ));
       
