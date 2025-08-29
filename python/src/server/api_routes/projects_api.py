@@ -8,9 +8,7 @@ Handles:
 - HTTP polling for progress updates
 """
 
-import asyncio
 import json
-import secrets
 from datetime import datetime
 from typing import Any
 
@@ -32,7 +30,6 @@ from ..services.projects import (
     ProjectService,
     SourceLinkingService,
     TaskService,
-    progress_service,
 )
 from ..services.projects.document_service import DocumentService
 from ..services.projects.versioning_service import VersioningService
@@ -175,42 +172,6 @@ async def create_project(request: CreateProjectRequest):
             f"Creating new project | title={request.title} | github_repo={request.github_repo}"
         )
 
-        # Generate unique progress ID for this creation
-        progress_id = secrets.token_hex(16)
-
-        # Start tracking creation progress
-        progress_service.start_operation(
-            progress_id,
-            "project_creation",
-            {
-                "title": request.title,
-                "description": request.description or "",
-                "github_repo": request.github_repo,
-            },
-        )
-
-        # Start background task to create the project with AI assistance
-        asyncio.create_task(_create_project_with_ai(progress_id, request))
-
-        logfire.info(
-            f"Project creation started | progress_id={progress_id} | title={request.title}"
-        )
-
-        # Return progress_id immediately so frontend can poll for progress
-        return {
-            "progress_id": progress_id,
-            "status": "started",
-            "message": "Project creation started. Poll /api/progress/{progress_id} for updates.",
-        }
-
-    except Exception as e:
-        logfire.error(f"Failed to start project creation | error={str(e)} | title={request.title}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
-
-
-async def _create_project_with_ai(progress_id: str, request: CreateProjectRequest):
-    """Background task to create project with AI assistance using ProjectCreationService."""
-    try:
         # Prepare kwargs for additional project fields
         kwargs = {}
         if request.pinned is not None:
@@ -220,10 +181,10 @@ async def _create_project_with_ai(progress_id: str, request: CreateProjectReques
         if request.data:
             kwargs["data"] = request.data
 
-        # Use ProjectCreationService to handle the entire workflow
-        creation_service = ProjectCreationService()
-        success, result = await creation_service.create_project_with_ai(
-            progress_id=progress_id,
+        # Create project directly with AI assistance
+        project_service = ProjectCreationService()
+        success, result = await project_service.create_project_with_ai(
+            progress_id="direct",  # No progress tracking needed
             title=request.title,
             description=request.description,
             github_repo=request.github_repo,
@@ -231,22 +192,21 @@ async def _create_project_with_ai(progress_id: str, request: CreateProjectReques
         )
 
         if success:
-            # Broadcast project list update
-            await broadcast_project_update()
-
-            # Complete the operation
-            await progress_service.complete_operation(
-                progress_id, {"project_id": result["project_id"]}
-            )
+            logfire.info(f"Project created successfully | project_id={result['project_id']}")
+            return {
+                "project_id": result["project_id"],
+                "project": result.get("project"),
+                "status": "completed",
+                "message": f"Project '{request.title}' created successfully",
+            }
         else:
-            # Error occurred
-            await progress_service.error_operation(
-                progress_id, result.get("error", "Unknown error")
-            )
+            raise HTTPException(status_code=500, detail=result)
 
     except Exception as e:
-        logfire.error(f"Project creation failed: {str(e)}")
-        await progress_service.error_operation(progress_id, str(e))
+        logfire.error(f"Failed to start project creation | error={str(e)} | title={request.title}")
+        raise HTTPException(status_code=500, detail={"error": str(e)})
+
+
 
 
 @router.get("/projects/health")

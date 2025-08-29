@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi import status as http_status
 
 from ..config.logfire_config import get_logger, logfire
-from ..services.projects import progress_service
+from ..utils.progress import ProgressTracker
 from ..utils.etag_utils import check_etag, generate_etag
 
 logger = get_logger(__name__)
@@ -29,8 +29,8 @@ async def get_progress(
     try:
         logfire.info(f"Getting progress for operation | operation_id={operation_id}")
 
-        # Get operation progress from service
-        operation = progress_service.get_operation_status(operation_id)
+        # Get operation progress from ProgressTracker
+        operation = ProgressTracker.get_progress_state(operation_id)
 
         if not operation:
             logfire.warning(f"Operation not found | operation_id={operation_id}")
@@ -44,7 +44,7 @@ async def get_progress(
             "operation_id": operation_id,
             "status": operation.get("status", "unknown"),  # "running", "completed", "failed"
             "progress": operation.get("percentage", 0),
-            "message": operation.get("step", "Processing..."),
+            "message": operation.get("log", "Processing..."),
             "metadata": operation,
             "error": operation.get("error") if operation.get("status") == "failed" else None,
             "timestamp": datetime.utcnow().isoformat()
@@ -98,19 +98,18 @@ async def list_active_operations():
     try:
         logfire.info("Listing active operations")
 
-        # Get all active operations from service
+        # Get all active operations from ProgressTracker
         active_operations = []
 
-        # Iterate through operations in progress service
-        # Access active_operations dict directly
-        for op_id, operation in progress_service.active_operations.items():
+        # Get active operations from ProgressTracker
+        for op_id, operation in ProgressTracker._progress_states.items():
             if operation.get("status") in ["starting", "running"]:
                 active_operations.append({
                     "operation_id": op_id,
                     "operation_type": operation.get("type", "unknown"),
                     "status": operation.get("status"),
                     "progress": operation.get("percentage", 0),
-                    "message": operation.get("step", "Processing..."),
+                    "message": operation.get("log", "Processing..."),
                     "started_at": operation.get("start_time", datetime.utcnow()).isoformat() if operation.get("start_time") else None
                 })
 
