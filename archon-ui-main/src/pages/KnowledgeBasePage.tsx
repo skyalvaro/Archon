@@ -451,13 +451,6 @@ export const KnowledgeBasePage = () => {
   const handleProgressComplete = (data: CrawlProgressData) => {
     console.log('Crawl completed:', data);
     
-    // Remove from progress items after completion - use Map for consistency
-    setProgressItems(prev => {
-      const itemMap = new Map(prev.map(item => [item.progressId, item]));
-      itemMap.delete(data.progressId);
-      return Array.from(itemMap.values());
-    });
-    
     // Clean up from localStorage immediately
     try {
       localStorage.removeItem(`crawl_progress_${data.progressId}`);
@@ -467,8 +460,6 @@ export const KnowledgeBasePage = () => {
     } catch (error) {
       console.error('Failed to clean up completed crawl:', error);
     }
-    
-    // Polling stops automatically when component unmounts or progressId changes
     
     // Show success toast
     const message = data.uploadType === 'document' 
@@ -489,11 +480,18 @@ export const KnowledgeBasePage = () => {
   };
 
   const handleProgressError = (error: string, progressId?: string) => {
-    // Remove from progress items on error - use Map for consistency
+    // Update progress item to show failed status with error message
     if (progressId) {
       setProgressItems(prev => {
         const itemMap = new Map(prev.map(item => [item.progressId, item]));
-        itemMap.delete(progressId);
+        const existingItem = itemMap.get(progressId);
+        if (existingItem) {
+          itemMap.set(progressId, {
+            ...existingItem,
+            status: 'failed',
+            error: error
+          });
+        }
         return Array.from(itemMap.values());
       });
     }
@@ -511,9 +509,7 @@ export const KnowledgeBasePage = () => {
         console.error('Failed to clean up failed crawl:', error);
       }
       
-      // Polling stops automatically when component unmounts or progressId changes
-      
-      // Auto-remove failed progress items after 5 seconds to prevent UI clutter
+      // Auto-remove failed progress items after 5 seconds to give users time to see the error
       setTimeout(() => {
         setProgressItems(prev => {
           const itemMap = new Map(prev.map(item => [item.progressId, item]));
@@ -564,10 +560,18 @@ export const KnowledgeBasePage = () => {
     }
 
     try {
-      // Remove the failed progress item - use Map for consistency
+      // Update the progress item to show it's being retried
       setProgressItems(prev => {
         const itemMap = new Map(prev.map(item => [item.progressId, item]));
-        itemMap.delete(progressId);
+        const existingItem = itemMap.get(progressId);
+        if (existingItem) {
+          itemMap.set(progressId, {
+            ...existingItem,
+            status: 'starting',
+            error: undefined,
+            message: 'Retrying...'
+          });
+        }
         return Array.from(itemMap.values());
       });
       
