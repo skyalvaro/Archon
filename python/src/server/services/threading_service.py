@@ -2,7 +2,7 @@
 Threading Service for Archon
 
 This service provides comprehensive threading patterns for high-performance AI operations
-while maintaining WebSocket connection health and system stability.
+with adaptive resource management and rate limiting.
 
 Based on proven patterns from crawl4ai_mcp.py architecture.
 """
@@ -22,7 +22,6 @@ from enum import Enum
 from typing import Any
 
 import psutil
-from fastapi import WebSocket
 
 from ..config.logfire_config import get_logger
 
@@ -36,7 +35,6 @@ class ProcessingMode(str, Enum):
     CPU_INTENSIVE = "cpu_intensive"  # AI summaries, embeddings, heavy computation
     IO_BOUND = "io_bound"  # Database operations, file I/O
     NETWORK_BOUND = "network_bound"  # External API calls, web requests
-    WEBSOCKET_SAFE = "websocket_safe"  # Operations that need to yield for WebSocket health
 
 
 @dataclass
@@ -70,7 +68,7 @@ class ThreadingConfig:
     memory_threshold: float = 0.8
     cpu_threshold: float = 0.9
     batch_size: int = 15
-    yield_interval: float = 0.1  # How often to yield for WebSocket health
+    yield_interval: float = 0.1  # How often to yield control to event loop
     health_check_interval: float = 30  # System health check frequency
 
 
@@ -192,8 +190,8 @@ class MemoryAdaptiveDispatcher:
             base = self.config.base_workers * 2
         elif mode == ProcessingMode.NETWORK_BOUND:
             base = self.config.base_workers
-        else:  # WEBSOCKET_SAFE
-            base = max(1, self.config.base_workers // 2)
+        else:
+            base = self.config.base_workers
 
         # Adjust based on system load
         if metrics.memory_percent > self.config.memory_threshold * 100:
@@ -231,7 +229,6 @@ class MemoryAdaptiveDispatcher:
         items: list[Any],
         process_func: Callable,
         mode: ProcessingMode = ProcessingMode.CPU_INTENSIVE,
-        websocket: WebSocket | None = None,
         progress_callback: Callable | None = None,
         enable_worker_tracking: bool = False,
     ) -> list[Any]:
@@ -312,10 +309,6 @@ class MemoryAdaptiveDispatcher:
                             "message": f"Worker {worker_id} completed item {index + 1}",
                         })
 
-                    # WebSocket health check
-                    if websocket and mode == ProcessingMode.WEBSOCKET_SAFE:
-                        if index % 10 == 0:  # Every 10 items
-                            await asyncio.sleep(self.config.yield_interval)
 
                     return result
 
@@ -354,107 +347,6 @@ class MemoryAdaptiveDispatcher:
         return successful_results
 
 
-class WebSocketSafeProcessor:
-    """WebSocket-safe processing with progress updates"""
-
-    def __init__(self, config: ThreadingConfig):
-        self.config = config
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        """Connect WebSocket client"""
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logfire_logger.info(
-            "WebSocket client connected",
-            extra={"total_connections": len(self.active_connections)}
-        )
-
-    def disconnect(self, websocket: WebSocket):
-        """Disconnect WebSocket client"""
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logfire_logger.info(
-                "WebSocket client disconnected",
-                extra={"remaining_connections": len(self.active_connections)}
-            )
-
-    async def broadcast_progress(self, message: dict[str, Any]):
-        """Broadcast progress to all connected clients"""
-        if not self.active_connections:
-            return
-
-        # Send to all clients concurrently
-        tasks = []
-        for connection in self.active_connections.copy():
-            try:
-                task = connection.send_json(message)
-                tasks.append(task)
-            except Exception:
-                self.disconnect(connection)
-
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def process_with_progress(
-        self,
-        items: list[Any],
-        process_func: Callable,
-        operation_name: str = "processing",
-        batch_size: int | None = None,
-    ) -> list[Any]:
-        """Process items with WebSocket progress updates"""
-
-        if not items:
-            return []
-
-        batch_size = batch_size or self.config.batch_size
-        total_items = len(items)
-        results = []
-
-        for batch_start in range(0, total_items, batch_size):
-            batch_end = min(batch_start + batch_size, total_items)
-            batch = items[batch_start:batch_end]
-
-            # Process batch
-            for i, item in enumerate(batch):
-                if asyncio.iscoroutinefunction(process_func):
-                    result = await process_func(item)
-                else:
-                    # Run in thread pool for CPU-intensive work
-                    loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, process_func, item)
-
-                results.append(result)
-
-                # Calculate progress
-                items_processed = batch_start + i + 1
-                progress = (items_processed / total_items) * 100
-
-                # Broadcast progress
-                await self.broadcast_progress({
-                    "type": "progress",
-                    "operation": operation_name,
-                    "progress": progress,
-                    "processed": items_processed,
-                    "total": total_items,
-                    "batch": f"Batch {batch_start // batch_size + 1}",
-                    "current_item": str(getattr(item, "id", i)),
-                })
-
-                # Yield control for WebSocket health
-                await asyncio.sleep(self.config.yield_interval)
-
-        # Final completion message
-        await self.broadcast_progress({
-            "type": "complete",
-            "operation": operation_name,
-            "total_processed": len(results),
-            "success_rate": f"{len(results) / total_items * 100:.1f}%",
-        })
-
-        return results
-
 
 class ThreadingService:
     """Main threading service that coordinates all threading operations"""
@@ -467,7 +359,6 @@ class ThreadingService:
         self.config = threading_config or ThreadingConfig()
         self.rate_limiter = RateLimiter(rate_limit_config or RateLimitConfig())
         self.memory_dispatcher = MemoryAdaptiveDispatcher(self.config)
-        self.websocket_processor = WebSocketSafeProcessor(self.config)
 
         # Thread pools for different workload types
         self.cpu_executor = ThreadPoolExecutor(
@@ -542,7 +433,6 @@ class ThreadingService:
         items: list[Any],
         process_func: Callable,
         mode: ProcessingMode = ProcessingMode.CPU_INTENSIVE,
-        websocket: WebSocket | None = None,
         progress_callback: Callable | None = None,
         enable_worker_tracking: bool = False,
     ) -> list[Any]:
@@ -551,18 +441,10 @@ class ThreadingService:
             items=items,
             process_func=process_func,
             mode=mode,
-            websocket=websocket,
             progress_callback=progress_callback,
             enable_worker_tracking=enable_worker_tracking,
         )
 
-    async def websocket_safe_process(
-        self, items: list[Any], process_func: Callable, operation_name: str = "processing"
-    ) -> list[Any]:
-        """Process items with WebSocket safety guarantees"""
-        return await self.websocket_processor.process_with_progress(
-            items=items, process_func=process_func, operation_name=operation_name
-        )
 
     def get_system_metrics(self) -> SystemMetrics:
         """Get current system performance metrics"""
@@ -582,7 +464,6 @@ class ThreadingService:
                         "cpu_percent": metrics.cpu_percent,
                         "available_memory_gb": metrics.available_memory_gb,
                         "active_threads": metrics.active_threads,
-                        "active_websockets": len(self.websocket_processor.active_connections),
                     }
                 )
 
