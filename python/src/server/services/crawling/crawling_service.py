@@ -467,14 +467,18 @@ class CrawlingService:
                 )
         except Exception as e:
             safe_logfire_error(f"Async crawl orchestration failed | error={str(e)}")
+            error_message = f"Crawl failed: {str(e)}"
             await self._handle_progress_update(
                 task_id, {
                     "status": "error", 
                     "percentage": -1, 
-                    "log": f"Crawl failed: {str(e)}",
+                    "log": error_message,
                     "error": str(e)
                 }
             )
+            # Mark error in progress tracker with standardized schema
+            if self.progress_tracker:
+                await self.progress_tracker.error(error_message)
             # Unregister on error
             if self.progress_id:
                 unregister_orchestration(self.progress_id)
