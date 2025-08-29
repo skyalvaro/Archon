@@ -471,6 +471,8 @@ class CrawlingService:
                     f"Unregistered orchestration service on cancellation | progress_id={self.progress_id}"
                 )
         except Exception as e:
+            # Log full stack trace for debugging
+            logger.error("Async crawl orchestration failed", exc_info=True)
             safe_logfire_error(f"Async crawl orchestration failed | error={str(e)}")
             error_message = f"Crawl failed: {str(e)}"
             await self._handle_progress_update(
