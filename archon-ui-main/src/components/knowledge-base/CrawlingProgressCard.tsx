@@ -94,7 +94,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
         onError(polledProgress.error || 'Unknown error');
       }
     }
-  }, [polledProgress, localProgressData.progressId, onComplete, onError, onProgress]);
+  }, [polledProgress]); // Only depend on polledProgress changes
   
   // Use local progress data for display
   const progressData = localProgressData;
