@@ -45,7 +45,7 @@ export const MCPPage = () => {
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [selectedIDE, setSelectedIDE] = useState<SupportedIDE>('windsurf');
-  const statusPollInterval = useRef<NodeJS.Timeout | null>(null);
+  const statusPollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const { showToast } = useToast();
 
   // Tab state for switching between Server Control and Clients
@@ -426,7 +426,7 @@ export const MCPPage = () => {
                 <div className="flex items-center justify-between">
                   <div 
                     className="flex items-center gap-3 cursor-help" 
-                    title={process.env.NODE_ENV === 'development' ? 
+                    title={import.meta.env.DEV ? 
                       `Debug Info:\nStatus: ${serverStatus.status}\nConfig: ${config ? 'loaded' : 'null'}\n${config ? `Details: ${JSON.stringify(config, null, 2)}` : ''}` : 
                       undefined
                     }
