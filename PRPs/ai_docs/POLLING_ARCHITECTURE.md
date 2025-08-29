@@ -25,30 +25,21 @@ const { data, isLoading, error, refetch } = usePolling({
 });
 ```
 
-### 2. Polling Service (`archon-ui-main/src/services/pollingService.ts`)
-Centralized service managing all polling operations across the application.
+### 2. Specialized Progress Services
+Individual services handle specific progress tracking needs:
 
-**Responsibilities:**
-- Coordinates multiple polling endpoints
-- Prevents duplicate requests
-- Manages polling lifecycle (start/stop/pause)
-- Implements request deduplication via cache keys
+**CrawlProgressService (`archon-ui-main/src/services/crawlProgressService.ts`)**
+- Tracks website crawling operations
+- Maps backend status to UI-friendly format
+- Includes in-flight request guard to prevent overlapping fetches
+- 1-second polling interval during active crawls
 
 **Polling Endpoints:**
 - `/api/projects` - Project list updates
 - `/api/projects/{id}/tasks` - Task list for active project
-- `/api/progress/crawl` - Website crawling progress
-- `/api/progress/project-creation` - Project creation progress
+- `/api/knowledge/crawl-progress/{id}` - Website crawling progress
+- `/api/progress/{id}` - Generic operation progress
 - `/api/agent-chat/sessions/{id}/messages` - Chat messages
-
-### 3. Progress Service (`archon-ui-main/src/services/progressService.ts`)
-Specialized service for tracking long-running operations.
-
-**Features:**
-- Separate polling for progress tracking
-- Higher frequency updates during active operations (1-2 seconds)
-- Automatic cleanup on completion
-- Progress percentage calculation
 
 ## Backend Support
 
@@ -63,8 +54,8 @@ Server-side optimization to reduce unnecessary data transfer.
 
 ### Progress API (`python/src/server/api_routes/progress_api.py`)
 Dedicated endpoints for progress tracking:
-- `GET /api/progress/crawl` - Returns crawling status and logs
-- `GET /api/progress/project-creation` - Returns project creation status
+- `GET /api/progress/{operation_id}` - Returns operation status with ETag support
+- `GET /api/knowledge/crawl-progress/{progress_id}` - Returns crawling status
 - Includes completion percentage, current step, and error details
 
 ## State Management
@@ -129,20 +120,15 @@ Only polls active/relevant data:
 - Progress polls only during active operations
 - Chat polls only for open sessions
 
-## Migration from Socket.IO
+## Architecture Benefits
 
-### What Changed
-- **Removed:** `socketIOService.ts`, `socketService.ts`, `taskSocketService.ts`
-- **Removed:** Socket event handlers (`handleTaskUpdated`, `handleTaskCreated`, etc.)
-- **Added:** Polling hooks and services
-- **Added:** ETag caching and progress endpoints
-
-### Benefits
-- **Simpler architecture** - No persistent connections to manage
-- **Better error recovery** - HTTP requests auto-retry
-- **Reduced complexity** - ~2,700 lines of code removed
-- **Easier debugging** - Standard HTTP requests in DevTools
-- **Better scaling** - No WebSocket connection limits
+### What We Have
+- **Simple HTTP polling** - Standard request/response pattern
+- **Automatic error recovery** - Built-in retry with exponential backoff
+- **ETag caching** - 70% bandwidth reduction via 304 responses
+- **Easy debugging** - Standard HTTP requests visible in DevTools
+- **No connection limits** - Scales with standard HTTP infrastructure
+- **Consolidated polling hooks** - Single pattern for all data fetching
 
 ### Trade-offs
 - **Latency:** 1-5 second delay vs instant updates
@@ -153,15 +139,14 @@ Only polls active/relevant data:
 
 ### Adding New Polling Endpoint
 
-1. **Frontend - Add to polling service:**
+1. **Frontend - Use the usePolling hook:**
 ```typescript
-// In pollingService.ts
-export const pollNewData = (params) => {
-  return pollEndpoint('/api/new-endpoint', params, {
-    interval: 5000,
-    enabled: true
-  });
-};
+// In your component or custom hook
+const { data, isLoading, error, refetch } = usePolling('/api/new-endpoint', {
+  interval: 5000,
+  enabled: true,
+  staleTime: 2000
+});
 ```
 
 2. **Backend - Add ETag support:**
@@ -182,12 +167,14 @@ async def get_data(request: Request):
     )
 ```
 
-3. **Use in component:**
+3. **For progress tracking, use useProgressPolling:**
 ```typescript
-const { data, refetch } = usePolling({
-  queryKey: ['new-data'],
-  queryFn: () => pollNewData(params),
-  interval: 5000
+const { data, isLoading } = useProgressPolling(operationId, {
+  onSuccess: (data) => {
+    if (data.status === 'completed') {
+      // Handle completion
+    }
+  }
 });
 ```
 
