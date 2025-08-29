@@ -60,22 +60,6 @@ Dedicated endpoints for progress tracking:
 
 ## State Management
 
-### Optimistic Updates
-For better UX, UI updates optimistically before server confirmation:
-
-```typescript
-// 1. Update UI immediately
-setTasks(prev => prev.map(task => 
-  task.id === taskId ? { ...task, status: newStatus } : task
-));
-
-// 2. Send to server
-await projectService.updateTask(taskId, { status: newStatus });
-
-// 3. Refresh to ensure consistency
-await onRefresh();
-```
-
 ### Loading States
 Visual feedback during operations:
 - `movingTaskIds: Set<string>` - Tracks tasks being moved
@@ -181,10 +165,10 @@ const { data, isLoading } = useProgressPolling(operationId, {
 ### Best Practices
 
 1. **Always provide loading states** - Users should know when data is updating
-2. **Use optimistic updates** - Update UI immediately, sync with server after
-3. **Handle errors gracefully** - Show toast, offer retry, fall back to cached data
-4. **Respect polling intervals** - Don't poll faster than necessary
-5. **Clean up on unmount** - Cancel pending requests when components unmount
+2. **Handle errors gracefully** - Show toast notifications with clear messages
+3. **Respect polling intervals** - Don't poll faster than necessary
+4. **Clean up on unmount** - Cancel pending requests when components unmount
+5. **Use ETag caching** - Reduce bandwidth with 304 responses
 
 ## Testing Polling Behavior
 

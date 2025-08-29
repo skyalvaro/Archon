@@ -143,18 +143,18 @@ Update[Feature]Request  // e.g., UpdateTaskRequest
 - Direct database values everywhere (no mapping)
 - Polling with `usePolling` hook for data fetching
 - Async/await with proper error handling
-- Optimistic updates for better UX
 - ETag headers for efficient polling
+- Loading indicators during operations
 
 ## Current Architecture Patterns
 
 ### Polling & Data Fetching
 - HTTP polling with `usePolling` and `useProgressPolling` hooks
 - ETag-based caching for bandwidth efficiency
-- Optimistic UI updates with rollback on error
 - Loading state indicators (`isLoading`, `isSwitchingProject`)
 - Error toast notifications for user feedback
 - Manual refresh triggers via `refetch()`
+- Immediate UI updates followed by API calls
 
 ### Service Architecture
 - Specialized services for different domains (`projectService`, `crawlProgressService`)
