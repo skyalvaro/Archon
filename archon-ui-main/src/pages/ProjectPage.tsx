@@ -226,7 +226,9 @@ function ProjectPage({
       return await projectService.deleteProject(projectId);
     },
     {
-      successMessage: "Project deleted successfully",
+      successMessage: projectToDelete 
+        ? `Project "${projectToDelete.title}" deleted successfully`
+        : "Project deleted successfully",
       onSuccess: () => {
         if (selectedProject?.id === projectToDelete?.id) {
           setSelectedProject(null);
@@ -470,35 +472,11 @@ function ProjectPage({
     if (!projectToDelete) return;
 
     try {
-      await projectService.deleteProject(projectToDelete.id);
-
-      // UI will update via polling
-
-      if (selectedProject?.id === projectToDelete.id) {
-        setSelectedProject(null);
-        setShowProjectDetails(false);
-      }
-
-      showToast(
-        `Project "${projectToDelete.title}" deleted successfully`,
-        "success",
-      );
+      await deleteProjectMutation.mutateAsync(projectToDelete.id);
     } catch (error) {
-      console.error("Failed to delete project:", error);
-      showToast("Failed to delete project. Please try again.", "error");
-    } finally {
-      setShowDeleteConfirm(false);
-      setProjectToDelete(null);
+      // Error handling is done by the mutation
     }
-  }, [
-    projectToDelete,
-    selectedProject,
-    setSelectedProject,
-    setShowProjectDetails,
-    showToast,
-    setShowDeleteConfirm,
-    setProjectToDelete,
-  ]);
+  }, [projectToDelete, deleteProjectMutation]);
 
   const cancelDeleteProject = useCallback(() => {
     setShowDeleteConfirm(false);
