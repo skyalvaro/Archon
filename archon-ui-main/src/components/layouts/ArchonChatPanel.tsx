@@ -47,8 +47,8 @@ export const ArchonChatPanel: React.FC<ArchonChatPanelProps> = props => {
       try {
         setConnectionStatus('connecting');
         
-        // Add a small delay to prevent race conditions on page refresh
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Yield to next frame to avoid initialization race conditions
+        await new Promise(resolve => requestAnimationFrame(resolve));
         
         // Create a new chat session
         try {
