@@ -858,7 +858,7 @@ async def stop_crawl_task(progress_id: str):
         from ..services.crawling import get_active_orchestration, unregister_orchestration
 
 
-        safe_logfire_info(f"Emitted crawl:stopping event | progress_id={progress_id}")
+        safe_logfire_info(f"Stop crawl requested | progress_id={progress_id}")
 
         # Step 1: Cancel the orchestration service
         orchestration = get_active_orchestration(progress_id)
