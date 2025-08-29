@@ -16,7 +16,6 @@ class ServerHealthService {
 
   // Settings
   private disconnectScreenEnabled: boolean = true;
-  private disconnectScreenDelay: number = 10000; // 10 seconds
   private maxMissedChecks: number = 2; // Show disconnect after 2 missed checks (60 seconds max with 30s interval)
   private checkInterval: number = HEALTH_CHECK_INTERVAL_MS; // Use constant for health check interval
 
@@ -150,12 +149,11 @@ class ServerHealthService {
 
   getSettings() {
     return {
-      enabled: this.disconnectScreenEnabled,
-      delay: this.disconnectScreenDelay
+      enabled: this.disconnectScreenEnabled
     };
   }
 
-  async updateSettings(settings: { enabled?: boolean; delay?: number }) {
+  async updateSettings(settings: { enabled?: boolean }) {
     if (settings.enabled !== undefined) {
       this.disconnectScreenEnabled = settings.enabled;
       await credentialsService.createCredential({
@@ -165,11 +163,6 @@ class ServerHealthService {
         category: 'features',
         description: 'Enable disconnect screen when server is disconnected'
       });
-    }
-    
-    if (settings.delay !== undefined) {
-      this.disconnectScreenDelay = settings.delay;
-      // You could save this to credentials as well if needed
     }
   }
 }
