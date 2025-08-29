@@ -111,6 +111,10 @@ describe('usePolling Hook - REAL Tests', () => {
       value: 'hidden',
       writable: true
     });
+    Object.defineProperty(document, 'hidden', {
+      value: true,
+      writable: true
+    });
     document.dispatchEvent(new Event('visibilitychange'));
 
     // Advance timers - polling should not occur
@@ -124,6 +128,10 @@ describe('usePolling Hook - REAL Tests', () => {
     // Simulate tab becoming visible again
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',
+      writable: true
+    });
+    Object.defineProperty(document, 'hidden', {
+      value: false,
       writable: true
     });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -143,7 +151,8 @@ describe('usePolling Hook - REAL Tests', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.error).toBe('Network error');
+      expect(result.current.error).toBeInstanceOf(Error);
+      expect(result.current.error?.message).toBe('Network error');
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
