@@ -177,12 +177,11 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
                 value={selectedDomain}
                 onChange={(e) => handleDomainChange(e.target.value)}
                 className="min-w-48"
-              >
-                <option value="all">All Domains</option>
-                {domains?.map(domain => (
-                  <option key={domain} value={domain}>{domain}</option>
-                )) || []}
-              </Select>
+                options={[
+                  { value: 'all', label: 'All Domains' },
+                  ...(domains?.map(domain => ({ value: domain, label: domain })) || [])
+                ]}
+              />
             </div>
             
             <div className="flex items-center text-sm text-gray-500 dark:text-zinc-400">
