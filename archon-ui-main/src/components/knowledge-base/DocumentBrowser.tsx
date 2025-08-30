@@ -179,15 +179,15 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
                 className="min-w-48"
               >
                 <option value="all">All Domains</option>
-                {domains.map(domain => (
+                {domains?.map(domain => (
                   <option key={domain} value={domain}>{domain}</option>
-                ))}
+                )) || []}
               </Select>
             </div>
             
             <div className="flex items-center text-sm text-gray-500 dark:text-zinc-400">
               <Filter className="w-4 h-4 mr-1" />
-              {filteredChunks.length} / {chunks.length} chunks
+              {(filteredChunks || []).length} / {(chunks || []).length} chunks
             </div>
           </div>
         </div>
@@ -213,7 +213,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
           ) : (
             <div className="h-full overflow-y-auto p-6">
               <AnimatePresence>
-                {filteredChunks.length === 0 ? (
+                {(filteredChunks || []).length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -229,7 +229,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
                   </motion.div>
                 ) : (
                   <div className="space-y-4">
-                    {filteredChunks.map((chunk, index) => (
+                    {(filteredChunks || []).map((chunk, index) => (
                       <motion.div
                         key={chunk.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -259,15 +259,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
                           
                           <div className="prose prose-sm dark:prose-invert max-w-none">
                             <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                              {searchQuery ? (
-                                // Highlight search terms
-                                chunk.content.replace(
-                                  new RegExp(`(${searchQuery})`, 'gi'),
-                                  '<mark class="bg-yellow-200 dark:bg-yellow-800">$1</mark>'
-                                )
-                              ) : (
-                                chunk.content
-                              )}
+                              {chunk.content || 'No content available'}
                             </div>
                           </div>
                           
