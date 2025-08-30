@@ -70,8 +70,6 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
    - For cloud Supabase: they recently introduced a new type of service role key but use the legacy one (the longer one).
    - For local Supabase: set SUPABASE_URL to http://host.docker.internal:8000 (unless you have an IP address set up).
 
-   OPTIONAL: If you want to enable the reranking RAG strategy, add " --group server-reranking" to the end of the uv install on line 18 of `python/server/Dockerfile.server`. This will significantly increase the size of the Archon Server container which is why it's off by default.
-
 3. **Database Setup**: In your [Supabase project](https://supabase.com/dashboard) SQL Editor, copy, paste, and execute the contents of `migration/complete_setup.sql`
 
 4. **Start Services** (choose one):

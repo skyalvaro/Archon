@@ -7,6 +7,16 @@ requires-python = ">=3.12"
 # Base dependencies - empty since we're using dependency groups
 dependencies = []
 
+# PyTorch CPU-only index configuration
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# Sources configuration to use CPU-only PyTorch
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
 [dependency-groups]
 # Development dependencies for linting and testing
 dev = [
