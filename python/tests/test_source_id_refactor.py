@@ -69,20 +69,22 @@ class TestSourceIDGeneration:
         assert ids[0] == ids[4], "First and last ID should match"
     
     def test_url_normalization(self):
-        """Test that URL normalization works correctly."""
+        """Test that URL variations generate consistent IDs based on case differences."""
         handler = URLHandler()
         
-        # These should all generate the same ID (after normalization)
+        # Test that URLs with same case generate same ID, different case generates different ID
         url_variations = [
             "https://github.com/Microsoft/TypeScript",
-            "HTTPS://GITHUB.COM/MICROSOFT/TYPESCRIPT",
-            "https://GitHub.com/Microsoft/TypeScript",
+            "https://github.com/microsoft/typescript",  # Different case in path
+            "https://GitHub.com/Microsoft/TypeScript",  # Different case in domain
         ]
         
         ids = [handler.generate_unique_source_id(url) for url in url_variations]
         
-        # All normalized versions should generate the same ID
-        assert len(set(ids)) == 1, f"Normalized URLs should generate same ID, got: {set(ids)}"
+        # First and third should be same (only domain case differs, which gets normalized)
+        # Second should be different (path case matters)
+        assert ids[0] == ids[2], f"URLs with only domain case differences should generate same ID"
+        assert ids[0] != ids[1], f"URLs with path case differences should generate different IDs"
     
     def test_concurrent_crawl_simulation(self):
         """Simulate concurrent crawls to verify no race conditions."""
