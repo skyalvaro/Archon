@@ -108,6 +108,9 @@ async def create_embedding(text: str, provider: str | None = None) -> list[float
                     "No embeddings returned from batch creation", text_preview=text
                 )
         return result.embeddings[0]
+    except EmbeddingAuthenticationError:
+        # Let auth errors bubble so the HTTP layer can return 401
+        raise
     except EmbeddingError:
         # Re-raise our custom exceptions
         raise
@@ -228,35 +231,9 @@ async def create_embeddings_batch(
                                     break  # Success, exit retry loop
 
                                 except openai.AuthenticationError as e:
-                                    # Authentication failure is critical - stop everything
-                                    error_message = str(e)
-                                    # Extract API key prefix if present (e.g., "sk-XXXX" or "ssk-XXXX")
-                                    import re
-                                    key_match = re.search(r'(s+k-[A-Za-z0-9]{4})', error_message)
-                                    api_key_prefix = key_match.group(1) if key_match else None
-                                    
-                                    search_logger.error(
-                                        f"⚠️ AUTHENTICATION FAILED at batch {batch_index}! "
-                                        f"Invalid or expired API key. "
-                                        f"Processed {result.success_count} texts successfully before failure.",
-                                        exc_info=True,
-                                    )
-
-                                    # Add remaining texts as failures
-                                    for text in texts[i:]:
-                                        result.add_failure(
-                                            text,
-                                            EmbeddingAuthenticationError(
-                                                "OpenAI API authentication failed - invalid or expired API key",
-                                                api_key_prefix=api_key_prefix,
-                                            ),
-                                            batch_index,
-                                        )
-
-                                    # Return what we have so far
-                                    span.set_attribute("authentication_failed", True)
-                                    span.set_attribute("partial_success", result.success_count > 0)
-                                    return result
+                                    # Invalid API key - critical error, stop everything
+                                    search_logger.error("Authentication failed: Invalid API key", exc_info=True)
+                                    raise EmbeddingAuthenticationError("Invalid API key") from e
 
                                 except openai.RateLimitError as e:
                                     error_message = str(e)
@@ -300,6 +277,9 @@ async def create_embeddings_batch(
                                         else:
                                             raise  # Will be caught by outer try
 
+                    except EmbeddingAuthenticationError:
+                        # Auth errors must bubble up immediately for HTTP 401
+                        raise
                     except Exception as e:
                         # This batch failed - track failures but continue with next batch
                         search_logger.error(f"Batch {batch_index} failed: {e}", exc_info=True)
@@ -350,6 +330,9 @@ async def create_embeddings_batch(
 
                 return result
 
+        except EmbeddingAuthenticationError:
+            # Auth errors must bubble up immediately for HTTP 401
+            raise
         except Exception as e:
             # Catastrophic failure - return what we have
             span.set_attribute("catastrophic_failure", True)

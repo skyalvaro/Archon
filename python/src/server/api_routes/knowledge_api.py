@@ -11,7 +11,6 @@ This module handles all knowledge base operations including:
 
 import asyncio
 import json
-import re
 import time
 import uuid
 from datetime import datetime
@@ -19,14 +18,22 @@ from datetime import datetime
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ..utils import get_supabase_client
+from ..services.storage import DocumentStorageService
+from ..services.search.rag_service import RAGService
+from ..services.knowledge import KnowledgeItemService, DatabaseMetricsService
+from ..services.crawling import CrawlOrchestrationService
+from ..services.crawler_manager import get_crawler
+
 # Import unified logging
 from ..config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
 from ..services.crawler_manager import get_crawler
-from ..services.crawling import CrawlOrchestrationService
-from ..services.knowledge import DatabaseMetricsService, KnowledgeItemService
 from ..services.search.rag_service import RAGService
 from ..services.storage import DocumentStorageService
 from ..utils import get_supabase_client
+from ..services.embeddings.embedding_exceptions import (
+    EmbeddingAuthenticationError,
+)
 from ..utils.document_processing import extract_text_from_document
 
 # Get logger for this module
@@ -42,45 +49,6 @@ from .socketio_handlers import (
 # Create router
 router = APIRouter(prefix="/api", tags=["knowledge"])
 
-
-def _sanitize_openai_error(error_message: str) -> str:
-    """Sanitize OpenAI API error messages to prevent information disclosure."""
-    # Input validation
-    if not isinstance(error_message, str):
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-    if not error_message.strip():
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-    
-    # Common patterns to sanitize
-    sanitized_patterns = {
-        r'https?://[^\s]+': '[REDACTED_URL]',  # Remove URLs
-        r'sk-[a-zA-Z0-9]{48}': '[REDACTED_KEY]',     # Remove API keys (OpenAI format)
-        r'"[^"]*auth[^"]*"': '[REDACTED_AUTH]',     # Remove auth details
-        r'org-[a-zA-Z0-9]{24}': '[REDACTED_ORG]',   # Remove OpenAI organization IDs
-        r'proj_[a-zA-Z0-9]{10,}': '[REDACTED_PROJ]', # Remove OpenAI project IDs (adjusted length)
-        r'req_[a-zA-Z0-9]{6,}': '[REDACTED_REQ]',   # Remove OpenAI request IDs (adjusted length)
-        r'user-[a-zA-Z0-9]{10,}': '[REDACTED_USER]', # Remove OpenAI user IDs
-        r'sess_[a-zA-Z0-9]{10,}': '[REDACTED_SESS]', # Remove session IDs
-        r'Bearer\s+[^\s]{1,200}': 'Bearer [REDACTED_AUTH_TOKEN]', # Remove bearer tokens (bounded to prevent ReDoS)
-    }
-
-    sanitized = error_message
-    for pattern, replacement in sanitized_patterns.items():
-        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
-
-    # Check for sensitive words after pattern replacement, but exclude our redacted patterns
-    sensitive_words = ['internal', 'server', 'token']
-    # Only check for 'endpoint' if it's not part of our redacted URL pattern
-    if 'endpoint' in sanitized.lower() and '[REDACTED_URL]' not in sanitized:
-        sensitive_words.append('endpoint')
-
-    # Return generic message if still contains sensitive info
-    if any(word in sanitized.lower() for word in sensitive_words):
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-
-    return sanitized
-
-
 # Get Socket.IO instance
 sio = get_socketio_instance()
 
@@ -91,6 +59,12 @@ crawl_semaphore = asyncio.Semaphore(CONCURRENT_CRAWL_LIMIT)
 
 # Track active async crawl tasks for cancellation support
 active_crawl_tasks: dict[str, asyncio.Task] = {}
+
+
+def _sanitize_openai_error(error_message: str) -> str:
+    """Sanitize OpenAI API error messages to prevent information disclosure."""
+    # Simple fallback implementation
+    return "OpenAI API encountered an error. Please verify your API key and quota."
 
 
 # Request Models

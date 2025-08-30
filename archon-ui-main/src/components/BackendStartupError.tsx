@@ -28,12 +28,12 @@ export const BackendStartupError: React.FC = () => {
                   <span className="font-semibold">Check Docker Logs</span>
                 </div>
                 <p className="text-red-100 font-mono text-sm mb-3">
-                  Check the <span className="text-red-400 font-bold">Archon-Server</span> logs in Docker Desktop for detailed error information.
+                  Check the <span className="text-red-400 font-bold">Archon API server</span> container logs in Docker Desktop for detailed error information.
                 </p>
                 <div className="space-y-2 text-xs text-red-300">
                   <p>1. Open Docker Desktop</p>
                   <p>2. Go to Containers tab</p>
-                  <p>3. Click on <span className="text-red-400 font-semibold">Archon-Server</span></p>
+                  <p>3. Look for the Archon server container (typically named <span className="text-red-400 font-semibold">archon-server</span> or similar)</p>
                   <p>4. View the logs for the specific error message</p>
                 </div>
               </div>
@@ -49,11 +49,16 @@ export const BackendStartupError: React.FC = () => {
                   After fixing the issue in your .env file, recreate the Docker containers:
                 </p>
                 <code className="block mt-2 p-2 bg-black/70 rounded text-red-100 font-mono text-sm">
-                  docker compose down && docker compose up -d
+                  docker compose down && docker compose up --build -d
                 </code>
-                <p className="text-red-300 text-xs mt-2">
-                  Note: Use 'down' and 'up', not 'restart' - containers need to be recreated to load new environment variables
-                </p>
+                <div className="text-red-300 text-xs mt-2">
+                  <p>Note:</p>
+                  <p>• Use 'down' and 'up' (not 'restart') so new env vars are picked up.</p>
+                  <p>• If you originally started with a specific profile (backend, frontend, or full),</p>
+                  <p>&nbsp;&nbsp;run the same profile again:</p>
+                  <br />
+                  <code className="bg-black/50 px-1 rounded">docker compose --profile full up --build -d</code>
+                </div>
               </div>
 
               <div className="flex justify-center pt-4">
