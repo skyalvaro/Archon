@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Search, Grid, Plus, Upload, Link as LinkIcon, Brain, Filter, BoxIcon, List, BookOpen, CheckSquare } from 'lucide-react';
+import { Search, Grid, Plus, Upload, Link as LinkIcon, Brain, Filter, BoxIcon, List, BookOpen, CheckSquare, ChevronDown, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -1221,6 +1221,18 @@ const AddKnowledgeModal = ({
   const [loading, setLoading] = useState(false);
   const [crawlDepth, setCrawlDepth] = useState(2);
   const [showDepthTooltip, setShowDepthTooltip] = useState(false);
+  
+  // Advanced domain configuration
+  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+  const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
+  const [excludedDomains, setExcludedDomains] = useState<string[]>([]);
+  const [includePatterns, setIncludePatterns] = useState<string[]>([]);
+  const [excludePatterns, setExcludePatterns] = useState<string[]>([]);
+  const [newAllowedDomain, setNewAllowedDomain] = useState('');
+  const [newExcludedDomain, setNewExcludedDomain] = useState('');
+  const [newIncludePattern, setNewIncludePattern] = useState('');
+  const [newExcludePattern, setNewExcludePattern] = useState('');
+  
   const { showToast } = useToast();
 
   // URL validation function that checks domain existence
@@ -1288,6 +1300,39 @@ const AddKnowledgeModal = ({
     }
   };
 
+  // Helper functions for domain/pattern management
+  const parseDomainList = (input: string): string[] => {
+    return input.split(',')
+      .map(domain => domain.trim())
+      .filter(domain => domain.length > 0);
+  };
+
+  const addDomainsToList = (input: string, currentList: string[], setter: (list: string[]) => void) => {
+    const domains = parseDomainList(input);
+    const newDomains = domains.filter(domain => !currentList.includes(domain));
+    if (newDomains.length > 0) {
+      setter([...currentList, ...newDomains]);
+    }
+  };
+
+  const removeDomainFromList = (domain: string, currentList: string[], setter: (list: string[]) => void) => {
+    setter(currentList.filter(d => d !== domain));
+  };
+
+  const handleDomainInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, input: string, currentList: string[], setter: (list: string[]) => void, inputSetter: (value: string) => void) => {
+    if (e.key === 'Enter' && input.trim()) {
+      addDomainsToList(input, currentList, setter);
+      inputSetter('');
+    }
+  };
+
+  const handleDomainInputBlur = (input: string, currentList: string[], setter: (list: string[]) => void, inputSetter: (value: string) => void) => {
+    if (input.trim()) {
+      addDomainsToList(input, currentList, setter);
+      inputSetter('');
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
@@ -1310,11 +1355,21 @@ const AddKnowledgeModal = ({
         const formattedUrl = validation.formattedUrl!;
         setUrl(formattedUrl); // Update the input field to show the corrected URL
         
+        // Build crawl config if advanced options are configured
+        const crawlConfig = (allowedDomains.length > 0 || excludedDomains.length > 0 || 
+                           includePatterns.length > 0 || excludePatterns.length > 0) ? {
+          allowed_domains: allowedDomains,
+          excluded_domains: excludedDomains,
+          include_patterns: includePatterns,
+          exclude_patterns: excludePatterns
+        } : undefined;
+
         const result = await knowledgeBaseService.crawlUrl({
           url: formattedUrl,
           knowledge_type: knowledgeType,
           tags,
-          max_depth: crawlDepth
+          max_depth: crawlDepth,
+          crawl_config: crawlConfig
         });
         
         // Crawl URL result received
@@ -1390,8 +1445,8 @@ const AddKnowledgeModal = ({
     }
   };
 
-  return <div className="fixed inset-0 bg-gray-500/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl relative before:content-[''] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-green-500 p-8">
+  return <div className="fixed inset-0 bg-gray-500/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <Card className="w-full max-w-2xl relative before:content-[''] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-green-500 p-8 my-8 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-8">
           Add Knowledge Source
         </h2>
@@ -1508,6 +1563,138 @@ const AddKnowledgeModal = ({
               showTooltip={showDepthTooltip}
               onTooltipToggle={setShowDepthTooltip}
             />
+          </div>
+        )}
+
+        {/* Advanced Domain Configuration - Only for URLs */}
+        {method === 'url' && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
+              className="flex items-center justify-between w-full p-3 text-left bg-gray-50 dark:bg-zinc-900 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Advanced Domain Configuration
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedConfig ? 'rotate-180' : ''}`} />
+            </button>
+            
+            <div className={`mt-4 space-y-4 transition-all duration-200 ${showAdvancedConfig ? 'block' : 'hidden'}`}>
+              {/* Allowed Domains */}
+              <div>
+                <label className="block text-gray-600 dark:text-zinc-400 text-sm mb-2">
+                  Allowed Domains (Whitelist)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {allowedDomains.map(domain => (
+                    <Badge key={domain} color="green" variant="outline" className="flex items-center gap-1">
+                      {domain}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => removeDomainFromList(domain, allowedDomains, setAllowedDomains)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  type="text"
+                  value={newAllowedDomain}
+                  onChange={e => setNewAllowedDomain(e.target.value)}
+                  onKeyDown={e => handleDomainInputKeyDown(e, newAllowedDomain, allowedDomains, setAllowedDomains, setNewAllowedDomain)}
+                  onBlur={() => handleDomainInputBlur(newAllowedDomain, allowedDomains, setAllowedDomains, setNewAllowedDomain)}
+                  placeholder="docs.example.com, api.example.com (comma-separated)"
+                  accentColor="green"
+                />
+              </div>
+
+              {/* Excluded Domains */}
+              <div>
+                <label className="block text-gray-600 dark:text-zinc-400 text-sm mb-2">
+                  Excluded Domains (Blacklist)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {excludedDomains.map(domain => (
+                    <Badge key={domain} color="red" variant="outline" className="flex items-center gap-1">
+                      {domain}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => removeDomainFromList(domain, excludedDomains, setExcludedDomains)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  type="text"
+                  value={newExcludedDomain}
+                  onChange={e => setNewExcludedDomain(e.target.value)}
+                  onKeyDown={e => handleDomainInputKeyDown(e, newExcludedDomain, excludedDomains, setExcludedDomains, setNewExcludedDomain)}
+                  onBlur={() => handleDomainInputBlur(newExcludedDomain, excludedDomains, setExcludedDomains, setNewExcludedDomain)}
+                  placeholder="spam.example.com, ads.example.com (comma-separated)"
+                  accentColor="red"
+                />
+              </div>
+
+              {/* Include Patterns */}
+              <div>
+                <label className="block text-gray-600 dark:text-zinc-400 text-sm mb-2">
+                  Include URL Patterns (Glob-style)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {includePatterns.map(pattern => (
+                    <Badge key={pattern} color="blue" variant="outline" className="flex items-center gap-1">
+                      {pattern}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => removeDomainFromList(pattern, includePatterns, setIncludePatterns)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  type="text"
+                  value={newIncludePattern}
+                  onChange={e => setNewIncludePattern(e.target.value)}
+                  onKeyDown={e => handleDomainInputKeyDown(e, newIncludePattern, includePatterns, setIncludePatterns, setNewIncludePattern)}
+                  onBlur={() => handleDomainInputBlur(newIncludePattern, includePatterns, setIncludePatterns, setNewIncludePattern)}
+                  placeholder="*/docs/*, */api/* (comma-separated)"
+                  accentColor="blue"
+                />
+              </div>
+
+              {/* Exclude Patterns */}
+              <div>
+                <label className="block text-gray-600 dark:text-zinc-400 text-sm mb-2">
+                  Exclude URL Patterns (Glob-style)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {excludePatterns.map(pattern => (
+                    <Badge key={pattern} color="orange" variant="outline" className="flex items-center gap-1">
+                      {pattern}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => removeDomainFromList(pattern, excludePatterns, setExcludePatterns)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  type="text"
+                  value={newExcludePattern}
+                  onChange={e => setNewExcludePattern(e.target.value)}
+                  onKeyDown={e => handleDomainInputKeyDown(e, newExcludePattern, excludePatterns, setExcludePatterns, setNewExcludePattern)}
+                  onBlur={() => handleDomainInputBlur(newExcludePattern, excludePatterns, setExcludePatterns, setNewExcludePattern)}
+                  placeholder="*/admin/*, */private/* (comma-separated)"
+                  accentColor="orange"
+                />
+              </div>
+
+              <div className="text-xs text-gray-500 dark:text-zinc-600 mt-2">
+                <p>• Leave empty to crawl all pages found on the site</p>
+                <p>• Use allowed domains to restrict crawling to specific subdomains</p>
+                <p>• Use patterns to include/exclude specific URL structures</p>
+              </div>
+            </div>
           </div>
         )}
         

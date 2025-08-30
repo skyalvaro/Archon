@@ -48,12 +48,20 @@ export interface KnowledgeItemsFilter {
   per_page?: number
 }
 
+export interface CrawlConfig {
+  allowed_domains?: string[]  // Whitelist of domains to crawl
+  excluded_domains?: string[] // Blacklist of domains to exclude
+  include_patterns?: string[] // URL patterns to include (glob-style)
+  exclude_patterns?: string[] // URL patterns to exclude (glob-style)
+}
+
 export interface CrawlRequest {
   url: string
   knowledge_type?: 'technical' | 'business'
   tags?: string[]
   update_frequency?: number
   max_depth?: number
+  crawl_config?: CrawlConfig  // Domain filtering configuration
   crawl_options?: {
     max_concurrent?: number
   }
@@ -206,6 +214,35 @@ class KnowledgeBaseService {
   }
 
   /**
+   * Get document chunks for a knowledge item with optional domain filtering
+   */
+  async getKnowledgeItemChunks(sourceId: string, domainFilter?: string) {
+    console.log('📄 [KnowledgeBase] Getting chunks for:', sourceId, 'domainFilter:', domainFilter);
+    
+    const params = new URLSearchParams();
+    if (domainFilter) {
+      params.append('domain_filter', domainFilter);
+    }
+    
+    const queryString = params.toString();
+    const endpoint = `/knowledge-items/${sourceId}/chunks${queryString ? `?${queryString}` : ''}`;
+    
+    return apiRequest<{
+      success: boolean;
+      source_id: string;
+      domain_filter?: string;
+      chunks: Array<{
+        id: string;
+        source_id: string;
+        content: string;
+        metadata?: any;
+        url?: string;
+      }>;
+      count: number;
+    }>(endpoint);
+  }
+
+  /**
    * Upload a document to the knowledge base with progress tracking
    */
   async uploadDocument(file: File, metadata: UploadMetadata = {}) {
@@ -239,7 +276,10 @@ class KnowledgeBaseService {
   async crawlUrl(request: CrawlRequest) {
     console.log('📡 Sending crawl request:', request);
     
-    const response = await apiRequest('/knowledge-items/crawl', {
+    // Use v2 endpoint if crawl_config is present, otherwise use original endpoint
+    const endpoint = request.crawl_config ? '/knowledge-items/crawl-v2' : '/knowledge-items/crawl';
+    
+    const response = await apiRequest(endpoint, {
       method: 'POST',
       body: JSON.stringify(request)
     });

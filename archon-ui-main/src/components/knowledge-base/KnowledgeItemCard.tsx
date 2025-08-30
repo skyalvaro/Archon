@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Upload, Trash2, RefreshCw, Code, FileText, Brain, BoxIcon, Pencil } from 'lucide-react';
+import { Link as LinkIcon, Upload, Trash2, RefreshCw, Code, FileText, Brain, BoxIcon, Pencil, BookOpen } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Checkbox } from '../ui/Checkbox';
@@ -7,6 +7,7 @@ import { KnowledgeItem, knowledgeBaseService } from '../../services/knowledgeBas
 import { useCardTilt } from '../../hooks/useCardTilt';
 import { CodeViewerModal, CodeExample } from '../code/CodeViewerModal';
 import { EditKnowledgeItemModal } from './EditKnowledgeItemModal';
+import { DocumentBrowser } from './DocumentBrowser';
 import '../../styles/card-animations.css';
 
 // Helper function to guess language from title
@@ -151,6 +152,7 @@ export const KnowledgeItemCard = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [loadedCodeExamples, setLoadedCodeExamples] = useState<any[] | null>(null);
   const [isLoadingCodeExamples, setIsLoadingCodeExamples] = useState(false);
+  const [showDocumentBrowser, setShowDocumentBrowser] = useState(false);
 
   const statusColorMap = {
     active: 'green',
@@ -444,6 +446,39 @@ export const KnowledgeItemCard = ({
                 </div>
               )}
               
+              {/* Browse Documents button */}
+              <div
+                className="cursor-pointer relative card-3d-layer-3"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDocumentBrowser(true);
+                }}
+                title="Browse document chunks"
+              >
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full backdrop-blur-sm transition-all duration-300 ${
+                  item.metadata.source_type === 'url'
+                    ? item.metadata.knowledge_type === 'technical'
+                      ? 'bg-green-500/20 border border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_20px_rgba(34,197,94,0.5)]'
+                      : 'bg-teal-500/20 border border-teal-500/40 shadow-[0_0_15px_rgba(20,184,166,0.3)] hover:shadow-[0_0_20px_rgba(20,184,166,0.5)]'
+                    : item.metadata.knowledge_type === 'technical'
+                      ? 'bg-indigo-500/20 border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)]'
+                      : 'bg-rose-500/20 border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)] hover:shadow-[0_0_20px_rgba(244,63,94,0.5)]'
+                }`}>
+                  <BookOpen className={`w-3 h-3 ${
+                    item.metadata.source_type === 'url'
+                      ? item.metadata.knowledge_type === 'technical' ? 'text-green-400' : 'text-teal-400'
+                      : item.metadata.knowledge_type === 'technical' ? 'text-indigo-400' : 'text-rose-400'
+                  }`} />
+                  <span className={`text-xs font-medium ${
+                    item.metadata.source_type === 'url'
+                      ? item.metadata.knowledge_type === 'technical' ? 'text-green-400' : 'text-teal-400'
+                      : item.metadata.knowledge_type === 'technical' ? 'text-indigo-400' : 'text-rose-400'
+                  }`}>
+                    Browse
+                  </span>
+                </div>
+              </div>
+              
               {/* Page count - orange neon container */}
               <div
                 className="relative card-3d-layer-3"
@@ -517,6 +552,13 @@ export const KnowledgeItemCard = ({
           }}
         />
       )}
+      
+      {/* Document Browser Modal */}
+      <DocumentBrowser
+        sourceId={item.source_id}
+        isOpen={showDocumentBrowser}
+        onClose={() => setShowDocumentBrowser(false)}
+      />
     </div>
   );
 }; 
