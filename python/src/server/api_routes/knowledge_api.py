@@ -66,6 +66,48 @@ def _sanitize_openai_error(error_message: str) -> str:
     # Simple fallback implementation
     return "OpenAI API encountered an error. Please verify your API key and quota."
 
+async def _validate_openai_api_key() -> None:
+    """
+    Validate OpenAI API key is present and working before starting operations.
+    
+    Raises:
+        HTTPException: 401 if API key is invalid/missing, 429 if quota exhausted
+    """
+    try:
+        # Test the API key with a minimal embedding request
+        from ..services.embeddings.embedding_service import create_embedding
+        from ..services.embeddings.embedding_exceptions import (
+            EmbeddingAuthenticationError,
+            EmbeddingQuotaExhaustedError,
+        )
+        
+        # Try to create a test embedding with minimal content
+        await create_embedding(text="test")
+        
+    except EmbeddingAuthenticationError as e:
+        raise HTTPException(
+            status_code=401, 
+            detail={
+                "error": "Invalid OpenAI API key",
+                "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
+                "error_type": "authentication_required"
+            }
+        )
+    except EmbeddingQuotaExhaustedError as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "OpenAI quota exhausted", 
+                "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+                "error_type": "quota_exhausted"
+            }
+        )
+    except Exception as e:
+        # For any other errors, allow the crawl to continue
+        # The error will be caught later during actual processing
+        logger.warning(f"API key validation failed with unexpected error: {e}")
+        pass
+
 
 # Request Models
 class KnowledgeItemRequest(BaseModel):
@@ -270,6 +312,9 @@ async def get_knowledge_item_code_examples(source_id: str):
 @router.post("/knowledge-items/{source_id}/refresh")
 async def refresh_knowledge_item(source_id: str):
     """Refresh a knowledge item by re-crawling its URL with the same metadata."""
+    # CRITICAL: Validate OpenAI API key before starting refresh
+    await _validate_openai_api_key()
+    
     try:
         safe_logfire_info(f"Starting knowledge item refresh | source_id={source_id}")
 
@@ -386,6 +431,9 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
     # Basic URL validation
     if not request.url.startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
+
+    # CRITICAL: Validate OpenAI API key before starting crawl
+    await _validate_openai_api_key()
 
     try:
         safe_logfire_info(
@@ -521,6 +569,9 @@ async def upload_document(
     knowledge_type: str = Form("technical"),
 ):
     """Upload and process a document with progress tracking."""
+    # CRITICAL: Validate OpenAI API key before starting upload
+    await _validate_openai_api_key()
+    
     try:
         # DETAILED LOGGING: Track knowledge_type parameter flow
         safe_logfire_info(
