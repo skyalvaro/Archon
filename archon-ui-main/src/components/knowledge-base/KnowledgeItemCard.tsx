@@ -7,7 +7,6 @@ import { KnowledgeItem, knowledgeBaseService } from '../../services/knowledgeBas
 import { useCardTilt } from '../../hooks/useCardTilt';
 import { CodeViewerModal, CodeExample } from '../code/CodeViewerModal';
 import { EditKnowledgeItemModal } from './EditKnowledgeItemModal';
-import { DocumentBrowser } from './DocumentBrowser';
 import '../../styles/card-animations.css';
 
 // Helper function to guess language from title
@@ -130,6 +129,7 @@ interface KnowledgeItemCardProps {
   onDelete: (sourceId: string) => void;
   onUpdate?: () => void;
   onRefresh?: (sourceId: string) => void;
+  onBrowseDocuments?: (sourceId: string) => void;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelection?: (event: React.MouseEvent) => void;
@@ -140,6 +140,7 @@ export const KnowledgeItemCard = ({
   onDelete,
   onUpdate,
   onRefresh,
+  onBrowseDocuments,
   isSelectionMode = false,
   isSelected = false,
   onToggleSelection
@@ -152,7 +153,6 @@ export const KnowledgeItemCard = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [loadedCodeExamples, setLoadedCodeExamples] = useState<any[] | null>(null);
   const [isLoadingCodeExamples, setIsLoadingCodeExamples] = useState(false);
-  const [showDocumentBrowser, setShowDocumentBrowser] = useState(false);
 
   const statusColorMap = {
     active: 'green',
@@ -451,7 +451,9 @@ export const KnowledgeItemCard = ({
                 className="cursor-pointer relative card-3d-layer-3"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowDocumentBrowser(true);
+                  if (onBrowseDocuments) {
+                    onBrowseDocuments(item.source_id);
+                  }
                 }}
                 title="Browse document chunks"
               >
@@ -553,12 +555,6 @@ export const KnowledgeItemCard = ({
         />
       )}
       
-      {/* Document Browser Modal */}
-      <DocumentBrowser
-        sourceId={item.source_id}
-        isOpen={showDocumentBrowser}
-        onClose={() => setShowDocumentBrowser(false)}
-      />
     </div>
   );
 }; 

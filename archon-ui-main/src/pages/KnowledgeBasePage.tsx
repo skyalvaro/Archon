@@ -19,6 +19,7 @@ import { KnowledgeItemCard } from '../components/knowledge-base/KnowledgeItemCar
 import { GroupedKnowledgeItemCard } from '../components/knowledge-base/GroupedKnowledgeItemCard';
 import { KnowledgeGridSkeleton, KnowledgeTableSkeleton } from '../components/knowledge-base/KnowledgeItemSkeleton';
 import { GroupCreationModal } from '../components/knowledge-base/GroupCreationModal';
+import { DocumentBrowser } from '../components/knowledge-base/DocumentBrowser';
 
 const extractDomain = (url: string): string => {
   try {
@@ -69,6 +70,10 @@ export const KnowledgeBasePage = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  
+  // Document browser state
+  const [documentBrowserSourceId, setDocumentBrowserSourceId] = useState<string | null>(null);
+  const [isDocumentBrowserOpen, setIsDocumentBrowserOpen] = useState(false);
   
   const { showToast } = useToast();
 
@@ -300,6 +305,11 @@ export const KnowledgeBasePage = () => {
 
   const handleAddKnowledge = () => {
     setIsAddModalOpen(true);
+  };
+
+  const handleBrowseDocuments = (sourceId: string) => {
+    setDocumentBrowserSourceId(sourceId);
+    setIsDocumentBrowserOpen(true);
   };
   
   // Selection handlers
@@ -1061,6 +1071,7 @@ export const KnowledgeBasePage = () => {
                               onDelete={handleDeleteItem} 
                               onUpdate={loadKnowledgeItems} 
                               onRefresh={handleRefreshItem}
+                              onBrowseDocuments={handleBrowseDocuments}
                               isSelectionMode={isSelectionMode}
                               isSelected={selectedItems.has(item.id)}
                               onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
@@ -1131,6 +1142,7 @@ export const KnowledgeBasePage = () => {
                           onDelete={handleDeleteItem} 
                           onUpdate={loadKnowledgeItems} 
                           onRefresh={handleRefreshItem}
+                          onBrowseDocuments={handleBrowseDocuments}
                           isSelectionMode={isSelectionMode}
                           isSelected={selectedItems.has(item.id)}
                           onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
@@ -1154,6 +1166,7 @@ export const KnowledgeBasePage = () => {
                         onDelete={handleDeleteItem} 
                         onUpdate={loadKnowledgeItems} 
                         onRefresh={handleRefreshItem}
+                        onBrowseDocuments={handleBrowseDocuments}
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedItems.has(item.id)}
                         onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
@@ -1191,6 +1204,18 @@ export const KnowledgeBasePage = () => {
             setIsGroupModalOpen(false);
             toggleSelectionMode(); // Exit selection mode
             loadKnowledgeItems(); // Reload to show groups
+          }}
+        />
+      )}
+      
+      {/* Document Browser Modal */}
+      {isDocumentBrowserOpen && documentBrowserSourceId && (
+        <DocumentBrowser
+          sourceId={documentBrowserSourceId}
+          isOpen={isDocumentBrowserOpen}
+          onClose={() => {
+            setIsDocumentBrowserOpen(false);
+            setDocumentBrowserSourceId(null);
           }}
         />
       )}
