@@ -8,37 +8,6 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { knowledgeBaseService } from '../../services/knowledgeBaseService';
 
-// Add custom scrollbar styles
-const scrollbarStyles = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgb(229 231 235);
-  }
-  .dark .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgb(39 39 42);
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgb(59 130 246);
-    border-radius: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgb(37 99 235);
-  }
-`;
-
-// Inject styles
-if (typeof document !== 'undefined') {
-  const styleElement = document.getElementById('document-browser-scrollbar-styles');
-  if (!styleElement) {
-    const style = document.createElement('style');
-    style.id = 'document-browser-scrollbar-styles';
-    style.textContent = scrollbarStyles;
-    document.head.appendChild(style);
-  }
-}
-
 interface DocumentChunk {
   id: string;
   source_id: string;
@@ -231,7 +200,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
 
             {/* Document List */}
             <div 
-              className="flex-1 overflow-y-auto custom-scrollbar"
+              className="flex-1 overflow-y-scroll"
               style={{
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'rgb(59 130 246) rgb(229 231 235)'
@@ -324,7 +293,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
 
                 {/* Content Body */}
                 <div 
-                  className="flex-1 overflow-y-auto p-6 custom-scrollbar"
+                  className="flex-1 overflow-y-scroll p-6"
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgb(59 130 246) rgb(229 231 235)'

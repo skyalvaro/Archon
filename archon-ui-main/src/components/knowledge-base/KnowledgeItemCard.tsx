@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Upload, Trash2, RefreshCw, Code, FileText, Brain, BoxIcon, Pencil, BookOpen } from 'lucide-react';
+import { Link as LinkIcon, Upload, Trash2, RefreshCw, Code, FileText, Brain, BoxIcon, Pencil } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Checkbox } from '../ui/Checkbox';
@@ -446,48 +446,20 @@ export const KnowledgeItemCard = ({
                 </div>
               )}
               
-              {/* Browse Documents button */}
+              {/* Page count - orange neon container (clickable for document browser) */}
               <div
-                className="cursor-pointer relative card-3d-layer-3"
+                className="relative card-3d-layer-3 cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (onBrowseDocuments) {
                     onBrowseDocuments(item.source_id);
                   }
                 }}
-                title="Browse document chunks"
-              >
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full backdrop-blur-sm transition-all duration-300 ${
-                  item.metadata.source_type === 'url'
-                    ? item.metadata.knowledge_type === 'technical'
-                      ? 'bg-green-500/20 border border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_20px_rgba(34,197,94,0.5)]'
-                      : 'bg-teal-500/20 border border-teal-500/40 shadow-[0_0_15px_rgba(20,184,166,0.3)] hover:shadow-[0_0_20px_rgba(20,184,166,0.5)]'
-                    : item.metadata.knowledge_type === 'technical'
-                      ? 'bg-indigo-500/20 border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)]'
-                      : 'bg-rose-500/20 border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)] hover:shadow-[0_0_20px_rgba(244,63,94,0.5)]'
-                }`}>
-                  <BookOpen className={`w-3 h-3 ${
-                    item.metadata.source_type === 'url'
-                      ? item.metadata.knowledge_type === 'technical' ? 'text-green-400' : 'text-teal-400'
-                      : item.metadata.knowledge_type === 'technical' ? 'text-indigo-400' : 'text-rose-400'
-                  }`} />
-                  <span className={`text-xs font-medium ${
-                    item.metadata.source_type === 'url'
-                      ? item.metadata.knowledge_type === 'technical' ? 'text-green-400' : 'text-teal-400'
-                      : item.metadata.knowledge_type === 'technical' ? 'text-indigo-400' : 'text-rose-400'
-                  }`}>
-                    Browse
-                  </span>
-                </div>
-              </div>
-              
-              {/* Page count - orange neon container */}
-              <div
-                className="relative card-3d-layer-3"
                 onMouseEnter={() => setShowPageTooltip(true)}
                 onMouseLeave={() => setShowPageTooltip(false)}
+                title="Click to browse document chunks"
               >
-                <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 border border-orange-500/40 rounded-full backdrop-blur-sm shadow-[0_0_15px_rgba(251,146,60,0.3)] transition-all duration-300">
+                <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 border border-orange-500/40 rounded-full backdrop-blur-sm shadow-[0_0_15px_rgba(251,146,60,0.3)] hover:shadow-[0_0_20px_rgba(251,146,60,0.5)] transition-all duration-300">
                   <FileText className="w-3 h-3 text-orange-400" />
                   <span className="text-xs text-orange-400 font-medium">
                     {Math.ceil(
@@ -498,10 +470,13 @@ export const KnowledgeItemCard = ({
                 {/* Page count tooltip - positioned relative to the badge */}
                 {showPageTooltip && (
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-black dark:bg-zinc-800 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-50 whitespace-nowrap">
-                    <div className="font-medium mb-1">
-                      {(item.metadata.word_count || 0).toLocaleString()} words
+                    <div className="font-medium mb-1 text-orange-300">
+                      Click to Browse Documents
                     </div>
                     <div className="text-gray-300 space-y-0.5">
+                      <div>
+                        {(item.metadata.word_count || 0).toLocaleString()} words
+                      </div>
                       <div>
                         = {Math.ceil((item.metadata.word_count || 0) / 250).toLocaleString()} pages
                       </div>
