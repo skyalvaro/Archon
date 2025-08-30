@@ -149,8 +149,14 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-500/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-7xl h-[90vh] relative before:content-[''] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-blue-500 flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-gray-500/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <Card 
+        className="w-full max-w-7xl h-[90vh] max-h-[90vh] relative before:content-[''] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-blue-500 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-zinc-800 flex-shrink-0">
           <div className="flex justify-between items-center">
@@ -170,11 +176,11 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
         </div>
 
         {/* Main Content - Two Column Layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Left Sidebar - Document List */}
-          <div className="w-80 border-r border-gray-200 dark:border-zinc-800 flex flex-col">
+          <div className="w-80 border-r border-gray-200 dark:border-zinc-800 flex flex-col min-h-0">
             {/* Search and Filter */}
-            <div className="p-4 border-b border-gray-200 dark:border-zinc-800 space-y-3">
+            <div className="p-4 border-b border-gray-200 dark:border-zinc-800 space-y-3 flex-shrink-0">
               <Input
                 type="text"
                 value={searchQuery}
@@ -200,7 +206,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
 
             {/* Document List */}
             <div 
-              className="flex-1 overflow-y-scroll"
+              className="flex-1 overflow-y-scroll min-h-0"
               style={{
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'rgb(59 130 246) rgb(229 231 235)'
@@ -267,11 +273,11 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
           </div>
 
           {/* Right Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {selectedChunk ? (
               <>
                 {/* Content Header */}
-                <div className="p-4 border-b border-gray-200 dark:border-zinc-800">
+                <div className="p-4 border-b border-gray-200 dark:border-zinc-800 flex-shrink-0">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
                       Document Chunk
@@ -293,7 +299,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
 
                 {/* Content Body */}
                 <div 
-                  className="flex-1 overflow-y-scroll p-6"
+                  className="flex-1 overflow-y-scroll p-6 min-h-0"
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgb(59 130 246) rgb(229 231 235)'
