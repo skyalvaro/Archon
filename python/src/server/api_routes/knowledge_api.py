@@ -240,7 +240,7 @@ async def get_knowledge_item_chunks(source_id: str, domain_filter: str | None = 
         supabase = get_supabase_client()
         
         # Build the query
-        query = supabase.from_("documents").select("id, source_id, content, metadata, url")
+        query = supabase.from_("archon_crawled_pages").select("id, source_id, content, metadata, url")
         query = query.eq("source_id", source_id)
         
         # Apply domain filtering if provided
