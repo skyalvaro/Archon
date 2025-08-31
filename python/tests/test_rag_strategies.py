@@ -18,15 +18,16 @@ def mock_embedding_service():
     with patch("src.server.services.embeddings.embedding_service.create_embedding") as mock_embed:
         mock_embed.return_value = [0.1] * 1536
         with patch("src.server.services.embeddings.embedding_service.create_embeddings_batch") as mock_batch:
-            from src.server.services.embeddings.embedding_service import EmbeddingResult
-            mock_batch.return_value = EmbeddingResult(
-                embeddings=[[0.1] * 1536],
-                texts_processed=["test"],
-                success_count=1,
-                failure_count=0,
-                has_failures=False,
-                failed_items=[]
-            )
+            # Create a mock result object with the expected attributes
+            mock_result = type('EmbeddingResult', (), {
+                'embeddings': [[0.1] * 1536],
+                'texts_processed': ["test"],
+                'success_count': 1,
+                'failure_count': 0,
+                'has_failures': False,
+                'failed_items': []
+            })()
+            mock_batch.return_value = mock_result
             yield
 
 # Mock problematic imports at module level
@@ -59,15 +60,16 @@ with patch.dict(
                 with patch(
                     "src.server.services.embeddings.embedding_service.create_embeddings_batch"
                 ) as mock_batch_embed:
-                    from src.server.services.embeddings.embedding_service import EmbeddingResult
-                    mock_batch_embed.return_value = EmbeddingResult(
-                        embeddings=[[0.1] * 1536],
-                        texts_processed=["test"],
-                        success_count=1,
-                        failure_count=0,
-                        has_failures=False,
-                        failed_items=[]
-                    )
+                    # Create a mock result object with the expected attributes
+                    mock_result = type('EmbeddingResult', (), {
+                        'embeddings': [[0.1] * 1536],
+                        'texts_processed': ["test"],
+                        'success_count': 1,
+                        'failure_count': 0,
+                        'has_failures': False,
+                        'failed_items': []
+                    })()
+                    mock_batch_embed.return_value = mock_result
 
 
 # Test RAGService core functionality
