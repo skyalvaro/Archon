@@ -11,6 +11,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Global mock to prevent any real API calls during testing
+@pytest.fixture(autouse=True)
+def mock_embedding_service():
+    """Auto-use fixture to mock embedding service globally"""
+    with patch("src.server.services.embeddings.embedding_service.create_embedding") as mock_embed:
+        mock_embed.return_value = [0.1] * 1536
+        with patch("src.server.services.embeddings.embedding_service.create_embeddings_batch") as mock_batch:
+            from src.server.services.embeddings.embedding_service import EmbeddingResult
+            mock_batch.return_value = EmbeddingResult(
+                embeddings=[[0.1] * 1536],
+                texts_processed=["test"],
+                success_count=1,
+                failure_count=0,
+                has_failures=False,
+                failed_items=[]
+            )
+            yield
+
 # Mock problematic imports at module level
 with patch.dict(
     os.environ,
@@ -31,11 +49,25 @@ with patch.dict(
             mock_client = MagicMock()
             mock_supabase.return_value = mock_client
 
-            # Mock embedding service to prevent API calls
+            # Mock embedding service comprehensively to prevent API calls
             with patch(
                 "src.server.services.embeddings.embedding_service.create_embedding"
             ) as mock_embed:
                 mock_embed.return_value = [0.1] * 1536
+                
+                # Also mock any other embedding functions that might be called
+                with patch(
+                    "src.server.services.embeddings.embedding_service.create_embeddings_batch"
+                ) as mock_batch_embed:
+                    from src.server.services.embeddings.embedding_service import EmbeddingResult
+                    mock_batch_embed.return_value = EmbeddingResult(
+                        embeddings=[[0.1] * 1536],
+                        texts_processed=["test"],
+                        success_count=1,
+                        failure_count=0,
+                        has_failures=False,
+                        failed_items=[]
+                    )
 
 
 # Test RAGService core functionality
