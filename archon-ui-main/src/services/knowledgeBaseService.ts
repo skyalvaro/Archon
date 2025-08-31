@@ -120,9 +120,10 @@ async function apiRequest<T>(
       }
       console.error(`❌ [KnowledgeBase] API error response:`, error);
       
+      // Parse the error structure correctly for OpenAI errors
       const enhancedError = parseKnowledgeBaseError({
         status: response.status,
-        error: error.error,
+        error: error.detail || error.error || error,
         detail: error.detail
       });
       throw enhancedError;

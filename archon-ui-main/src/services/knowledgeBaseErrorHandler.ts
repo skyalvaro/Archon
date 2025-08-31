@@ -11,7 +11,7 @@
 export interface OpenAIErrorDetails {
   error: string;
   message: string;
-  error_type: 'quota_exhausted' | 'rate_limit' | 'api_error';
+  error_type: 'authentication_required' | 'quota_exhausted' | 'rate_limit' | 'api_error';
   tokens_used?: number;
   retry_after?: number;
 }
@@ -143,6 +143,9 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
 export function getDisplayErrorMessage(error: EnhancedError): string {
   if (error.isOpenAIError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
+      case 'authentication_required':
+        return `Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.`;
+      
       case 'quota_exhausted':
         return `OpenAI API quota exhausted. Please add credits to your OpenAI account or check your billing settings.`;
       
@@ -204,6 +207,8 @@ export function getErrorSeverity(error: EnhancedError): 'error' | 'warning' | 'i
 export function getErrorAction(error: EnhancedError): string | null {
   if (error.isOpenAIError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
+      case 'authentication_required':
+        return 'Go to Settings and verify your OpenAI API key';
       case 'quota_exhausted':
         return 'Check your OpenAI billing dashboard and add credits';
       case 'rate_limit': {
