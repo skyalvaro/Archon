@@ -128,8 +128,23 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
         enhancedError.isOpenAIError = true;
         enhancedError.errorDetails = errorData as OpenAIErrorDetails;
         
-        // Override the message with the detailed error message
-        enhancedError.message = errorData.message || errorData.error || enhancedError.message;
+        // Set a more descriptive message based on error type
+        switch (errorData.error_type) {
+          case 'authentication_required':
+            enhancedError.message = '401 Unauthorized - Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.';
+            break;
+          case 'quota_exhausted':
+            enhancedError.message = 'OpenAI API quota exhausted. Please add credits to your OpenAI account or check your billing settings.';
+            break;
+          case 'rate_limit':
+            enhancedError.message = 'OpenAI API rate limit exceeded. Please wait a moment and try again.';
+            break;
+          case 'api_error':
+            enhancedError.message = `OpenAI API error: ${errorData.message}. Please check your API key configuration.`;
+            break;
+          default:
+            enhancedError.message = errorData.message || errorData.error || enhancedError.message;
+        }
       }
     }
   }
