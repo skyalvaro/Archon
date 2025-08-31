@@ -66,7 +66,7 @@ class TestOpenAIQuotaErrorHandling:
                     await rag_service.search_documents("test query")
                 
                 assert "invalid api key" in str(exc_info.value).lower()
-                assert exc_info.value.api_key_prefix == "sk-1234"
+                assert exc_info.value.api_key_prefix == "sk-1…"
 
     @pytest.mark.asyncio
     async def test_rate_limit_error_propagation(self):
@@ -170,7 +170,7 @@ class TestOpenAIQuotaErrorHandling:
             assert "authentication failed" in exc_info.value.detail["error"].lower()
             assert "invalid or expired" in exc_info.value.detail["message"].lower()
             assert exc_info.value.detail["error_type"] == "authentication_failed"
-            assert exc_info.value.detail["api_key_prefix"] == "sk-1234"
+            assert exc_info.value.detail["api_key_prefix"] == "sk-1…"
 
     @pytest.mark.asyncio
     async def test_api_generic_error_in_rag_endpoint(self):
