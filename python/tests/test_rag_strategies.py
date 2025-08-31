@@ -358,12 +358,13 @@ class TestRAGIntegration:
             # Simulate embedding failure (returns None)
             mock_embedding.return_value = None
 
+            # Should now fail fast and return error result instead of empty results
             success, result = await rag_service.perform_rag_query(query="test query", match_count=5)
 
-            # Should handle gracefully by returning empty results
-            assert success is True
-            assert "results" in result
-            assert len(result["results"]) == 0  # Empty results due to embedding failure
+            # Should return failure result due to "fail fast" principle
+            assert success is False
+            assert "error" in result
+            assert "Failed to create embedding" in result["error"] or "configuration or API issue" in result["error"]
 
     @pytest.mark.asyncio
     async def test_empty_results_handling(self, rag_service):
