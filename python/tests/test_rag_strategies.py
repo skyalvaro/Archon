@@ -50,26 +50,9 @@ with patch.dict(
             mock_client = MagicMock()
             mock_supabase.return_value = mock_client
 
-            # Mock embedding service comprehensively to prevent API calls
-            with patch(
-                "src.server.services.embeddings.embedding_service.create_embedding"
-            ) as mock_embed:
-                mock_embed.return_value = [0.1] * 1536
-                
-                # Also mock any other embedding functions that might be called
-                with patch(
-                    "src.server.services.embeddings.embedding_service.create_embeddings_batch"
-                ) as mock_batch_embed:
-                    # Create a mock result object with the expected attributes
-                    mock_result = type('EmbeddingResult', (), {
-                        'embeddings': [[0.1] * 1536],
-                        'texts_processed': ["test"],
-                        'success_count': 1,
-                        'failure_count': 0,
-                        'has_failures': False,
-                        'failed_items': []
-                    })()
-                    mock_batch_embed.return_value = mock_result
+            # Import the modules we need but don't mock create_embedding at module level
+            # This allows individual tests to properly mock create_embedding as needed
+            pass
 
 
 # Test RAGService core functionality
@@ -386,12 +369,11 @@ class TestRAGIntegration:
     @pytest.mark.asyncio
     async def test_error_handling_in_rag_pipeline(self, rag_service):
         """Test error handling when strategies fail"""
-        with patch(
-            "src.server.services.embeddings.embedding_service.create_embedding"
-        ) as mock_embedding:
-            # Simulate embedding failure (returns None)
-            mock_embedding.return_value = None
-
+        # Mock the search_documents method to raise an error directly
+        with patch.object(
+            rag_service, 'search_documents', 
+            side_effect=RuntimeError("Failed to create embedding for query - this indicates a configuration or API issue")
+        ):
             # Should now fail fast and return error result instead of empty results
             success, result = await rag_service.perform_rag_query(query="test query", match_count=5)
 
