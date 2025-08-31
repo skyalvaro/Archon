@@ -144,7 +144,7 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
   if (error.isOpenAIError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
       case 'authentication_required':
-        return `Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.`;
+        return `401 Unauthorized - Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.`;
       
       case 'quota_exhausted':
         return `OpenAI API quota exhausted. Please add credits to your OpenAI account or check your billing settings.`;
