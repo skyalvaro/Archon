@@ -178,6 +178,10 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
   // Handle HTTP status codes
   if (error.statusCode) {
     switch (error.statusCode) {
+      case 401:
+        return '401 Unauthorized - Invalid or missing OpenAI credentials. Verify your API key in Settings.';
+      case 403:
+        return '403 Forbidden - Your OpenAI key/org/project lacks access to this operation.';
       case 429:
         return 'API rate limit exceeded. Please wait a moment and try again.';
       case 502:
@@ -212,8 +216,9 @@ export function getErrorSeverity(error: EnhancedError): 'error' | 'warning' | 'i
   if (error.statusCode && error.statusCode >= 500) {
     return 'error'; // Server errors
   }
-  
-  return 'warning'; // Default to warning for other errors
+  if (error.statusCode === 401 || error.statusCode === 403) return 'error';
+  if (error.statusCode === 429) return 'warning';
+  return 'warning'; // Default for other 4xx/unknown
 }
 
 /**
@@ -237,5 +242,20 @@ export function getErrorAction(error: EnhancedError): string | null {
     }
   }
   
+  // HTTP fallback when no OpenAI-specific details are present
+  if (error.statusCode) {
+    switch (error.statusCode) {
+      case 401:
+        return 'Go to Settings and verify your OpenAI API key';
+      case 403:
+        return 'Check your OpenAI org/project permissions';
+      case 429: {
+        const retryAfter = error.errorDetails?.retry_after ?? 30;
+        return `Wait ${retryAfter} seconds and try again`;
+      }
+      default:
+        return null;
+    }
+  }
   return null;
 }

@@ -45,7 +45,7 @@ async def add_documents_to_supabase(
         provider: Optional provider override for embeddings
         
     Returns:
-        Dict with statistics: chunks_stored, embedding_failures, total_chunks
+        Dict with statistics: chunks_stored, embedding_failures, total_chunks, success
     """
     with safe_span(
         "add_documents_to_supabase", total_documents=len(contents), batch_size=batch_size
