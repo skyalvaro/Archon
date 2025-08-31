@@ -176,7 +176,7 @@ export const DocumentBrowser: React.FC<DocumentBrowserProps> = ({
         </div>
 
         {/* Main Content - Two Column Layout */}
-        <div className="flex-1 flex h-full">
+        <div className="flex-1 flex">
           {/* Left Sidebar - Document List */}
           <div className="w-80 border-r border-gray-200 dark:border-zinc-800 flex flex-col">
             {/* Search and Filter */}
