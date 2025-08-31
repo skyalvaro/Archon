@@ -105,7 +105,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({ error, onDismiss, classN
  * return (
  *   <>
  *     <ErrorAlert error={error} onDismiss={clearError} />
- *     {/* Your component content */}
+ *     <YourComponentContent />
  *   </>
  * );
  * ```

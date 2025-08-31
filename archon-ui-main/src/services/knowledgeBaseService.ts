@@ -109,10 +109,17 @@ async function apiRequest<T>(
 
     if (!response.ok) {
       console.error(`❌ [KnowledgeBase] Response not OK: ${response.status} ${response.statusText}`);
-      const error = await response.json();
-      console.error(`❌ [KnowledgeBase] API error response:`, error);
       
       // Use enhanced error handling for better user experience
+      let error: any;
+      try {
+        error = await response.json();
+      } catch {
+        const text = await response.text();
+        error = { status: response.status, error: text };
+      }
+      console.error(`❌ [KnowledgeBase] API error response:`, error);
+      
       const enhancedError = parseKnowledgeBaseError({
         status: response.status,
         error: error.error,

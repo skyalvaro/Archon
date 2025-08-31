@@ -206,9 +206,10 @@ export function getErrorAction(error: EnhancedError): string | null {
     switch (error.errorDetails.error_type) {
       case 'quota_exhausted':
         return 'Check your OpenAI billing dashboard and add credits';
-      case 'rate_limit':
-        const retryAfter = error.errorDetails.retry_after || 30;
+      case 'rate_limit': {
+        const retryAfter = error.errorDetails.retry_after ?? 30;
         return `Wait ${retryAfter} seconds and try again`;
+      }
       case 'api_error':
         return 'Verify your OpenAI API key in Settings';
       default:
