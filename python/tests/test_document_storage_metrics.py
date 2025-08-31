@@ -195,9 +195,9 @@ class TestDocumentStorageMetrics:
         with patch('src.server.services.crawling.document_storage_operations.safe_logfire_info'):
             with patch('src.server.services.crawling.document_storage_operations.add_documents_to_supabase') as mock_add_docs:
                 mock_add_docs.return_value = {
-                    'chunks_stored': 8,
+                    'chunks_stored': 3,
                     'embedding_failures': 0,
-                    'total_chunks': 8,
+                    'total_chunks': 3,
                     'success': True
                 }
                 # Mix of documents with various content states
