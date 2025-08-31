@@ -18,8 +18,45 @@ interface ErrorAlertProps {
   className?: string;
 }
 
+/**
+ * Validate error object structure and properties
+ */
+function isValidError(error: any): error is EnhancedError {
+  if (!error || typeof error !== 'object') return false;
+  
+  // Check that it has basic Error properties
+  if (typeof error.message !== 'string') return false;
+  
+  // If it claims to be an OpenAI error, validate the structure
+  if (error.isOpenAIError === true) {
+    if (!error.errorDetails || typeof error.errorDetails !== 'object') return false;
+    
+    const { error_type, message, error: errorField } = error.errorDetails;
+    if (typeof error_type !== 'string' || typeof message !== 'string') return false;
+  }
+  
+  // If statusCode is present, it should be a number
+  if (error.statusCode !== undefined && typeof error.statusCode !== 'number') return false;
+  
+  return true;
+}
+
 export const ErrorAlert: React.FC<ErrorAlertProps> = ({ error, onDismiss, className = '' }) => {
   if (!error) return null;
+  
+  // Validate error object structure
+  if (!isValidError(error)) {
+    console.warn('Invalid error object passed to ErrorAlert:', error);
+    // Create a fallback error object
+    const fallbackError: EnhancedError = Object.assign(new Error('Invalid error object received'), {
+      errorDetails: {
+        error: 'validation_error',
+        message: 'An error occurred but the error details could not be parsed properly.',
+        error_type: 'api_error' as const
+      }
+    });
+    error = fallbackError;
+  }
 
   const severity = getErrorSeverity(error);
   const displayMessage = getDisplayErrorMessage(error);

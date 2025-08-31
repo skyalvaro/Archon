@@ -119,7 +119,7 @@ async def _validate_openai_api_key() -> None:
             detail={
                 "error": "Invalid OpenAI API key",
                 "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
-                "error_type": "authentication_required"
+                "error_type": "authentication_failed"
             }
         )
     except EmbeddingQuotaExhaustedError as e:

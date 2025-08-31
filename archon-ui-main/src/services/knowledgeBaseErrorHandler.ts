@@ -11,9 +11,28 @@
 export interface OpenAIErrorDetails {
   error: string;
   message: string;
-  error_type: 'authentication_required' | 'quota_exhausted' | 'rate_limit' | 'api_error';
+  error_type: 'authentication_required' | 'authentication_failed' | 'quota_exhausted' | 'rate_limit' | 'api_error';
   tokens_used?: number;
   retry_after?: number;
+}
+
+// Valid OpenAI error types
+const VALID_ERROR_TYPES = [
+  'authentication_required',
+  'authentication_failed', 
+  'quota_exhausted', 
+  'rate_limit', 
+  'api_error'
+] as const;
+
+/**
+ * Validate and normalize error type from API response
+ */
+function validateErrorType(errorType: any): OpenAIErrorDetails['error_type'] {
+  if (typeof errorType === 'string' && VALID_ERROR_TYPES.includes(errorType as any)) {
+    return errorType as OpenAIErrorDetails['error_type'];
+  }
+  return 'api_error'; // Default fallback
 }
 
 export interface EnhancedError extends Error {
@@ -35,38 +54,43 @@ function createFallbackError(reason: string): EnhancedError {
   }) as EnhancedError;
 }
 
+// Constants for validation
+const MAX_OBJECT_KEYS = 100;
+const MAX_RECURSION_DEPTH = 10;
+
 /**
  * Check if an object can be safely serialized (no circular references)
  */
 function isSafeObject(obj: any): boolean {
   if (typeof obj !== 'object' || obj === null) return true;
   
-  // Quick size estimate to prevent expensive operations on large objects
-  const keys = Object.keys(obj);
-  if (keys.length > 100) return false;
+  // Quick size check to prevent expensive operations on large objects
+  if (Object.keys(obj).length > MAX_OBJECT_KEYS) return false;
   
-  // Check for deep nesting that could indicate circular references
-  let depth = 0;
-  function checkDepth(value: any, currentDepth: number): boolean {
-    if (currentDepth > 10) return false; // Max depth exceeded
-    if (typeof value !== 'object' || value === null) return true;
+  // Use WeakSet for cycle detection - more efficient than recursive depth checking
+  const visited = new WeakSet();
+  
+  function hasCycles(value: any, depth = 0): boolean {
+    if (depth > MAX_RECURSION_DEPTH) return true; // Prevent deep recursion
+    if (typeof value !== 'object' || value === null) return false;
     
-    for (const key in value) {
-      if (value.hasOwnProperty(key)) {
-        if (!checkDepth(value[key], currentDepth + 1)) return false;
+    if (visited.has(value)) return true; // Circular reference detected
+    visited.add(value);
+    
+    try {
+      for (const key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key) && hasCycles(value[key], depth + 1)) {
+          return true;
+        }
       }
+    } catch {
+      return true; // Error during traversal indicates unsafe object
     }
-    return true;
-  }
-  
-  if (!checkDepth(obj, 0)) return false;
-  
-  try {
-    JSON.stringify(obj);
-    return true;
-  } catch {
+    
     return false;
   }
+  
+  return !hasCycles(obj);
 }
 
 /**
@@ -126,11 +150,21 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
       // Check if it's an OpenAI-specific error
       if (typeof errorData === 'object' && errorData.error_type) {
         enhancedError.isOpenAIError = true;
-        enhancedError.errorDetails = errorData as OpenAIErrorDetails;
+        
+        // Validate and normalize the error details
+        const validatedErrorType = validateErrorType(errorData.error_type);
+        enhancedError.errorDetails = {
+          error: errorData.error || 'unknown',
+          message: errorData.message || 'Unknown error occurred',
+          error_type: validatedErrorType,
+          tokens_used: typeof errorData.tokens_used === 'number' ? errorData.tokens_used : undefined,
+          retry_after: typeof errorData.retry_after === 'number' ? errorData.retry_after : undefined
+        };
         
         // Set a more descriptive message based on error type
-        switch (errorData.error_type) {
+        switch (validatedErrorType) {
           case 'authentication_required':
+          case 'authentication_failed':
             enhancedError.message = '401 Unauthorized - Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.';
             break;
           case 'quota_exhausted':
@@ -159,6 +193,7 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
   if (error.isOpenAIError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
       case 'authentication_required':
+      case 'authentication_failed':
         return `401 Unauthorized - Invalid OpenAI API key. Please verify your OpenAI API key in Settings before starting a crawl.`;
       
       case 'quota_exhausted':
@@ -228,6 +263,7 @@ export function getErrorAction(error: EnhancedError): string | null {
   if (error.isOpenAIError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
       case 'authentication_required':
+      case 'authentication_failed':
         return 'Go to Settings and verify your OpenAI API key';
       case 'quota_exhausted':
         return 'Check your OpenAI billing dashboard and add credits';
