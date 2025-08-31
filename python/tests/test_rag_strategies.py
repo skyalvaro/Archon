@@ -15,20 +15,20 @@ import pytest
 @pytest.fixture(autouse=True)
 def mock_embedding_service():
     """Auto-use fixture to mock embedding service globally"""
-    with patch("src.server.services.embeddings.embedding_service.create_embedding") as mock_embed:
-        mock_embed.return_value = [0.1] * 1536
-        with patch("src.server.services.embeddings.embedding_service.create_embeddings_batch") as mock_batch:
-            # Create a mock result object with the expected attributes
-            mock_result = type('EmbeddingResult', (), {
-                'embeddings': [[0.1] * 1536],
-                'texts_processed': ["test"],
-                'success_count': 1,
-                'failure_count': 0,
-                'has_failures': False,
-                'failed_items': []
-            })()
-            mock_batch.return_value = mock_result
-            yield
+    # Only mock create_embeddings_batch (batch function), not create_embedding
+    # This allows individual tests to mock create_embedding as needed
+    with patch("src.server.services.embeddings.embedding_service.create_embeddings_batch") as mock_batch:
+        # Create a mock result object with the expected attributes
+        mock_result = type('EmbeddingResult', (), {
+            'embeddings': [[0.1] * 1536],
+            'texts_processed': ["test"],
+            'success_count': 1,
+            'failure_count': 0,
+            'has_failures': False,
+            'failed_items': []
+        })()
+        mock_batch.return_value = mock_result
+        yield
 
 # Mock problematic imports at module level
 with patch.dict(
