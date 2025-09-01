@@ -79,8 +79,8 @@ class DocumentStorageOperations:
             if cancellation_check:
                 cancellation_check()
 
-            doc_url = doc.get('url', '').strip()
-            markdown_content = doc.get('markdown', '').strip()
+            doc_url = (doc.get('url') or '').strip()
+            markdown_content = (doc.get('markdown') or '').strip()
 
             # Skip documents with empty or whitespace-only content or missing URLs
             if not markdown_content or not doc_url:

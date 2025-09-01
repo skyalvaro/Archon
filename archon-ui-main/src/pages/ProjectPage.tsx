@@ -423,6 +423,9 @@ function ProjectPage({
 
   // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
   useEffect(() => {
+    // Skip processing polling data while tasks are being moved to prevent race conditions
+    if (movingTaskIds.size > 0) return;
+    
     // The polling returns an array directly, not wrapped in { tasks: [...] }
     if (tasksData && selectedProject) {
       const uiTasks: Task[] = tasksData.map((task: any) => ({
@@ -439,51 +442,33 @@ function ProjectPage({
         task_order: task.task_order || 0,
       }));
       
-      // Only update tasks if no drag operations in progress
-      if (movingTaskIds.size === 0) {
-        // Check if tasks have actually changed before updating
-        setTasks((prevTasks) => {
-          // Quick check: if lengths differ, update
-          if (prevTasks.length !== uiTasks.length) {
-            return uiTasks;
-          }
+      // Check if tasks have actually changed before updating
+      setTasks((prevTasks) => {
+        // Quick check: if lengths differ, update
+        if (prevTasks.length !== uiTasks.length) {
+          return uiTasks;
+        }
+        
+        // Deep check: compare each task
+        const hasChanges = uiTasks.some((newTask) => {
+          const oldTask = prevTasks.find(t => t.id === newTask.id);
+          if (!oldTask) return true; // New task
           
-          // Deep check: compare each task
-          const hasChanges = uiTasks.some((newTask) => {
-            const oldTask = prevTasks.find(t => t.id === newTask.id);
-            if (!oldTask) return true; // New task
-            
-            // Check if any field has changed
-            return oldTask.title !== newTask.title ||
-                   oldTask.description !== newTask.description ||
-                   oldTask.status !== newTask.status ||
-                   oldTask.assignee.name !== newTask.assignee.name ||
-                   oldTask.feature !== newTask.feature ||
-                   oldTask.task_order !== newTask.task_order;
-          });
-          
-          if (hasChanges) {
-            return uiTasks;
-          }
-          
-          return prevTasks;
+          // Check if any field has changed
+          return oldTask.title !== newTask.title ||
+                 oldTask.description !== newTask.description ||
+                 oldTask.status !== newTask.status ||
+                 oldTask.assignee.name !== newTask.assignee.name ||
+                 oldTask.feature !== newTask.feature ||
+                 oldTask.task_order !== newTask.task_order;
         });
-      } else {
-        // Merge updates for non-moving tasks only
-        setTasks((prev) => {
-          const updated = prev.map((task) => {
-            if (movingTaskIds.has(task.id)) {
-              return task; // Preserve local state for moving tasks
-            }
-            const updatedTask = uiTasks.find((t) => t.id === task.id);
-            return updatedTask || task;
-          });
-          
-          // Also add any new tasks that aren't in prev
-          const newTasks = uiTasks.filter(t => !prev.find(p => p.id === t.id));
-          return [...updated, ...newTasks];
-        });
-      }
+        
+        if (hasChanges) {
+          return uiTasks;
+        }
+        
+        return prevTasks;
+      });
       
       const projectIds = projects
         .map((p) => p.id)
