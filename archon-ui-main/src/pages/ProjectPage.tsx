@@ -938,6 +938,7 @@ function ProjectPage({
                       projectId={selectedProject.id}
                       movingTaskIds={movingTaskIds}
                       setMovingTaskIds={setMovingTaskIds}
+                      refetchTasks={refetchTasks}
                     />
                   )}
                 </TabsContent>

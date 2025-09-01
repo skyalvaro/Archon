@@ -256,6 +256,11 @@ export const TaskBoardView = ({
   };
 
   const isAnyTaskMoving = movingTaskIds.size > 0;
+  
+  // Debug logging
+  if (movingTaskIds.size > 0) {
+    console.log(`[TaskBoardView] Tasks currently moving:`, Array.from(movingTaskIds), 'Showing loader:', isAnyTaskMoving);
+  }
 
   return (
     <div className="flex flex-col h-full min-h-[70vh] relative">

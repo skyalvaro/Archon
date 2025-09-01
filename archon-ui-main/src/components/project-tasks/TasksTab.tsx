@@ -36,13 +36,15 @@ export const TasksTab = ({
   onTasksChange,
   projectId,
   movingTaskIds,
-  setMovingTaskIds
+  setMovingTaskIds,
+  refetchTasks
 }: {
   initialTasks: Task[];
   onTasksChange: (tasks: Task[]) => void;
   projectId: string;
   movingTaskIds: Set<string>;
   setMovingTaskIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  refetchTasks: () => Promise<void>;
 }) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
@@ -295,7 +297,11 @@ export const TasksTab = ({
     setTaskOperationError(null);
     
     // Add to loading set
-    setMovingTaskIds(prev => new Set([...prev, taskId]));
+    setMovingTaskIds(prev => {
+      const newSet = new Set([...prev, taskId]);
+      console.log(`[TasksTab] Added ${taskId} to movingTaskIds. Set size:`, newSet.size, 'Set contents:', Array.from(newSet));
+      return newSet;
+    });
     
     try {
       const movingTask = tasks.find(task => task.id === taskId);
@@ -323,7 +329,50 @@ export const TasksTab = ({
       
       console.log(`[TasksTab] Successfully moved task ${taskId}`);
       
-      // Task moved - polling will pick up changes automatically
+      // Keep checking until backend has the correct status
+      const verifyTaskStatus = async (): Promise<boolean> => {
+        try {
+          await refetchTasks();
+          
+          // Check if the current tasks state has the correct status
+          // Note: refetchTasks triggers useEffect in ProjectPage which updates tasks
+          // We need to wait a tick for React state to update
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          const currentTask = tasks.find(t => t.id === taskId);
+          const hasCorrectStatus = currentTask?.status === newStatus;
+          
+          console.log(`[TasksTab] Verification for task ${taskId}: expected=${newStatus}, actual=${currentTask?.status}, correct=${hasCorrectStatus}`);
+          
+          return hasCorrectStatus;
+        } catch (error) {
+          console.error(`[TasksTab] Failed to verify task status:`, error);
+          return false;
+        }
+      };
+      
+      // Keep trying until we get the correct status or max attempts
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (attempts < maxAttempts) {
+        const isCorrect = await verifyTaskStatus();
+        if (isCorrect) {
+          console.log(`[TasksTab] Task ${taskId} status verified correctly after ${attempts + 1} attempts`);
+          break;
+        }
+        
+        attempts++;
+        console.log(`[TasksTab] Task status not correct yet, attempt ${attempts}/${maxAttempts}`);
+        
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 200)); // Wait before retry
+        }
+      }
+      
+      if (attempts >= maxAttempts) {
+        console.warn(`[TasksTab] Could not verify correct task status after ${maxAttempts} attempts`);
+      }
       
     } catch (error) {
       console.error(`[TasksTab] Failed to move task ${taskId}:`, error);
@@ -335,10 +384,11 @@ export const TasksTab = ({
       
       // Revert optimistic update - polling will sync correct state
     } finally {
-      // Remove from loading set
+      // Remove from loading set only after we've confirmed the update
       setMovingTaskIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(taskId);
+        console.log(`[TasksTab] Removed ${taskId} from movingTaskIds. Set size:`, newSet.size, 'Set contents:', Array.from(newSet));
         return newSet;
       });
     }
