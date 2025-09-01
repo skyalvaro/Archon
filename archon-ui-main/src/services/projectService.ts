@@ -8,7 +8,8 @@ import type {
   UpdateProjectRequest,
   CreateTaskRequest, 
   UpdateTaskRequest,
-  DatabaseTaskStatus
+  DatabaseTaskStatus,
+  TaskCounts
 } from '../types/project';
 
 import { 
@@ -379,9 +380,10 @@ export const projectService = {
     }
 
     try {
-      // Use the standard update task endpoint with status parameter
-      const task = await callAPI<Task>(`/api/tasks/${taskId}?status=${status}`, {
-        method: 'PUT'
+      // Use the standard update task endpoint with JSON body
+      const task = await callAPI<Task>(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
       });
       
       

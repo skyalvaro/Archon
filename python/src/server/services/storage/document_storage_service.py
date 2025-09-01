@@ -48,9 +48,9 @@ async def add_documents_to_supabase(
         "add_documents_to_supabase", total_documents=len(contents), batch_size=batch_size
     ) as span:
         # Simple progress reporting helper with batch info support
-        async def report_progress(message: str, percentage: int, batch_info: dict = None):
+        async def report_progress(message: str, progress: int, batch_info: dict = None):
             if progress_callback and asyncio.iscoroutinefunction(progress_callback):
-                await progress_callback(message, percentage, batch_info)
+                await progress_callback(message, progress, batch_info)
 
         # Load settings from database
         try:
@@ -143,7 +143,7 @@ async def add_documents_to_supabase(
             batch_metadatas = metadatas[i:batch_end]
 
             # Simple batch progress - only track completed batches
-            current_percentage = int((completed_batches / total_batches) * 100)
+            current_progress = int((completed_batches / total_batches) * 100)
 
             # Get max workers setting FIRST before using it
             if use_contextual_embeddings:
@@ -161,7 +161,7 @@ async def add_documents_to_supabase(
             if progress_callback and asyncio.iscoroutinefunction(progress_callback):
                 await progress_callback(
                     f"Processing batch {batch_num}/{total_batches} ({len(batch_contents)} chunks)",
-                    current_percentage,
+                    current_progress,
                     {
                         "current_batch": batch_num,
                         "total_batches": total_batches,
@@ -241,7 +241,7 @@ async def add_documents_to_supabase(
                 if progress_callback and "rate limit" in message.lower():
                     await progress_callback(
                         message,
-                        current_percentage,  # Use current batch progress
+                        current_progress,  # Use current batch progress
                         {"batch": batch_num, "type": "rate_limit_wait"}
                     )
             
@@ -324,9 +324,9 @@ async def add_documents_to_supabase(
                     completed_batches += 1
                     # Ensure last batch reaches 100%
                     if completed_batches == total_batches:
-                        new_percentage = 100
+                        new_progress = 100
                     else:
-                        new_percentage = int((completed_batches / total_batches) * 100)
+                        new_progress = int((completed_batches / total_batches) * 100)
 
                     complete_msg = (
                         f"Completed batch {batch_num}/{total_batches} ({len(batch_data)} chunks)"
@@ -340,7 +340,7 @@ async def add_documents_to_supabase(
                         "chunks_processed": len(batch_data),
                         "max_workers": max_workers if use_contextual_embeddings else 0,
                     }
-                    await report_progress(complete_msg, new_percentage, batch_info)
+                    await report_progress(complete_msg, new_progress, batch_info)
                     break
 
                 except Exception as e:

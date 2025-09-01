@@ -235,10 +235,10 @@ class SinglePageCrawlStrategy:
             logger.info(f"Crawling markdown file: {url}")
 
             # Define local report_progress helper like in other methods
-            async def report_progress(percentage: int, message: str):
+            async def report_progress(progress: int, message: str):
                 """Helper to report progress if callback is available"""
                 if progress_callback:
-                    await progress_callback('crawling', percentage, message)
+                    await progress_callback('crawling', progress, message)
 
             # Report initial progress
             await report_progress(start_progress, f"Fetching text file: {url}")

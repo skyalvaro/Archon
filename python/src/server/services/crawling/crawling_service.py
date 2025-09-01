@@ -122,19 +122,19 @@ class CrawlingService:
             base_status: The base status to use for progress updates
 
         Returns:
-            Async callback function with signature (status: str, percentage: int, message: str, **kwargs) -> None
+            Async callback function with signature (status: str, progress: int, message: str, **kwargs) -> None
         """
-        async def callback(status: str, percentage: int, message: str, **kwargs):
+        async def callback(status: str, progress: int, message: str, **kwargs):
             if self.progress_tracker:
                 # Update progress via tracker (stores in memory for HTTP polling)
                 await self.progress_tracker.update(
                     status=base_status,
-                    percentage=percentage,
+                    progress=progress,
                     log=message,
                     **kwargs
                 )
                 safe_logfire_info(
-                    f"Updated crawl progress | progress_id={self.progress_id} | status={base_status} | percentage={percentage}"
+                    f"Updated crawl progress | progress_id={self.progress_id} | status={base_status} | progress={progress}"
                 )
 
         return callback
@@ -151,9 +151,9 @@ class CrawlingService:
             # Update progress via tracker for HTTP polling
             await self.progress_tracker.update(
                 status=update.get("status", "processing"),
-                percentage=update.get("percentage", 0),
+                progress=update.get("progress", update.get("percentage", 0)),  # Support both for compatibility
                 log=update.get("log", "Processing..."),
-                **{k: v for k, v in update.items() if k not in ["status", "percentage", "log"]}
+                **{k: v for k, v in update.items() if k not in ["status", "progress", "percentage", "log"]}
             )
 
     # Simple delegation methods for backward compatibility
@@ -272,7 +272,7 @@ class CrawlingService:
                     task_id,
                     {
                         "status": self.progress_mapper.get_current_stage(),
-                        "percentage": self.progress_mapper.get_current_progress(),
+                        "progress": self.progress_mapper.get_current_progress(),
                         "heartbeat": True,
                         "log": "Background task still running...",
                         "message": "Processing...",
@@ -289,7 +289,7 @@ class CrawlingService:
                 await self.progress_tracker.start({
                     "url": url,
                     "status": "starting",
-                    "percentage": 0,
+                    "progress": 0,
                     "log": f"Starting crawl of {url}"
                 })
 
@@ -309,7 +309,7 @@ class CrawlingService:
                     task_id,
                     {
                         "status": stage,
-                        "percentage": overall_progress,
+                        "progress": overall_progress,
                         "log": message,
                         "message": message,
                         **kwargs,
@@ -347,19 +347,19 @@ class CrawlingService:
 
             # Process and store documents using document storage operations
             async def doc_storage_callback(
-                message: str, percentage: int, batch_info: dict | None = None
+                message: str, progress: int, batch_info: dict | None = None
             ):
                 if self.progress_tracker:
-                    # Map percentage to document storage range (20-85%)
-                    mapped_percentage = 20 + int((percentage / 100) * (85 - 20))
+                    # Map progress to document storage range (20-85%)
+                    mapped_progress = 20 + int((progress / 100) * (85 - 20))
                     safe_logfire_info(
-                        f"Document storage progress mapping: {percentage}% -> {mapped_percentage}%"
+                        f"Document storage progress mapping: {progress}% -> {mapped_progress}%"
                     )
 
                     # Update progress state via tracker
                     await self.progress_tracker.update(
                         status="document_storage",
-                        percentage=mapped_percentage,
+                        progress=mapped_progress,
                         log=message,
                         **(batch_info or {})
                     )
@@ -400,9 +400,9 @@ class CrawlingService:
                         # Update progress state via tracker
                         await self.progress_tracker.update(
                             status=data.get("status", "code_extraction"),
-                            percentage=data.get("percentage", 85),
+                            progress=data.get("progress", data.get("percentage", 85)),  # Support both
                             log=data.get("log", "Extracting code examples..."),
-                            **{k: v for k, v in data.items() if k not in ["status", "percentage", "log"]}
+                            **{k: v for k, v in data.items() if k not in ["status", "progress", "percentage", "log"]}
                         )
 
                 code_examples_count = await self.doc_storage_ops.extract_and_store_code_examples(
@@ -461,7 +461,7 @@ class CrawlingService:
                 task_id,
                 {
                     "status": "cancelled",
-                    "percentage": -1,
+                    "progress": -1,
                     "log": "Crawl operation was cancelled by user",
                 },
             )
@@ -479,7 +479,7 @@ class CrawlingService:
             await self._handle_progress_update(
                 task_id, {
                     "status": "error",
-                    "percentage": -1,
+                    "progress": -1,
                     "log": error_message,
                     "error": str(e)
                 }
@@ -509,7 +509,7 @@ class CrawlingService:
             if self.progress_tracker:
                 await self.progress_tracker.update(
                     status="crawling",
-                    percentage=10,
+                    progress=10,
                     log="Detected text file, fetching content..."
                 )
             crawl_results = await self.crawl_markdown_file(
@@ -525,7 +525,7 @@ class CrawlingService:
             if self.progress_tracker:
                 await self.progress_tracker.update(
                     status="crawling",
-                    percentage=10,
+                    progress=10,
                     log="Detected sitemap, parsing URLs..."
                 )
             sitemap_urls = self.parse_sitemap(url)
@@ -535,7 +535,7 @@ class CrawlingService:
                 if self.progress_tracker:
                     await self.progress_tracker.update(
                         status="crawling",
-                        percentage=15,
+                        progress=15,
                         log=f"Starting batch crawl of {len(sitemap_urls)} URLs..."
                     )
 
@@ -552,7 +552,7 @@ class CrawlingService:
             if self.progress_tracker:
                 await self.progress_tracker.update(
                     status="crawling",
-                    percentage=10,
+                    progress=10,
                     log=f"Starting recursive crawl with max depth {request.get('max_depth', 1)}..."
                 )
 

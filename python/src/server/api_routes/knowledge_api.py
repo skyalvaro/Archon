@@ -289,7 +289,7 @@ async def refresh_knowledge_item(source_id: str):
         await tracker.start({
             "url": url,
             "status": "initializing",
-            "percentage": 0,
+            "progress": 0,
             "log": f"Starting refresh for {url}",
             "source_id": source_id,
             "operation": "refresh"
@@ -377,7 +377,7 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         await tracker.start({
             "url": str(request.url),
             "status": "initializing",
-            "percentage": 0,
+            "progress": 0,
             "log": f"Starting crawl for {request.url}"
         })
 
@@ -529,7 +529,7 @@ async def upload_document(
         await tracker.start({
             "filename": file.filename,
             "status": "initializing",
-            "percentage": 0,
+            "progress": 0,
             "log": f"Starting upload for {file.filename}"
         })
         # Start background task for processing with file content and metadata
@@ -591,7 +591,7 @@ async def _perform_upload_with_progress(
         mapped_progress = progress_mapper.map_progress("processing", 50)
         await tracker.update(
             status="processing",
-            percentage=mapped_progress,
+            progress=mapped_progress,
             log=f"Extracting text from {filename}"
         )
 
@@ -621,7 +621,7 @@ async def _perform_upload_with_progress(
 
             await tracker.update(
                 status="document_storage",
-                percentage=mapped_percentage,
+                progress=mapped_percentage,
                 log=message,
                 currentUrl=f"file://{filename}",
                 **(batch_info or {})
@@ -895,7 +895,7 @@ async def stop_crawl_task(progress_id: str):
                 task.cancel()
                 try:
                     await asyncio.wait_for(task, timeout=2.0)
-                except (TimeoutError, asyncio.CancelledError):
+                except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
             del active_crawl_tasks[progress_id]
             found = True
@@ -910,7 +910,7 @@ async def stop_crawl_task(progress_id: str):
                 tracker = ProgressTracker(progress_id, operation_type="crawl")
                 await tracker.update(
                     status="cancelled",
-                    percentage=-1,
+                    progress=-1,
                     log="Crawl cancelled by user"
                 )
             except Exception:

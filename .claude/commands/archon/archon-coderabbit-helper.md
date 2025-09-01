@@ -1,5 +1,5 @@
 ---
-title: Archon CodeRabbit Helper
+name: Archon CodeRabbit Helper
 description: Analyze CodeRabbit suggestions, assess validity, and provide actionable options with tradeoffs
 argument-hint: Paste the CodeRabbit suggestion here
 ---

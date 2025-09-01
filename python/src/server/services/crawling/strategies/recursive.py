@@ -130,13 +130,13 @@ class RecursiveCrawlStrategy:
             max_session_permit=max_concurrent,
         )
 
-        async def report_progress(percentage: int, message: str, **kwargs):
+        async def report_progress(progress_val: int, message: str, **kwargs):
             """Helper to report progress if callback is available"""
             if progress_callback:
                 # Pass step information as flattened kwargs for consistency
                 await progress_callback(
                     "crawling",
-                    percentage,
+                    progress_val,
                     message,
                     currentStep=message,
                     stepMessage=message,

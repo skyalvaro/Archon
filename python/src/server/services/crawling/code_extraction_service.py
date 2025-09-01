@@ -173,7 +173,7 @@ class CodeExtractionService:
             if progress_callback:
                 await progress_callback({
                     "status": "code_extraction",
-                    "percentage": end_progress,
+                    "progress": end_progress,
                     "log": "No code examples found to extract",
                 })
             return 0
@@ -330,7 +330,7 @@ class CodeExtractionService:
                     )
                     await progress_callback({
                         "status": "code_extraction",
-                        "percentage": mapped_progress,
+                        "progress": mapped_progress,
                         "log": f"Extracted code from {completed_docs}/{total_docs} documents",
                         "completed_documents": completed_docs,
                         "total_documents": total_docs,
@@ -1368,7 +1368,7 @@ class CodeExtractionService:
             if progress_callback:
                 await progress_callback({
                     "status": "code_extraction",
-                    "percentage": end_progress,
+                    "progress": end_progress,
                     "log": f"Skipped AI summary generation (disabled). Using default summaries for {len(all_code_blocks)} code blocks.",
                 })
 
@@ -1387,14 +1387,17 @@ class CodeExtractionService:
         if progress_callback:
             # Create a wrapper that maps the progress to the correct range
             async def mapped_callback(data: dict):
-                # Map the percentage from generate_code_summaries_batch (0-100) to our range
-                if "percentage" in data:
-                    raw_percentage = data["percentage"]
+                # Map the progress from generate_code_summaries_batch (0-100) to our range
+                if "progress" in data or "percentage" in data:
+                    raw_progress = data.get("progress", data.get("percentage", 0))
                     # Map from 0-100 to start_progress-end_progress
-                    mapped_percentage = start_progress + int(
-                        (raw_percentage / 100) * (end_progress - start_progress)
+                    mapped_progress = start_progress + int(
+                        (raw_progress / 100) * (end_progress - start_progress)
                     )
-                    data["percentage"] = mapped_percentage
+                    data["progress"] = mapped_progress
+                    # Remove old percentage field if present
+                    if "percentage" in data:
+                        del data["percentage"]
                     # Change the status to match what the orchestration expects
                     data["status"] = "code_extraction"
                 await progress_callback(data)
@@ -1475,16 +1478,16 @@ class CodeExtractionService:
             async def mapped_storage_callback(data: dict):
                 # Extract values from the dictionary
                 message = data.get("log", "")
-                percentage = data.get("percentage", 0)
+                progress_val = data.get("progress", data.get("percentage", 0))
 
                 # Map storage progress (0-100) to our range (start_progress to end_progress)
-                mapped_percentage = start_progress + int(
-                    (percentage / 100) * (end_progress - start_progress)
+                mapped_progress = start_progress + int(
+                    (progress_val / 100) * (end_progress - start_progress)
                 )
 
                 update_data = {
                     "status": "code_storage",
-                    "percentage": mapped_percentage,
+                    "progress": mapped_progress,
                     "log": message,
                 }
 
@@ -1516,7 +1519,7 @@ class CodeExtractionService:
             if progress_callback:
                 await progress_callback({
                     "status": "code_extraction",  # Keep status as code_extraction, not completed
-                    "percentage": end_progress,
+                    "progress": end_progress,
                     "log": f"Code extraction phase completed. Stored {len(storage_data['examples'])} code examples.",
                 })
 

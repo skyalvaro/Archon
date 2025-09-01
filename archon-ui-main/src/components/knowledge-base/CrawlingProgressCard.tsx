@@ -74,25 +74,30 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
         progress: polledProgress.progress
       });
       
-      // Merge the polled data with existing data
-      setLocalProgressData(prev => ({
-        ...prev,
-        ...polledProgress
-      }));
-      
-      // Call onProgress callback if provided
-      if (onProgress) {
-        onProgress({ ...localProgressData, ...polledProgress });
-      }
-      
-      // Handle completion
-      if (polledProgress.status === 'completed' && onComplete) {
-        console.log(`✅ Card ${localProgressData.progressId}: Crawl completed`);
-        onComplete({ ...localProgressData, ...polledProgress });
-      } else if ((polledProgress.status === 'error' || polledProgress.status === 'failed') && onError) {
-        console.log(`❌ Card ${localProgressData.progressId}: Crawl failed`);
-        onError(polledProgress.error || 'Unknown error');
-      }
+      // Merge the polled data with existing data and use the merged result for callbacks
+      setLocalProgressData(prev => {
+        const merged = {
+          ...prev,
+          ...polledProgress
+        };
+        
+        // Call callbacks with the fresh merged data
+        // This avoids stale closure issues
+        if (onProgress) {
+          onProgress(merged);
+        }
+        
+        // Handle completion
+        if (merged.status === 'completed' && onComplete) {
+          console.log(`✅ Card ${merged.progressId}: Crawl completed`);
+          onComplete(merged);
+        } else if ((merged.status === 'error' || merged.status === 'failed') && onError) {
+          console.log(`❌ Card ${merged.progressId}: Crawl failed`);
+          onError(merged.error || 'Unknown error');
+        }
+        
+        return merged;
+      });
     }
   }, [polledProgress]); // Only depend on polledProgress changes
   
@@ -120,7 +125,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
       console.log('🛑 Stopping crawl with progress ID:', progressData.progressId);
       
       // Optimistic UI update - immediately show stopping status
-      progressData.status = 'stopping';
+      setLocalProgressData(prev => ({ ...prev, status: 'stopping' }));
       
       // Call the onStop callback if provided - this will handle localStorage and API call
       if (onStop) {
@@ -130,7 +135,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
     } catch (error) {
       console.error('Failed to stop crawl:', error);
       // Revert optimistic update on error
-      progressData.status = progressData.status === 'stopping' ? 'processing' : progressData.status;
+      setLocalProgressData(prev => (prev.status === 'stopping' ? { ...prev, status: 'processing' } : prev));
     } finally {
       setIsStopping(false);
     }
@@ -238,7 +243,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
 
     // Map current status directly to step progress
     const currentStatus = progressData.status;
-    const currentPercentage = progressData.percentage || 0;
+    const currentPercentage = progressData.progress;
 
     // Normalize status to handle backend/frontend naming differences
     const normalizedStatus = currentStatus === 'code_extraction' ? 'code_storage' : currentStatus;
@@ -625,14 +630,14 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
               Overall Progress
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {Math.round(Math.max(0, Math.min(100, progressData.percentage || 0)))}%
+              {Math.round(Math.max(0, Math.min(100, progressData.progress)))}%
             </span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-zinc-700 rounded-full h-2" data-testid="crawling-progress-bar">
             <motion.div
               className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600"
               initial={{ width: 0 }}
-              animate={{ width: `${Math.max(0, Math.min(100, progressData.percentage || 0))}%` }}
+              animate={{ width: `${Math.max(0, Math.min(100, progressData.progress))}%` }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
             />
           </div>
@@ -658,7 +663,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
       )}
 
       {/* Show info when crawling is complete but processing continues */}
-      {progressData.status === 'document_storage' && progressData.percentage < 30 && (
+      {progressData.status === 'document_storage' && progressData.progress < 30 && (
         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-md">
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />

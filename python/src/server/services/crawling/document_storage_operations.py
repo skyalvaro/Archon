@@ -79,10 +79,12 @@ class DocumentStorageOperations:
             if cancellation_check:
                 cancellation_check()
 
-            doc_url = doc.get('url', '')
-            markdown_content = doc.get('markdown', '')
+            doc_url = doc.get('url', '').strip()
+            markdown_content = doc.get('markdown', '').strip()
 
-            if not markdown_content:
+            # Skip documents with empty or whitespace-only content or missing URLs
+            if not markdown_content or not doc_url:
+                logger.debug(f"Skipping document {doc_index}: empty {'URL' if not doc_url else 'content'}")
                 continue
 
             # Increment processed document count

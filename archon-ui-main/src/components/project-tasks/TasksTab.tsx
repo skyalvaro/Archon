@@ -42,7 +42,7 @@ export const TasksTab = ({
   onTasksChange: (tasks: Task[]) => void;
   projectId: string;
   movingTaskIds: Set<string>;
-  setMovingTaskIds: (ids: Set<string>) => void;
+  setMovingTaskIds: React.Dispatch<React.SetStateAction<Set<string>>>;
 }) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
@@ -307,11 +307,12 @@ export const TasksTab = ({
       const newOrder = getNextOrderForStatus(newStatus);
 
       // Optimistically update UI for immediate feedback
-      setTasks(prev => prev.map(task => 
+      const updatedTasks = tasks.map(task => 
         task.id === taskId 
           ? { ...task, status: newStatus, task_order: newOrder }
           : task
-      ));
+      );
+      updateTasks(updatedTasks);
 
       // Update in backend
       await projectService.updateTask(taskId, {

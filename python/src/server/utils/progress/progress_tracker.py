@@ -33,7 +33,7 @@ class ProgressTracker:
             "progressId": progress_id,
             "startTime": datetime.now().isoformat(),
             "status": "initializing",
-            "percentage": 0,
+            "progress": 0,
             "logs": [],
         }
         # Store in class-level dictionary
@@ -68,19 +68,19 @@ class ProgressTracker:
             f"Progress tracking started | progress_id={self.progress_id} | type={self.operation_type}"
         )
 
-    async def update(self, status: str, percentage: int, log: str, **kwargs):
+    async def update(self, status: str, progress: int, log: str, **kwargs):
         """
-        Update progress with status, percentage, and log message.
+        Update progress with status, progress, and log message.
 
         Args:
             status: Current status (analyzing, crawling, processing, etc.)
-            percentage: Progress percentage (0-100)
+            progress: Progress value (0-100)
             log: Log message describing current operation
             **kwargs: Additional data to include in update
         """
         self.state.update({
             "status": status,
-            "percentage": min(100, max(0, percentage)),  # Ensure 0-100
+            "progress": min(100, max(0, progress)),  # Ensure 0-100
             "log": log,
             "timestamp": datetime.now().isoformat(),
         })
@@ -92,7 +92,7 @@ class ProgressTracker:
             "timestamp": datetime.now().isoformat(),
             "message": log,
             "status": status,
-            "percentage": percentage,
+            "progress": progress,
         })
 
         # Add any additional data
@@ -109,7 +109,7 @@ class ProgressTracker:
             completion_data: Optional data about the completed operation
         """
         self.state["status"] = "completed"
-        self.state["percentage"] = 100
+        self.state["progress"] = 100
         self.state["endTime"] = datetime.now().isoformat()
 
         if completion_data:
@@ -162,10 +162,10 @@ class ProgressTracker:
             batch_size: Size of each batch
             message: Progress message
         """
-        percentage = int((current_batch / total_batches) * 100)
+        progress_val = int((current_batch / total_batches) * 100)
         await self.update(
             status="processing_batch",
-            percentage=percentage,
+            progress=progress_val,
             log=message,
             currentBatch=current_batch,
             totalBatches=total_batches,
@@ -183,14 +183,14 @@ class ProgressTracker:
             total_pages: Total pages to process
             current_url: Currently processing URL
         """
-        percentage = int((processed_pages / max(total_pages, 1)) * 100)
+        progress_val = int((processed_pages / max(total_pages, 1)) * 100)
         log = f"Processing page {processed_pages}/{total_pages}"
         if current_url:
             log += f": {current_url}"
 
         await self.update(
             status="crawling",
-            percentage=percentage,
+            progress=progress_val,
             log=log,
             processedPages=processed_pages,
             totalPages=total_pages,
@@ -208,10 +208,10 @@ class ProgressTracker:
             total_chunks: Total chunks to store
             operation: Storage operation description
         """
-        percentage = int((chunks_stored / max(total_chunks, 1)) * 100)
+        progress_val = int((chunks_stored / max(total_chunks, 1)) * 100)
         await self.update(
             status="document_storage",
-            percentage=percentage,
+            progress=progress_val,
             log=f"{operation}: {chunks_stored}/{total_chunks} chunks",
             chunksStored=chunks_stored,
             totalChunks=total_chunks,
@@ -224,7 +224,7 @@ class ProgressTracker:
 
         safe_logfire_info(
             f"📊 [PROGRESS] Updated {self.operation_type} | ID: {self.progress_id} | "
-            f"Status: {self.state.get('status')} | Percentage: {self.state.get('percentage')}%"
+            f"Status: {self.state.get('status')} | Progress: {self.state.get('progress')}%"
         )
 
     def _format_duration(self, seconds: float) -> str:
