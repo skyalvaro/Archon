@@ -69,7 +69,6 @@ function ProjectPage({
   const [newProjectForm, setNewProjectForm] = useState({
     title: "",
     description: "",
-    color: "blue" as const,
   });
 
   // State for delete confirmation modal
@@ -78,6 +77,9 @@ function ProjectPage({
     id: string;
     title: string;
   } | null>(null);
+
+  // State for copy feedback
+  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
 
   const { showToast } = useToast();
 
@@ -95,7 +97,7 @@ function ProjectPage({
   });
 
   // Derive projects array from polling data - ensure it's always an array
-  const projects = projectsData?.projects || [];
+  const projects = Array.isArray(projectsData) ? projectsData : (projectsData?.projects || []);
 
   // Poll tasks for selected project
   const {
@@ -161,7 +163,7 @@ function ProjectPage({
     {
       successMessage: "Creating project...",
       onSuccess: (response) => {
-        setNewProjectForm({ title: "", description: "", color: "blue" });
+        setNewProjectForm({ title: "", description: "" });
         setIsNewProjectModalOpen(false);
         // Polling will pick up the new project
         showToast("Project created successfully!", "success");
@@ -174,7 +176,7 @@ function ProjectPage({
   );
   
   // Direct API call for immediate task loading during project switch
-  const loadTasksForProject = async (projectId: string) => {
+  const loadTasksForProject = useCallback(async (projectId: string) => {
     try {
       const taskData = await projectService.getTasksByProject(projectId);
       
@@ -203,7 +205,7 @@ function ProjectPage({
         error instanceof Error ? error.message : "Failed to load tasks",
       );
     }
-  };
+  }, []);
 
   const handleProjectSelect = useCallback(async (project: Project) => {
     // Early return if already selected
@@ -227,7 +229,7 @@ function ProjectPage({
     } finally {
       setIsSwitchingProject(false);
     }
-  }, [selectedProject?.id, loadTasksForProject]);
+  }, [selectedProject?.id, loadTasksForProject, showToast]);
 
   // Load task counts for all projects using batch endpoint
   const loadTaskCountsForAllProjects = useCallback(
@@ -332,7 +334,6 @@ function ProjectPage({
 
   // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
   useEffect(() => {
-    // The polling returns an array directly, not wrapped in { tasks: [...] }
     if (tasksData && selectedProject) {
       const uiTasks: Task[] = tasksData.map((task: any) => ({
         id: task.id,
@@ -348,37 +349,25 @@ function ProjectPage({
         task_order: task.task_order || 0,
       }));
       
-      // Check if tasks have actually changed before updating
-      setTasks((prevTasks) => {
-        // Quick check: if lengths differ, update
-        if (prevTasks.length !== uiTasks.length) {
-          return uiTasks;
-        }
-        
-        // Deep check: compare each task
-        const hasChanges = uiTasks.some((newTask) => {
-          const oldTask = prevTasks.find(t => t.id === newTask.id);
-          if (!oldTask) return true; // New task
-          
-          // Check if any field has changed
-          return oldTask.title !== newTask.title ||
-                 oldTask.description !== newTask.description ||
-                 oldTask.status !== newTask.status ||
-                 oldTask.assignee.name !== newTask.assignee.name ||
-                 oldTask.feature !== newTask.feature ||
-                 oldTask.task_order !== newTask.task_order;
+      const changed =
+        tasks.length !== uiTasks.length ||
+        uiTasks.some((t) => {
+          const old = tasks.find((x) => x.id === t.id);
+          return (
+            !old ||
+            old.title !== t.title ||
+            old.description !== t.description ||
+            old.status !== t.status ||
+            old.assignee.name !== t.assignee.name ||
+            old.feature !== t.feature ||
+            old.task_order !== t.task_order
+          );
         });
-        
-        if (hasChanges) {
-          return uiTasks;
-        }
-        
-        return prevTasks;
-      });
-      
-      // Force refresh task counts when tasks change
-      const projectIds = projects.map((p) => p.id);
-      debouncedLoadTaskCounts(projectIds, true);
+      if (changed) {
+        setTasks(uiTasks);
+        const projectIds = projects.map((p) => p.id);
+        debouncedLoadTaskCounts(projectIds, true);
+      }
     }
   }, [tasksData, projects, selectedProject?.id]);
 
@@ -717,20 +706,26 @@ function ProjectPage({
                               "Project ID copied to clipboard",
                               "success",
                             );
-                            // Visual feedback
-                            const button = e.currentTarget;
-                            const originalHTML = button.innerHTML;
-                            button.innerHTML =
-                              '<svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Copied!';
+                            // Visual feedback with React state
+                            setCopiedProjectId(project.id);
                             setTimeout(() => {
-                              button.innerHTML = originalHTML;
+                              setCopiedProjectId(null);
                             }, 2000);
                           }}
                           className="flex-1 flex items-center justify-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors py-1"
                           title="Copy Project ID to clipboard"
                         >
-                          <Clipboard className="w-3 h-3" />
-                          <span>Copy ID</span>
+                          {copiedProjectId === project.id ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clipboard className="w-3 h-3" />
+                              <span>Copy ID</span>
+                            </>
+                          )}
                         </button>
 
                         {/* Delete button */}

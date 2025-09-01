@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
-import { Edit, Trash2, RefreshCw, Tag, User, Bot, Clipboard } from 'lucide-react';
+import { Edit, Trash2, RefreshCw, Tag, Clipboard } from 'lucide-react';
 import { Task } from './TaskTableView';
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
 
@@ -52,7 +52,6 @@ export const DraggableTaskCard = ({
       
       if (draggedIndex === hoveredIndex) return;
       
-      console.log('BOARD HOVER: Moving task', draggedItem.id, 'from index', draggedIndex, 'to', hoveredIndex, 'in status', task.status);
       
       // Move the task immediately for visual feedback (same pattern as table view)
       onTaskReorder(draggedItem.id, hoveredIndex, task.status);
@@ -69,15 +68,7 @@ export const DraggableTaskCard = ({
     setIsFlipped(!isFlipped);
   };
 
-  // Calculate hover effects for parent-child relationships
-  const getRelatedTaskIds = () => {
-    const relatedIds = new Set<string>();
-    
-    return relatedIds;
-  };
-
-  const relatedTaskIds = getRelatedTaskIds();
-  const isHighlighted = hoveredTaskId ? relatedTaskIds.has(hoveredTaskId) || hoveredTaskId === task.id : false;
+  const isHighlighted = hoveredTaskId === task.id;
   const isSelected = selectedTasks?.has(task.id) || false;
 
   const handleMouseEnter = () => {

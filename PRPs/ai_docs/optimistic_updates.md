@@ -1,6 +1,6 @@
 # Optimistic Updates Pattern (Future State)
 
-**⚠️ STATUS: This is NOT currently implemented. there is a POC in project page in the FE. This document describes the desired future state for handling optimistic updates in a simple, consistent way.**
+**⚠️ STATUS:** This is not currently implemented. There is a proof‑of‑concept (POC) on the frontend Project page. This document describes the desired future state for handling optimistic updates in a simple, consistent way.
 
 ## Mental Model
 
@@ -9,16 +9,17 @@ Think of optimistic updates as "assuming success" - update the UI immediately fo
 ## The Pattern
 
 ```typescript
-// 1. Save current state (for rollback)
-const previousState = currentState; // Note: Use deep clone for objects/arrays in production
+// 1. Save current state (for rollback) — take an immutable snapshot
+const previousState = structuredClone(currentState);
 
 // 2. Update UI immediately
 setState(newState);
 
 // 3. Call API
 try {
-  await api.updateResource(newState);
-  // Success - UI already updated, nothing to do
+  const serverState = await api.updateResource(newState);
+  // Success — use server as the source of truth
+  setState(serverState);
 } catch (error) {
   // 4. Rollback on failure
   setState(previousState);
@@ -35,24 +36,35 @@ function useOptimistic<T>(initialValue: T, updateFn: (value: T) => Promise<T>) {
   const [value, setValue] = useState(initialValue);
   const [isUpdating, setIsUpdating] = useState(false);
   const previousValueRef = useRef<T>(initialValue);
+  const opSeqRef = useRef(0);      // monotonically increasing op id
+  const mountedRef = useRef(true); // avoid setState after unmount
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const optimisticUpdate = async (newValue: T) => {
+    const opId = ++opSeqRef.current;
     // Save for rollback
     previousValueRef.current = value;
 
     // Update immediately
-    setValue(newValue);
-    setIsUpdating(true);
+    if (mountedRef.current) setValue(newValue);
+    if (mountedRef.current) setIsUpdating(true);
 
     try {
       const result = await updateFn(newValue);
-      setValue(result); // Use server response as source of truth
+      // Apply only if latest op and still mounted
+      if (mountedRef.current && opId === opSeqRef.current) {
+        setValue(result); // Server is source of truth
+      }
     } catch (error) {
       // Rollback
-      setValue(previousValueRef.current);
+      if (mountedRef.current && opId === opSeqRef.current) {
+        setValue(previousValueRef.current);
+      }
       throw error;
     } finally {
-      setIsUpdating(false);
+      if (mountedRef.current && opId === opSeqRef.current) {
+        setIsUpdating(false);
+      }
     }
   };
 
@@ -82,11 +94,11 @@ const handleStatusChange = (newStatus: string) => {
 
 ## Key Principles
 
-1. **Keep it simple** - Just save, update, and rollback
-2. **Server is truth** - Always use server response as final state
-3. **User feedback** - Show loading states and error messages
-4. **Selective usage** - Only for actions where instant feedback matters:
-   - Drag and drop
+1. **Keep it simple** — save, update, roll back.
+2. **Server is the source of truth** — always use the server response as the final state.
+3. **User feedback** — show loading states and clear error messages.
+4. **Selective usage** — only where instant feedback matters:
+   - Drag‑and‑drop
    - Status changes
    - Toggle switches
    - Quick edits
@@ -95,7 +107,7 @@ const handleStatusChange = (newStatus: string) => {
 
 - Don't track complex state histories
 - Don't try to merge conflicts
-- Don't use for create/delete operations (too complex to rollback cleanly)
+- Use with caution for create/delete operations. If used, generate temporary client IDs, reconcile with server‑assigned IDs, ensure idempotency, and define clear rollback/error states. Prefer non‑optimistic flows when side effects are complex.
 - Don't over-engineer with queues or reconciliation
 
 ## When to Implement
@@ -130,5 +142,7 @@ The examples above are simplified for clarity. Production implementations should
 3. **Unmount safety**: Avoid setState after component unmount
 4. **Debouncing**: For rapid updates (e.g., sliders), debounce API calls
 5. **Conflict resolution**: For collaborative editing, consider operational transforms
+6. **Polling/ETag interplay**: When polling, ignore stale responses (e.g., compare opId or Last-Modified) and rely on ETag/304 to prevent flicker overriding optimistic state.
+7. **Idempotency & retries**: Use idempotency keys on write APIs so client retries (or duplicate submits) don't create duplicate effects.
 
 These complexities are why we recommend starting simple and only adding optimistic updates where the UX benefit is clear.

@@ -6,7 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import { Task } from './TaskTableView'; // Import Task interface
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
-import { DraggableTaskCard, DraggableTaskCardProps } from './DraggableTaskCard'; // Import the new component and its props
+import { DraggableTaskCard } from './DraggableTaskCard';
 
 interface TaskBoardViewProps {
   tasks: Task[];
@@ -175,20 +175,13 @@ export const TaskBoardView = ({
     const tasksToDelete = tasks.filter(task => selectedTasks.has(task.id));
     
     try {
-      // Delete all selected tasks
-      await Promise.all(
-        tasksToDelete.map(task => projectService.deleteTask(task.id))
-      );
-      
-      // Clear selection
+      // Use onTaskDelete for each task so parent updates state/metrics
+      await Promise.all(tasksToDelete.map(task => onTaskDelete(task)));
       clearSelection();
-      
-      showToast(`${tasksToDelete.length} tasks deleted successfully`, 'success');
     } catch (error) {
       console.error('Failed to delete tasks:', error);
-      showToast('Failed to delete some tasks', 'error');
     }
-  }, [selectedTasks, tasks, clearSelection, showToast]);
+  }, [selectedTasks, tasks, onTaskDelete, clearSelection]);
 
   // Mass status change handler
   const handleMassStatusChange = useCallback(async (newStatus: Task['status']) => {
@@ -197,24 +190,15 @@ export const TaskBoardView = ({
     const tasksToUpdate = tasks.filter(task => selectedTasks.has(task.id));
     
     try {
-      // Update all selected tasks
+      // Call onTaskMove so optimistic UI and counts refresh immediately; parent persists
       await Promise.all(
-        tasksToUpdate.map(task => 
-          projectService.updateTask(task.id, { 
-            status: newStatus 
-          })
-        )
+        tasksToUpdate.map(task => onTaskMove(task.id, newStatus))
       );
-      
-      // Clear selection
       clearSelection();
-      
-      showToast(`${tasksToUpdate.length} tasks moved to ${newStatus}`, 'success');
     } catch (error) {
       console.error('Failed to update tasks:', error);
-      showToast('Failed to update some tasks', 'error');
     }
-  }, [selectedTasks, tasks, clearSelection, showToast]);
+  }, [selectedTasks, tasks, onTaskMove, clearSelection]);
 
   // No status mapping needed - using database values directly
 
@@ -229,18 +213,15 @@ export const TaskBoardView = ({
     if (!taskToDelete) return;
 
     try {
-      await projectService.deleteTask(taskToDelete.id);
-      // Notify parent to update tasks
-      onTaskDelete(taskToDelete);
-      showToast(`Task "${taskToDelete.title}" deleted successfully`, 'success');
+      // Delegate deletion to parent to avoid duplicate API calls
+      await onTaskDelete(taskToDelete);
     } catch (error) {
       console.error('Failed to delete task:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to delete task', 'error');
     } finally {
       setShowDeleteConfirm(false);
       setTaskToDelete(null);
     }
-  }, [taskToDelete, onTaskDelete, showToast, setShowDeleteConfirm, setTaskToDelete, projectService]);
+  }, [taskToDelete, onTaskDelete, setShowDeleteConfirm, setTaskToDelete]);
 
   // Cancel deletion
   const cancelDeleteTask = useCallback(() => {
@@ -319,7 +300,7 @@ export const TaskBoardView = ({
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
-          onTaskDelete={onTaskDelete}
+          onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
           hoveredTaskId={hoveredTaskId}
@@ -336,7 +317,7 @@ export const TaskBoardView = ({
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
-          onTaskDelete={onTaskDelete}
+          onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
           hoveredTaskId={hoveredTaskId}
@@ -353,7 +334,7 @@ export const TaskBoardView = ({
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
-          onTaskDelete={onTaskDelete}
+          onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
           hoveredTaskId={hoveredTaskId}
@@ -370,7 +351,7 @@ export const TaskBoardView = ({
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
           onTaskComplete={onTaskComplete}
-          onTaskDelete={onTaskDelete}
+          onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
           hoveredTaskId={hoveredTaskId}

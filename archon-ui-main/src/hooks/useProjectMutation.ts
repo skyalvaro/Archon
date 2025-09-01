@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
 interface UseProjectMutationOptions<TData, TVariables> {
   onSuccess?: (data: TData, variables: TVariables) => void;
@@ -26,6 +27,7 @@ export function useProjectMutation<TData = unknown, TVariables = unknown>(
   mutationFn: (variables: TVariables) => Promise<TData>,
   options: UseProjectMutationOptions<TData, TVariables> = {}
 ): UseProjectMutationResult<TData, TVariables> {
+  const { showToast } = useToast();
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -72,8 +74,8 @@ export function useProjectMutation<TData = unknown, TVariables = unknown>(
         }
 
         // Show success message if available
-        if (successMessage && typeof window !== 'undefined') {
-          console.log(successMessage);
+        if (successMessage) {
+          showToast(successMessage, 'success');
         }
       }
 
@@ -92,9 +94,7 @@ export function useProjectMutation<TData = unknown, TVariables = unknown>(
         }
 
         // Show error message
-        if (typeof window !== 'undefined') {
-          console.error(`${errorMessage}:`, error);
-        }
+        showToast(errorMessage, 'error');
       }
 
       throw error;

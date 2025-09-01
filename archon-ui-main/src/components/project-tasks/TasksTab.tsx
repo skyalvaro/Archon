@@ -6,11 +6,15 @@ import { Toggle } from '../ui/Toggle';
 import { projectService } from '../../services/projectService';
 import { useToast } from '../../contexts/ToastContext';
 import { debounce } from '../../utils/debounce';
+import { calculateReorderPosition, getDefaultTaskOrder } from '../../utils/taskOrdering';
 
 import type { CreateTaskRequest, UpdateTaskRequest } from '../../types/project';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
+
+// Type for optimistic task updates with operation tracking
+type OptimisticTask = Task & { _optimisticOperationId: string };
 
 
 
@@ -31,7 +35,7 @@ export const TasksTab = ({
   const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
-  const [optimisticTaskUpdates, setOptimisticTaskUpdates] = useState<Map<string, Task>>(new Map());
+  const [optimisticTaskUpdates, setOptimisticTaskUpdates] = useState<Map<string, OptimisticTask>>(new Map());
   
   // Initialize tasks, but preserve optimistic updates
   useEffect(() => {
@@ -46,7 +50,7 @@ export const TasksTab = ({
           console.log(`[TasksTab] Preserving optimistic update for task ${task.id}:`, optimisticUpdate.status);
           // Clean up internal tracking field before returning
           const { _optimisticOperationId, ...cleanTask } = optimisticUpdate;
-          return cleanTask; // Keep optimistic version without internal fields
+          return cleanTask as Task; // Keep optimistic version without internal fields
         }
         return task; // Use polling data for non-optimistic tasks
       });
@@ -125,7 +129,7 @@ export const TasksTab = ({
       closeModal();
     } catch (error) {
       console.error('Failed to save task:', error);
-      alert(`Failed to save task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showToast(`Failed to save task: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setIsSavingTask(false);
     }
@@ -170,7 +174,7 @@ export const TasksTab = ({
         // Polling will eventually sync the correct state
       }
     }, 800), // Slightly reduced delay for better responsiveness
-    [projectId]
+    []
   );
 
   // Optimized task reordering without optimistic update conflicts
@@ -206,41 +210,8 @@ export const TasksTab = ({
     const movingTask = statusTasks[movingTaskIndex];
     console.log('REORDER: Moving', movingTask.title, 'from', movingTaskIndex, 'to', targetIndex);
     
-    // Calculate new position using improved algorithm
-    let newPosition: number;
-    
-    if (targetIndex === 0) {
-      // Moving to first position
-      const firstTask = statusTasks[0];
-      newPosition = firstTask.task_order / 2;
-    } else if (targetIndex === statusTasks.length - 1) {
-      // Moving to last position
-      const lastTask = statusTasks[statusTasks.length - 1];
-      newPosition = lastTask.task_order + 1024;
-    } else {
-      // Moving between two items
-      let prevTask, nextTask;
-      
-      if (targetIndex > movingTaskIndex) {
-        // Moving down
-        prevTask = statusTasks[targetIndex];
-        nextTask = statusTasks[targetIndex + 1];
-      } else {
-        // Moving up
-        prevTask = statusTasks[targetIndex - 1];
-        nextTask = statusTasks[targetIndex];
-      }
-      
-      if (prevTask && nextTask) {
-        newPosition = (prevTask.task_order + nextTask.task_order) / 2;
-      } else if (prevTask) {
-        newPosition = prevTask.task_order + 1024;
-      } else if (nextTask) {
-        newPosition = nextTask.task_order / 2;
-      } else {
-        newPosition = 1024; // Fallback
-      }
-    }
+    // Calculate new position using shared ordering utility
+    const newPosition = calculateReorderPosition(statusTasks, movingTaskIndex, targetIndex);
     
     console.log('REORDER: New position calculated:', newPosition);
     
@@ -283,12 +254,12 @@ export const TasksTab = ({
     const newOrder = getNextOrderForStatus(newStatus);
 
     // 2. Update UI immediately (optimistic update - no loader!)
-    const optimisticTask = { 
+    const optimisticTask: OptimisticTask = { 
       ...movingTask, 
       status: newStatus, 
       task_order: newOrder,
       _optimisticOperationId: operationId // Track which operation created this
-    } as Task & { _optimisticOperationId: string };
+    };
     const optimisticTasks = tasks.map(task => 
       task.id === taskId ? optimisticTask : task
     );
@@ -351,15 +322,12 @@ export const TasksTab = ({
 
   const deleteTask = async (task: Task) => {
     try {
-      // Delete the task
       await projectService.deleteTask(task.id);
-      console.log(`[TasksTab] Task ${task.id} deleted`);
-      
-      // Task deleted - polling will pick up changes automatically
-      
+      updateTasks(tasks.filter(t => t.id !== task.id));
+      showToast(`Task "${task.title}" deleted`, 'success');
     } catch (error) {
       console.error('Failed to delete task:', error);
-      // Note: The toast notification for deletion is now handled by TaskBoardView and TaskTableView
+      showToast('Failed to delete task', 'error');
     }
   };
 
@@ -419,7 +387,7 @@ export const TasksTab = ({
       
     } catch (error) {
       console.error(`[TasksTab] Failed to update task ${taskId} inline:`, error);
-      alert(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showToast(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
       throw error;
     }
   };
@@ -503,7 +471,7 @@ export const TasksTab = ({
             {/* Add Task Button with Luminous Style */}
             <button 
               onClick={() => {
-                const defaultOrder = getTasksForPrioritySelection('todo')[0]?.value || 1;
+                const defaultOrder = getDefaultTaskOrder(tasks.filter(t => t.status === 'todo'));
                 setEditingTask({
                   id: '',
                   title: '',

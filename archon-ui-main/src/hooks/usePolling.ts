@@ -206,8 +206,8 @@ export function useTaskPolling(projectId: string, options?: UsePollingOptions<an
   const url = `${baseUrl}/${projectId}/tasks`;
   
   return usePolling(url, {
-    interval: 3000, // 3 seconds for tasks
-    staleTime: 1000, // Consider data stale after 1 second
+    interval: 8000, // 8 seconds for tasks
+    staleTime: 2000, // Consider data stale after 2 seconds
     ...options,
   });
 }
@@ -219,8 +219,8 @@ export function useProjectPolling(options?: UsePollingOptions<any>) {
   const url = '/api/projects';
   
   return usePolling(url, {
-    interval: 5000, // 5 seconds for project list
-    staleTime: 2000, // Consider data stale after 2 seconds
+    interval: 10000, // 10 seconds for project list
+    staleTime: 3000, // Consider data stale after 3 seconds
     ...options,
   });
 }
