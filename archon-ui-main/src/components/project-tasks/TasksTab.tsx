@@ -34,17 +34,11 @@ const formatTask = (dbTask: any): Task => {
 export const TasksTab = ({
   initialTasks,
   onTasksChange,
-  projectId,
-  movingTaskIds,
-  setMovingTaskIds,
-  refetchTasks
+  projectId
 }: {
   initialTasks: Task[];
   onTasksChange: (tasks: Task[]) => void;
   projectId: string;
-  movingTaskIds: Set<string>;
-  setMovingTaskIds: React.Dispatch<React.SetStateAction<Set<string>>>;
-  refetchTasks: () => Promise<void>;
 }) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
@@ -55,11 +49,29 @@ export const TasksTab = ({
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
   const [taskOperationError, setTaskOperationError] = useState<string | null>(null);
+  const [optimisticTaskUpdates, setOptimisticTaskUpdates] = useState<Map<string, Task>>(new Map());
+  const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
   
-  // Initialize tasks
+  // Initialize tasks, but preserve optimistic updates
   useEffect(() => {
-    setTasks(initialTasks);
-  }, [initialTasks]);
+    if (optimisticTaskUpdates.size === 0) {
+      // No optimistic updates, use incoming data as-is
+      setTasks(initialTasks);
+    } else {
+      // Merge incoming data with optimistic updates
+      const mergedTasks = initialTasks.map(task => {
+        const optimisticUpdate = optimisticTaskUpdates.get(task.id);
+        if (optimisticUpdate) {
+          console.log(`[TasksTab] Preserving optimistic update for task ${task.id}:`, optimisticUpdate.status);
+          // Clean up internal tracking field before returning
+          const { _optimisticOperationId, ...cleanTask } = optimisticUpdate;
+          return cleanTask; // Keep optimistic version without internal fields
+        }
+        return task; // Use polling data for non-optimistic tasks
+      });
+      setTasks(mergedTasks);
+    }
+  }, [initialTasks, optimisticTaskUpdates]);
 
   // Load project features on component mount
   useEffect(() => {
@@ -289,106 +301,92 @@ export const TasksTab = ({
     debouncedPersistSingleTask(updatedTask);
   }, [tasks, updateTasks, debouncedPersistSingleTask]);
 
-  // Task move function (for board view)
+  // Task move function (for board view) - Optimistic Updates with Concurrent Operation Protection
   const moveTask = async (taskId: string, newStatus: Task['status']) => {
-    console.log(`[TasksTab] Moving task ${taskId} to ${newStatus}`);
+    // Generate unique operation ID to handle concurrent operations
+    const operationId = `${taskId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[TasksTab] Optimistically moving task ${taskId} to ${newStatus} (op: ${operationId})`);
     
     // Clear any previous errors
     setTaskOperationError(null);
     
-    // Add to loading set
-    setMovingTaskIds(prev => {
-      const newSet = new Set([...prev, taskId]);
-      console.log(`[TasksTab] Added ${taskId} to movingTaskIds. Set size:`, newSet.size, 'Set contents:', Array.from(newSet));
-      return newSet;
-    });
+    // Find the task and validate
+    const movingTask = tasks.find(task => task.id === taskId);
+    if (!movingTask) {
+      showToast('Task not found', 'error');
+      return;
+    }
+
+    // Cancel any existing operations for this task (rapid moves)
+    setPendingOperations(prev => new Set(prev).add(operationId));
+
+    // 1. Save current state for rollback
+    const previousTasks = [...tasks]; // Shallow clone sufficient
+    const newOrder = getNextOrderForStatus(newStatus);
+
+    // 2. Update UI immediately (optimistic update - no loader!)
+    const optimisticTask = { 
+      ...movingTask, 
+      status: newStatus, 
+      task_order: newOrder,
+      _optimisticOperationId: operationId // Track which operation created this
+    } as Task & { _optimisticOperationId: string };
+    const optimisticTasks = tasks.map(task => 
+      task.id === taskId ? optimisticTask : task
+    );
     
+    // Track this as an optimistic update with operation ID
+    setOptimisticTaskUpdates(prev => new Map(prev).set(taskId, optimisticTask));
+    updateTasks(optimisticTasks);
+
+    // 3. Call API in background
     try {
-      const movingTask = tasks.find(task => task.id === taskId);
-      if (!movingTask) {
-        throw new Error('Task not found');
-      }
-      
-      const oldStatus = movingTask.status;
-      const newOrder = getNextOrderForStatus(newStatus);
-
-      // Optimistically update UI for immediate feedback
-      const updatedTasks = tasks.map(task => 
-        task.id === taskId 
-          ? { ...task, status: newStatus, task_order: newOrder }
-          : task
-      );
-      updateTasks(updatedTasks);
-
-      // Update in backend
       await projectService.updateTask(taskId, {
         status: newStatus,
         task_order: newOrder,
         client_timestamp: Date.now()
       });
       
-      console.log(`[TasksTab] Successfully moved task ${taskId}`);
+      console.log(`[TasksTab] Successfully moved task ${taskId} (op: ${operationId})`);
       
-      // Keep checking until backend has the correct status
-      const verifyTaskStatus = async (): Promise<boolean> => {
-        try {
-          await refetchTasks();
-          
-          // Check if the current tasks state has the correct status
-          // Note: refetchTasks triggers useEffect in ProjectPage which updates tasks
-          // We need to wait a tick for React state to update
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          const currentTask = tasks.find(t => t.id === taskId);
-          const hasCorrectStatus = currentTask?.status === newStatus;
-          
-          console.log(`[TasksTab] Verification for task ${taskId}: expected=${newStatus}, actual=${currentTask?.status}, correct=${hasCorrectStatus}`);
-          
-          return hasCorrectStatus;
-        } catch (error) {
-          console.error(`[TasksTab] Failed to verify task status:`, error);
-          return false;
+      // Only clear if this is still the current operation (no newer operation started)
+      setOptimisticTaskUpdates(prev => {
+        const currentOptimistic = prev.get(taskId);
+        if (currentOptimistic?._optimisticOperationId === operationId) {
+          const newMap = new Map(prev);
+          newMap.delete(taskId);
+          return newMap;
         }
-      };
-      
-      // Keep trying until we get the correct status or max attempts
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (attempts < maxAttempts) {
-        const isCorrect = await verifyTaskStatus();
-        if (isCorrect) {
-          console.log(`[TasksTab] Task ${taskId} status verified correctly after ${attempts + 1} attempts`);
-          break;
-        }
-        
-        attempts++;
-        console.log(`[TasksTab] Task status not correct yet, attempt ${attempts}/${maxAttempts}`);
-        
-        if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 200)); // Wait before retry
-        }
-      }
-      
-      if (attempts >= maxAttempts) {
-        console.warn(`[TasksTab] Could not verify correct task status after ${maxAttempts} attempts`);
-      }
+        return prev; // Don't clear, newer operation is active
+      });
       
     } catch (error) {
-      console.error(`[TasksTab] Failed to move task ${taskId}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to move task';
-      setTaskOperationError(errorMessage);
+      console.error(`[TasksTab] Failed to move task ${taskId} (op: ${operationId}):`, error);
       
-      // Show error toast
-      showToast(errorMessage, 'error');
+      // Only rollback if this is still the current operation
+      setOptimisticTaskUpdates(prev => {
+        const currentOptimistic = prev.get(taskId);
+        if (currentOptimistic?._optimisticOperationId === operationId) {
+          // 4. Rollback on failure - revert to exact previous state
+          updateTasks(previousTasks);
+          
+          const newMap = new Map(prev);
+          newMap.delete(taskId);
+          
+          const errorMessage = error instanceof Error ? error.message : 'Failed to move task';
+          setTaskOperationError(errorMessage);
+          showToast(`Failed to move task: ${errorMessage}`, 'error');
+          
+          return newMap;
+        }
+        return prev; // Don't rollback, newer operation is active
+      });
       
-      // Revert optimistic update - polling will sync correct state
     } finally {
-      // Remove from loading set only after we've confirmed the update
-      setMovingTaskIds(prev => {
+      // Clean up operation tracking
+      setPendingOperations(prev => {
         const newSet = new Set(prev);
-        newSet.delete(taskId);
-        console.log(`[TasksTab] Removed ${taskId} from movingTaskIds. Set size:`, newSet.size, 'Set contents:', Array.from(newSet));
+        newSet.delete(operationId);
         return newSet;
       });
     }
@@ -542,7 +540,6 @@ export const TasksTab = ({
               onTaskDelete={deleteTask}
               onTaskMove={moveTask}
               onTaskReorder={handleTaskReorder}
-              movingTaskIds={movingTaskIds}
             />
           )}
         </div>

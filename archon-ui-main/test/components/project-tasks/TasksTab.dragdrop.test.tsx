@@ -15,7 +15,7 @@ describe('TasksTab Drag and Drop Integration', () => {
     expect(fileContent).toMatch(/finally\s*{\s*\/\/\s*Remove from loading set\s*setMovingTaskIds/);
     
     // Check that the cleanup happens even on error
-    const moveTaskMatch = fileContent.match(/const moveTask[\s\S]*?\n  \};/);
+    const moveTaskMatch = fileContent.match(/const moveTask[\s\S]*?\n{2}\};/);
     expect(moveTaskMatch).toBeTruthy();
     if (moveTaskMatch) {
       const moveTaskFunction = moveTaskMatch[0];

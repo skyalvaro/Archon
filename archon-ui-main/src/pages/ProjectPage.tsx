@@ -137,7 +137,6 @@ function ProjectPage({
   // State management for real data
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [movingTaskIds, setMovingTaskIds] = useState<Set<string>>(new Set());
   const [projectTaskCounts, setProjectTaskCounts] = useState<
     Record<string, { todo: number; doing: number; done: number }>
   >({});
@@ -195,7 +194,7 @@ function ProjectPage({
     error: tasksPollingError,
     refetch: refetchTasks,
   } = useTaskPolling(selectedProject?.id || "", {
-    enabled: !!selectedProject && !isSwitchingProject && movingTaskIds.size === 0,
+    enabled: !!selectedProject && !isSwitchingProject,
     onError: (error) => {
       console.error("Failed to load tasks:", error);
       setTasksError(error.message);
@@ -423,9 +422,6 @@ function ProjectPage({
 
   // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
   useEffect(() => {
-    // Skip processing polling data while tasks are being moved to prevent race conditions
-    if (movingTaskIds.size > 0) return;
-    
     // The polling returns an array directly, not wrapped in { tasks: [...] }
     if (tasksData && selectedProject) {
       const uiTasks: Task[] = tasksData.map((task: any) => ({
@@ -475,7 +471,7 @@ function ProjectPage({
         .filter((id) => !id.startsWith("temp-"));
       debouncedLoadTaskCounts(projectIds);
     }
-  }, [tasksData, projects, selectedProject?.id, movingTaskIds.size]);
+  }, [tasksData, projects, selectedProject?.id]);
 
   // Manual refresh function using polling refetch
   const loadProjects = async () => {
@@ -936,9 +932,6 @@ function ProjectPage({
                         debouncedLoadTaskCounts(projectIds);
                       }}
                       projectId={selectedProject.id}
-                      movingTaskIds={movingTaskIds}
-                      setMovingTaskIds={setMovingTaskIds}
-                      refetchTasks={refetchTasks}
                     />
                   )}
                 </TabsContent>
