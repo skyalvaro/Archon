@@ -97,13 +97,13 @@ class RateLimiter:
                     self.request_times.append(now)
                     self.token_usage.append((now, estimated_tokens))
                     return True
-                    
+
                 wait_time = self._calculate_wait_time(estimated_tokens)
                 usage = self._get_current_usage()
-            
+
             if wait_time <= 0:
                 return False
-                
+
             logfire_logger.info(
                 f"Rate limiting: waiting {wait_time:.1f}s",
                 extra={
@@ -336,7 +336,7 @@ class MemoryAdaptiveDispatcher:
         # Process results and track failures
         successful_results = []
         failed_items = []
-        
+
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
                 failed_items.append({"index": idx, "error": str(result)})
@@ -350,7 +350,7 @@ class MemoryAdaptiveDispatcher:
                 successful_results.append(result)
 
         success_rate = len(successful_results) / len(items) * 100
-        
+
         # Log completion with detailed failure information
         log_extra = {
             "total_items": len(items),
@@ -359,7 +359,7 @@ class MemoryAdaptiveDispatcher:
             "success_rate": f"{success_rate:.1f}%",
             "workers_used": optimal_workers,
         }
-        
+
         if failed_items:
             log_extra["failed_items"] = failed_items
             logfire_logger.warning(

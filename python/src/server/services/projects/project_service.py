@@ -310,7 +310,7 @@ class ProjectService:
             error_message = str(e)
             if "The result contains 0 rows" in error_message or "PGRST116" in error_message:
                 return False, {"error": "Project not found"}
-            
+
             logger.error(f"Error getting project features: {e}")
             return False, {"error": f"Error getting project features: {str(e)}"}
 

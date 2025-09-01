@@ -272,6 +272,67 @@ async def projects_health():
         }
 
 
+@router.get("/projects/task-counts")
+async def get_all_task_counts(
+    request: Request,
+    response: Response,
+):
+    """
+    Get task counts for all projects in a single batch query.
+    Optimized endpoint to avoid N+1 query problem.
+    
+    Returns counts grouped by project_id with todo, doing, and done counts.
+    Review status is included in doing count to match frontend logic.
+    """
+    try:
+        # Get If-None-Match header for ETag comparison
+        if_none_match = request.headers.get("If-None-Match")
+
+        logfire.debug(f"Getting task counts for all projects | etag={if_none_match}")
+
+        # Use TaskService to get batch task counts
+        # Get client explicitly to ensure mocking works in tests
+        supabase_client = get_supabase_client()
+        task_service = TaskService(supabase_client)
+        success, result = task_service.get_all_project_task_counts()
+
+        if not success:
+            logfire.error(f"Failed to get task counts | error={result.get('error')}")
+            raise HTTPException(status_code=500, detail=result)
+
+        # Generate ETag from counts data
+        etag_data = {
+            "counts": result,
+            "count": len(result)
+        }
+        current_etag = generate_etag(etag_data)
+
+        # Check if client's ETag matches (304 Not Modified)
+        if check_etag(if_none_match, current_etag):
+            response.status_code = 304
+            response.headers["ETag"] = current_etag
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            logfire.debug(f"Task counts unchanged, returning 304 | etag={current_etag}")
+            return None
+
+        # Set ETag headers for successful response
+        response.headers["ETag"] = current_etag
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Last-Modified"] = datetime.utcnow().isoformat()
+
+        logfire.debug(
+            f"Task counts retrieved | project_count={len(result)} | etag={current_etag}"
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logfire.error(f"Failed to get task counts | error={str(e)}")
+        raise HTTPException(status_code=500, detail={"error": str(e)})
+
+
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str):
     """Get a specific project."""
@@ -490,14 +551,14 @@ async def list_project_tasks(
     project_id: str,
     request: Request,
     response: Response,
-    include_archived: bool = False, 
+    include_archived: bool = False,
     exclude_large_fields: bool = False
 ):
     """List all tasks for a specific project with ETag support for efficient polling."""
     try:
         # Get If-None-Match header for ETag comparison
         if_none_match = request.headers.get("If-None-Match")
-        
+
         logfire.debug(
             f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | etag={if_none_match}"
         )

@@ -414,3 +414,61 @@ class TaskService:
         except Exception as e:
             logger.error(f"Error archiving task: {e}")
             return False, {"error": f"Error archiving task: {str(e)}"}
+
+    def get_all_project_task_counts(self) -> tuple[bool, dict[str, dict[str, int]]]:
+        """
+        Get task counts for all projects in a single optimized query.
+        
+        Returns task counts grouped by project_id and status.
+        Includes review status in "doing" count to match frontend logic.
+        
+        Returns:
+            Tuple of (success, counts_dict) where counts_dict is:
+            {"project-id": {"todo": 5, "doing": 2, "done": 10}}
+        """
+        try:
+            logger.debug("Fetching task counts for all projects in batch")
+
+            # Query all non-archived tasks grouped by project_id and status
+            response = (
+                self.supabase_client.table("archon_tasks")
+                .select("project_id, status")
+                .or_("archived.is.null,archived.is.false")
+                .execute()
+            )
+
+            if not response.data:
+                logger.debug("No tasks found")
+                return True, {}
+
+            # Process results into counts by project and status
+            counts_by_project = {}
+
+            for task in response.data:
+                project_id = task.get("project_id")
+                status = task.get("status")
+
+                if not project_id or not status:
+                    continue
+
+                # Initialize project counts if not exists
+                if project_id not in counts_by_project:
+                    counts_by_project[project_id] = {
+                        "todo": 0,
+                        "doing": 0,
+                        "done": 0
+                    }
+
+                # Map review to doing to match frontend logic
+                if status == "review":
+                    counts_by_project[project_id]["doing"] += 1
+                elif status in ["todo", "doing", "done"]:
+                    counts_by_project[project_id][status] += 1
+
+            logger.debug(f"Task counts fetched for {len(counts_by_project)} projects")
+
+            return True, counts_by_project
+
+        except Exception as e:
+            logger.error(f"Error fetching task counts: {e}")
+            return False, {"error": f"Error fetching task counts: {str(e)}"}

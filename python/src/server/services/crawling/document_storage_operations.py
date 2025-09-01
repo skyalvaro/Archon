@@ -282,13 +282,13 @@ class DocumentStorageOperations:
                             "original_url": request.get("url"),
                         },
                     }
-                    
+
                     # Add new fields if provided
                     if source_url:
                         fallback_data["source_url"] = source_url
                     if source_display_name:
                         fallback_data["source_display_name"] = source_display_name
-                    
+
                     self.supabase_client.table("archon_sources").upsert(fallback_data).execute()
                     safe_logfire_info(f"Fallback source creation succeeded for '{source_id}'")
                 except Exception as fallback_error:

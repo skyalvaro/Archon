@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useToast } from "../contexts/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStaggeredEntrance } from "../hooks/useStaggeredEntrance";
 import { useProjectPolling, useTaskPolling } from "../hooks/usePolling";
 import { useDatabaseMutation } from "../hooks/useDatabaseMutation";
 import { useProjectMutation } from "../hooks/useProjectMutation";
+import { debounce } from "../utils/debounce";
 import {
   Tabs,
   TabsList,
@@ -12,12 +13,9 @@ import {
   TabsContent,
 } from "../components/project-tasks/Tabs";
 import { DocsTab } from "../components/project-tasks/DocsTab";
-// import { FeaturesTab } from '../components/project-tasks/FeaturesTab';
-// import { DataTab } from '../components/project-tasks/DataTab';
 import { TasksTab } from "../components/project-tasks/TasksTab";
 import { Button } from "../components/ui/Button";
 import {
-  ChevronRight,
   ShoppingCart,
   Code,
   Briefcase,
@@ -132,23 +130,6 @@ interface ProjectPageProps {
   "data-id"?: string;
 }
 
-// Icon mapping for projects (since database stores icon names as strings)
-const getProjectIcon = (iconName?: string) => {
-  const iconMap = {
-    ShoppingCart: <ShoppingCart className="w-5 h-5" />,
-    Briefcase: <Briefcase className="w-5 h-5" />,
-    Code: <Code className="w-5 h-5" />,
-    Layers: <Layers className="w-5 h-5" />,
-    BarChart: <BarChart3 className="w-5 h-5" />,
-    Heart: <Heart className="w-5 h-5" />,
-  };
-  return (
-    iconMap[iconName as keyof typeof iconMap] || (
-      <Briefcase className="w-5 h-5" />
-    )
-  );
-};
-
 function ProjectPage({
   className = "",
   "data-id": dataId,
@@ -156,12 +137,19 @@ function ProjectPage({
   // State management for real data
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [movingTaskIds, setMovingTaskIds] = useState<Set<string>>(new Set());
   const [projectTaskCounts, setProjectTaskCounts] = useState<
     Record<string, { todo: number; doing: number; done: number }>
   >({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [isSwitchingProject, setIsSwitchingProject] = useState(false);
+  
+  // Task counts cache with 5-minute TTL
+  const taskCountsCache = useRef<{
+    data: Record<string, { todo: number; doing: number; done: number }>;
+    timestamp: number;
+  } | null>(null);
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
@@ -174,8 +162,6 @@ function ProjectPage({
     description: "",
     color: "blue" as const,
   });
-
-  // Handler for retrying project creation
 
   // State for delete confirmation modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -209,13 +195,11 @@ function ProjectPage({
     error: tasksPollingError,
     refetch: refetchTasks,
   } = useTaskPolling(selectedProject?.id || "", {
-    enabled: !!selectedProject,
+    enabled: !!selectedProject && !isSwitchingProject && movingTaskIds.size === 0,
     onError: (error) => {
       console.error("Failed to load tasks:", error);
       setTasksError(error.message);
     },
-    // Removed onSuccess callback - direct API calls handle task updates
-    // Polling now only used for ETag efficiency, not state updates
   });
 
 
@@ -279,156 +263,10 @@ function ProjectPage({
       },
     },
   );
-
-  const handleProjectSelect = async (project: Project) => {
-    // Show loading state during project switch
-    setIsSwitchingProject(true);
-    setTasksError(null);
-    setTasks([]); // Clear stale tasks immediately to prevent wrong data showing
-    
-    try {
-      setSelectedProject(project);
-      setShowProjectDetails(true);
-      setActiveTab("tasks");
-      
-      // Load tasks for the new project
-      await loadTasksForProject(project.id);
-    } catch (error) {
-      console.error('Failed to switch project:', error);
-      showToast('Failed to load project tasks', 'error');
-    } finally {
-      setIsSwitchingProject(false);
-    }
-  };
-
-  // Auto-select pinned project or first project when projects load
-  useEffect(() => {
-    if (!projects?.length) return;
-
-    // console.log("📦 Projects loaded via polling:", projects.length);
-
-    // Sort projects - pinned first, then alphabetically
-    const sortedProjects = [...projects].sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      return a.title.localeCompare(b.title);
-    });
-
-    // Load task counts for all projects
-    const projectIds = sortedProjects.map((p) => p.id);
-    loadTaskCountsForAllProjects(projectIds);
-
-    // Find pinned project - this is ALWAYS the default on page load
-    const pinnedProject = sortedProjects.find((p) => p.pinned === true);
-    // console.log(
-    //   `📌 Pinned project:`,
-    //   pinnedProject ? `${pinnedProject.title}` : "None found",
-    // );
-
-    // On page load, ALWAYS select pinned project if it exists
-    if (
-      pinnedProject &&
-      (!selectedProject || selectedProject.id !== pinnedProject.id)
-    ) {
-      console.log(`✅ Selecting pinned project: ${pinnedProject.title}`);
-      handleProjectSelect(pinnedProject);
-    } else if (!selectedProject && sortedProjects.length > 0) {
-      // No pinned project, select first one
-      const firstProject = sortedProjects[0];
-      console.log(
-        `📋 No pinned project, selecting first: ${firstProject.title}`,
-      );
-      handleProjectSelect(firstProject);
-    }
-  }, [projects, selectedProject, handleProjectSelect]);
-
-  // Update loading state based on polling
-  useEffect(() => {
-    setIsLoadingTasks(isPollingTasks);
-  }, [isPollingTasks]);
-
-  // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
-  useEffect(() => {
-    if (tasksData?.tasks) {
-      // Update tasks for the selected project to keep UI in sync with server changes
-      if (selectedProject) {
-        const uiTasks: Task[] = tasksData.tasks.map((task: any) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: (task.status || "todo") as Task["status"],
-          assignee: {
-            name: (task.assignee || "User") as "User" | "Archon" | "AI IDE Agent",
-            avatar: "",
-          },
-          feature: task.feature || "General",
-          featureColor: task.featureColor || "#6366f1",
-          task_order: task.task_order || 0,
-        }));
-        setTasks(uiTasks);
-      }
-      
-      const projectIds = projects
-        .map((p) => p.id)
-        .filter((id) => !id.startsWith("temp-"));
-      loadTaskCountsForAllProjects(projectIds);
-    }
-  }, [tasksData?.tasks, projects, selectedProject]);
-
-  // Load task counts for all projects in parallel
-  const loadTaskCountsForAllProjects = useCallback(
-    async (projectIds: string[]) => {
-      try {
-        // Fetch all project tasks in parallel
-        const results = await Promise.allSettled(
-          projectIds.map(async (projectId) => {
-            const tasksData = await projectService.getTasksByProject(projectId);
-            const todos = tasksData.filter((t: any) => t.status === "todo").length;
-            const doing = tasksData.filter(
-              (t: any) => t.status === "doing" || t.status === "review"
-            ).length;
-            const done = tasksData.filter((t: any) => t.status === "done").length;
-            return { projectId, counts: { todo: todos, doing, done } };
-          })
-        );
-
-        // Process results and handle failures
-        const counts: Record<string, { todo: number; doing: number; done: number }> = {};
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            counts[result.value.projectId] = result.value.counts;
-          } else {
-            // Extract projectId from the original array since we can't get it from rejection
-            const failedIndex = results.indexOf(result);
-            const projectId = projectIds[failedIndex];
-            console.error(`Failed to load tasks for project ${projectId}:`, result.reason);
-            counts[projectId] = { todo: 0, doing: 0, done: 0 };
-          }
-        });
-
-        setProjectTaskCounts(counts);
-      } catch (error) {
-        console.error("Failed to load task counts:", error);
-      }
-    },
-    [],
-  );
-
-  // Manual refresh function using polling refetch
-  const loadProjects = async () => {
-    try {
-      console.log(`[LOAD PROJECTS] Manually refreshing projects...`);
-      await refetchProjects();
-    } catch (error) {
-      console.error("Failed to refresh projects:", error);
-      showToast("Failed to refresh projects. Please try again.", "error");
-    }
-  };
-
+  
   // Direct API call for immediate task loading during project switch
   const loadTasksForProject = async (projectId: string) => {
     try {
-      console.log(`[LOAD TASKS] Direct API call for project: ${projectId}`);
       const taskData = await projectService.getTasksByProject(projectId);
       
       // Use the same formatting logic as polling onSuccess callback
@@ -450,12 +288,217 @@ function ProjectPage({
       }));
       
       setTasks(uiTasks);
-      console.log(`[LOAD TASKS] Set ${uiTasks.length} tasks immediately`);
     } catch (error) {
       console.error("Failed to load tasks:", error);
       setTasksError(
         error instanceof Error ? error.message : "Failed to load tasks",
       );
+    }
+  };
+
+  const handleProjectSelect = useCallback(async (project: Project) => {
+    // Early return if already selected
+    if (selectedProject?.id === project.id) return;
+    
+    // Show loading state during project switch
+    setIsSwitchingProject(true);
+    setTasksError(null);
+    setTasks([]); // Clear stale tasks immediately to prevent wrong data showing
+    
+    try {
+      setSelectedProject(project);
+      setShowProjectDetails(true);
+      setActiveTab("tasks");
+      
+      // Load tasks for the new project
+      await loadTasksForProject(project.id);
+    } catch (error) {
+      console.error('Failed to switch project:', error);
+      showToast('Failed to load project tasks', 'error');
+    } finally {
+      setIsSwitchingProject(false);
+    }
+  }, [selectedProject?.id, loadTasksForProject]);
+
+  // Load task counts for all projects using batch endpoint
+  const loadTaskCountsForAllProjects = useCallback(
+    async (projectIds: string[]) => {
+      // Check cache first (5-minute TTL = 300000ms)
+      const now = Date.now();
+      if (taskCountsCache.current && 
+          (now - taskCountsCache.current.timestamp) < 300000) {
+        // Use cached data
+        const cachedCounts = taskCountsCache.current.data;
+        const filteredCounts: Record<string, { todo: number; doing: number; done: number }> = {};
+        projectIds.forEach((projectId) => {
+          if (cachedCounts[projectId]) {
+            filteredCounts[projectId] = cachedCounts[projectId];
+          } else {
+            filteredCounts[projectId] = { todo: 0, doing: 0, done: 0 };
+          }
+        });
+        setProjectTaskCounts(filteredCounts);
+        return;
+      }
+      
+      try {
+        // Use single batch API call instead of N parallel calls
+        const counts = await projectService.getTaskCountsForAllProjects();
+        
+        // Update cache
+        taskCountsCache.current = {
+          data: counts,
+          timestamp: now
+        };
+        
+        // Filter to only requested projects and provide defaults for missing ones
+        const filteredCounts: Record<string, { todo: number; doing: number; done: number }> = {};
+        projectIds.forEach((projectId) => {
+          if (counts[projectId]) {
+            filteredCounts[projectId] = counts[projectId];
+          } else {
+            // Provide default counts if project not found
+            filteredCounts[projectId] = { todo: 0, doing: 0, done: 0 };
+          }
+        });
+
+        setProjectTaskCounts(filteredCounts);
+      } catch (error) {
+        console.error("Failed to load task counts:", error);
+        // Set all to 0 on complete failure
+        const emptyCounts: Record<string, { todo: number; doing: number; done: number }> = {};
+        projectIds.forEach((id) => {
+          emptyCounts[id] = { todo: 0, doing: 0, done: 0 };
+        });
+        setProjectTaskCounts(emptyCounts);
+      }
+    },
+    [],
+  );
+  
+  // Create debounced version to avoid rapid API calls
+  const debouncedLoadTaskCounts = useMemo(
+    () => debounce((projectIds: string[]) => {
+      loadTaskCountsForAllProjects(projectIds);
+    }, 1000),
+    [loadTaskCountsForAllProjects]
+  );
+
+  // Auto-select pinned project or first project when projects load
+  useEffect(() => {
+    if (!projects?.length) return;
+
+
+    // Sort projects - pinned first, then alphabetically
+    const sortedProjects = [...projects].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return a.title.localeCompare(b.title);
+    });
+
+    // Load task counts for all projects (debounced)
+    const projectIds = sortedProjects.map((p) => p.id);
+    debouncedLoadTaskCounts(projectIds);
+
+    // Find pinned project - this is ALWAYS the default on page load
+    const pinnedProject = sortedProjects.find((p) => p.pinned === true);
+
+    // On page load, ALWAYS select pinned project if it exists
+    if (
+      pinnedProject &&
+      (!selectedProject || selectedProject.id !== pinnedProject.id)
+    ) {
+      handleProjectSelect(pinnedProject);
+    } else if (!selectedProject && sortedProjects.length > 0) {
+      // No pinned project, select first one
+      const firstProject = sortedProjects[0];
+      handleProjectSelect(firstProject);
+    }
+  }, [projects, selectedProject, handleProjectSelect]);
+
+  // Update loading state based on polling
+  useEffect(() => {
+    setIsLoadingTasks(isPollingTasks);
+  }, [isPollingTasks]);
+
+  // Refresh task counts when tasks update via polling AND keep UI in sync for selected project
+  useEffect(() => {
+    // The polling returns an array directly, not wrapped in { tasks: [...] }
+    if (tasksData && selectedProject) {
+      const uiTasks: Task[] = tasksData.map((task: any) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: (task.status || "todo") as Task["status"],
+        assignee: {
+          name: (task.assignee || "User") as "User" | "Archon" | "AI IDE Agent",
+          avatar: "",
+        },
+        feature: task.feature || "General",
+        featureColor: task.featureColor || "#6366f1",
+        task_order: task.task_order || 0,
+      }));
+      
+      // Only update tasks if no drag operations in progress
+      if (movingTaskIds.size === 0) {
+        // Check if tasks have actually changed before updating
+        setTasks((prevTasks) => {
+          // Quick check: if lengths differ, update
+          if (prevTasks.length !== uiTasks.length) {
+            return uiTasks;
+          }
+          
+          // Deep check: compare each task
+          const hasChanges = uiTasks.some((newTask) => {
+            const oldTask = prevTasks.find(t => t.id === newTask.id);
+            if (!oldTask) return true; // New task
+            
+            // Check if any field has changed
+            return oldTask.title !== newTask.title ||
+                   oldTask.description !== newTask.description ||
+                   oldTask.status !== newTask.status ||
+                   oldTask.assignee.name !== newTask.assignee.name ||
+                   oldTask.feature !== newTask.feature ||
+                   oldTask.task_order !== newTask.task_order;
+          });
+          
+          if (hasChanges) {
+            return uiTasks;
+          }
+          
+          return prevTasks;
+        });
+      } else {
+        // Merge updates for non-moving tasks only
+        setTasks((prev) => {
+          const updated = prev.map((task) => {
+            if (movingTaskIds.has(task.id)) {
+              return task; // Preserve local state for moving tasks
+            }
+            const updatedTask = uiTasks.find((t) => t.id === task.id);
+            return updatedTask || task;
+          });
+          
+          // Also add any new tasks that aren't in prev
+          const newTasks = uiTasks.filter(t => !prev.find(p => p.id === t.id));
+          return [...updated, ...newTasks];
+        });
+      }
+      
+      const projectIds = projects
+        .map((p) => p.id)
+        .filter((id) => !id.startsWith("temp-"));
+      debouncedLoadTaskCounts(projectIds);
+    }
+  }, [tasksData, projects, selectedProject?.id, movingTaskIds.size]);
+
+  // Manual refresh function using polling refetch
+  const loadProjects = async () => {
+    try {
+      await refetchProjects();
+    } catch (error) {
+      console.error("Failed to refresh projects:", error);
+      showToast("Failed to refresh projects. Please try again.", "error");
     }
   };
 
@@ -519,28 +562,6 @@ function ProjectPage({
   const { isVisible, containerVariants, itemVariants, titleVariants } =
     useStaggeredEntrance([1, 2, 3], 0.15);
 
-  // Add animation for tab content
-  const tabContentVariants = {
-    hidden: {
-      opacity: 0,
-      y: 20,
-    },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.4,
-        ease: "easeOut",
-      },
-    },
-    exit: {
-      opacity: 0,
-      y: -20,
-      transition: {
-        duration: 0.2,
-      },
-    },
-  };
 
   return (
     <motion.div
@@ -873,12 +894,6 @@ function ProjectPage({
               >
                 Docs
               </TabsTrigger>
-              {/* <TabsTrigger value="features" className="py-3 font-mono transition-all duration-300" color="purple">
-                Features
-              </TabsTrigger>
-              <TabsTrigger value="data" className="py-3 font-mono transition-all duration-300" color="pink">
-                Data
-              </TabsTrigger> */}
               <TabsTrigger
                 value="tasks"
                 className="py-3 font-mono transition-all duration-300"
@@ -895,16 +910,6 @@ function ProjectPage({
                   <DocsTab tasks={tasks} project={selectedProject} />
                 </TabsContent>
               )}
-              {/* {activeTab === 'features' && (
-                <TabsContent value="features" className="mt-0">
-                  <FeaturesTab project={selectedProject} />
-                </TabsContent>
-              )}
-              {activeTab === 'data' && (
-                <TabsContent value="data" className="mt-0">
-                  <DataTab project={selectedProject} />
-                </TabsContent>
-              )} */}
               {activeTab === "tasks" && (
                 <TabsContent value="tasks" className="mt-0">
                   {isLoadingTasks ? (
@@ -943,9 +948,11 @@ function ProjectPage({
                         const projectIds = projects
                           .map((p) => p.id)
                           .filter((id) => !id.startsWith("temp-"));
-                        loadTaskCountsForAllProjects(projectIds);
+                        debouncedLoadTaskCounts(projectIds);
                       }}
                       projectId={selectedProject.id}
+                      movingTaskIds={movingTaskIds}
+                      setMovingTaskIds={setMovingTaskIds}
                     />
                   )}
                 </TabsContent>

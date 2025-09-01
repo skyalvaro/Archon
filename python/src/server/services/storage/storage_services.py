@@ -7,7 +7,6 @@ These services extend the base storage functionality with specific implementatio
 
 from typing import Any
 
-
 from ...config.logfire_config import get_logger, safe_span
 from .base_storage_service import BaseStorageService
 from .document_storage_service import add_documents_to_supabase

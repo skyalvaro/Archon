@@ -4,8 +4,8 @@ Recursive Crawling Strategy
 Handles recursive crawling of websites by following internal links.
 """
 
-from collections.abc import Callable
-from typing import Any, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 from urllib.parse import urldefrag
 
 from crawl4ai import CacheMode, CrawlerRunConfig, MemoryAdaptiveDispatcher
@@ -135,9 +135,9 @@ class RecursiveCrawlStrategy:
             if progress_callback:
                 # Pass step information as flattened kwargs for consistency
                 await progress_callback(
-                    "crawling", 
-                    percentage, 
-                    message, 
+                    "crawling",
+                    percentage,
+                    message,
                     currentStep=message,
                     stepMessage=message,
                     **kwargs
@@ -156,7 +156,7 @@ class RecursiveCrawlStrategy:
             # Check for cancellation at the start of each depth level
             if cancellation_check:
                 cancellation_check()
-            
+
             urls_to_crawl = [
                 normalize_url(url) for url in current_urls if normalize_url(url) not in visited
             ]
@@ -184,7 +184,7 @@ class RecursiveCrawlStrategy:
                 # Check for cancellation before processing each batch
                 if cancellation_check:
                     cancellation_check()
-                
+
                 batch_urls = urls_to_crawl[batch_idx : batch_idx + batch_size]
                 batch_end_idx = min(batch_idx + batch_size, len(urls_to_crawl))
 
@@ -224,7 +224,7 @@ class RecursiveCrawlStrategy:
                             # If cancelled, break out of the loop
                             logger.info("Crawl cancelled during batch processing")
                             break
-                    
+
                     # Map back to original URL using the mapping dict
                     original_url = url_mapping.get(result.url, result.url)
 

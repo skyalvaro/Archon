@@ -11,7 +11,6 @@ This module handles all knowledge base operations including:
 
 import asyncio
 import json
-import time
 import uuid
 from datetime import datetime
 
@@ -37,7 +36,7 @@ router = APIRouter(prefix="/api", tags=["knowledge"])
 
 # Create a semaphore to limit concurrent crawl OPERATIONS (not pages within a crawl)
 # This prevents the server from becoming unresponsive during heavy crawling
-# 
+#
 # IMPORTANT: This is different from CRAWL_MAX_CONCURRENT (configured in UI/database):
 # - CONCURRENT_CRAWL_LIMIT: Max number of separate crawl operations that can run simultaneously (server protection)
 #   Example: User A crawls site1.com, User B crawls site2.com, User C crawls site3.com = 3 operations
@@ -523,7 +522,7 @@ async def upload_document(
             "content_type": file.content_type,
             "size": len(file_content),
         }
-        
+
         # Initialize progress tracker IMMEDIATELY so it's available for polling
         from ..utils.progress.progress_tracker import ProgressTracker
         tracker = ProgressTracker(progress_id, operation_type="upload")
@@ -619,7 +618,7 @@ async def _perform_upload_with_progress(
             """Progress callback for tracking document processing"""
             # Map the document storage progress to overall progress range
             mapped_percentage = progress_mapper.map_progress("document_storage", percentage)
-            
+
             await tracker.update(
                 status="document_storage",
                 percentage=mapped_percentage,
@@ -830,19 +829,19 @@ async def knowledge_health():
     """Knowledge API health check with migration detection."""
     # Check for database migration needs
     from ..main import _check_database_schema
-    
+
     schema_status = await _check_database_schema()
     if not schema_status["valid"]:
         return {
             "status": "migration_required",
-            "service": "knowledge-api", 
+            "service": "knowledge-api",
             "timestamp": datetime.now().isoformat(),
             "ready": False,
             "migration_required": True,
             "message": schema_status["message"],
             "migration_instructions": "Open Supabase Dashboard → SQL Editor → Run: migration/add_source_url_display_name.sql"
         }
-    
+
     # Removed health check logging to reduce console noise
     result = {
         "status": "healthy",
@@ -896,7 +895,7 @@ async def stop_crawl_task(progress_id: str):
                 task.cancel()
                 try:
                     await asyncio.wait_for(task, timeout=2.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except (TimeoutError, asyncio.CancelledError):
                     pass
             del active_crawl_tasks[progress_id]
             found = True

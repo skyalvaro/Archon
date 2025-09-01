@@ -21,10 +21,31 @@ os.environ.setdefault("ARCHON_AGENTS_PORT", "8052")
 @pytest.fixture(autouse=True)
 def prevent_real_db_calls():
     """Automatically prevent any real database calls in all tests."""
-    with patch("supabase.create_client") as mock_create:
-        # Make create_client raise an error if called without our mock
-        mock_create.side_effect = Exception("Real database calls are not allowed in tests!")
-        yield
+    # Create a mock client to use everywhere
+    mock_client = MagicMock()
+    
+    # Mock table operations with chaining support
+    mock_table = MagicMock()
+    mock_select = MagicMock()
+    mock_or = MagicMock()
+    mock_execute = MagicMock()
+    
+    # Setup basic chaining
+    mock_execute.data = []
+    mock_or.execute.return_value = mock_execute
+    mock_select.or_.return_value = mock_or
+    mock_select.execute.return_value = mock_execute
+    mock_select.eq.return_value = mock_select
+    mock_select.order.return_value = mock_select
+    mock_table.select.return_value = mock_select
+    mock_table.insert.return_value.execute.return_value.data = [{"id": "test-id"}]
+    mock_client.table.return_value = mock_table
+    
+    # Patch all the common ways to get a Supabase client
+    with patch("supabase.create_client", return_value=mock_client):
+        with patch("src.server.services.client_manager.get_supabase_client", return_value=mock_client):
+            with patch("src.server.utils.get_supabase_client", return_value=mock_client):
+                yield
 
 
 @pytest.fixture
@@ -79,14 +100,15 @@ def client(mock_supabase_client):
     """FastAPI test client with mocked database."""
     # Patch all the ways Supabase client can be created
     with patch(
-        "src.server.services.client_manager.create_client", return_value=mock_supabase_client
+        "src.server.services.client_manager.get_supabase_client",
+        return_value=mock_supabase_client,
     ):
         with patch(
-            "src.server.services.credential_service.create_client",
+            "src.server.utils.get_supabase_client",
             return_value=mock_supabase_client,
         ):
             with patch(
-                "src.server.services.client_manager.get_supabase_client",
+                "src.server.services.credential_service.create_client",
                 return_value=mock_supabase_client,
             ):
                 with patch("supabase.create_client", return_value=mock_supabase_client):

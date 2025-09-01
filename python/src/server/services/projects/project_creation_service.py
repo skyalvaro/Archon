@@ -6,7 +6,7 @@ AI-assisted documentation generation and progress tracking.
 """
 
 # Removed direct logging import - using unified config
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.server.utils import get_supabase_client
@@ -55,8 +55,8 @@ class ProjectCreationService:
                 "title": title,
                 "description": description or "",
                 "github_repo": github_repo,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 "docs": [],  # Empty docs array to start - PRD will be added here by DocumentAgent
                 "features": kwargs.get("features", {}),
                 "data": kwargs.get("data", {}),
@@ -146,7 +146,7 @@ class ProjectCreationService:
             # Check if LLM provider is configured
             from ..credential_service import credential_service
             provider_config = await credential_service.get_active_provider("llm")
-            
+
             if not provider_config:
                 # No LLM provider configured, skip AI documentation
                 return False
@@ -179,7 +179,7 @@ class ProjectCreationService:
             )
 
             if agent_result.success:
-    
+
                 return True
             else:
                 return False

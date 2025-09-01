@@ -33,7 +33,7 @@ class SitemapCrawlStrategy:
             # Check for cancellation before making the request
             if cancellation_check:
                 cancellation_check()
-            
+
             logger.info(f"Parsing sitemap: {sitemap_url}")
             resp = requests.get(sitemap_url, timeout=30)
 
@@ -46,14 +46,14 @@ class SitemapCrawlStrategy:
                 urls = [loc.text for loc in tree.findall('.//{*}loc') if loc.text]
                 logger.info(f"Successfully extracted {len(urls)} URLs from sitemap")
 
-            except ElementTree.ParseError as e:
+            except ElementTree.ParseError:
                 logger.exception(f"Error parsing sitemap XML from {sitemap_url}")
-            except Exception as e:
+            except Exception:
                 logger.exception(f"Unexpected error parsing sitemap from {sitemap_url}")
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             logger.exception(f"Network error fetching sitemap from {sitemap_url}")
-        except Exception as e:
+        except Exception:
             logger.exception(f"Unexpected error in sitemap parsing for {sitemap_url}")
 
         return urls

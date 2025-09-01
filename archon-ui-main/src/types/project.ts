@@ -105,6 +105,13 @@ export interface UpdateProjectRequest {
 }
 
 // Create task request
+// Task counts for a project
+export interface TaskCounts {
+  todo: number;
+  doing: number;
+  done: number;
+}
+
 export interface CreateTaskRequest {
   project_id: string;
   title: string;

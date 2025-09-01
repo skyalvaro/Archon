@@ -34,11 +34,15 @@ const formatTask = (dbTask: any): Task => {
 export const TasksTab = ({
   initialTasks,
   onTasksChange,
-  projectId
+  projectId,
+  movingTaskIds,
+  setMovingTaskIds
 }: {
   initialTasks: Task[];
   onTasksChange: (tasks: Task[]) => void;
   projectId: string;
+  movingTaskIds: Set<string>;
+  setMovingTaskIds: (ids: Set<string>) => void;
 }) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
@@ -48,7 +52,6 @@ export const TasksTab = ({
   const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
-  const [movingTaskIds, setMovingTaskIds] = useState<Set<string>>(new Set());
   const [taskOperationError, setTaskOperationError] = useState<string | null>(null);
   
   // Initialize tasks

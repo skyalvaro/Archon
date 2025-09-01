@@ -458,6 +458,20 @@ export const projectService = {
     }
   },
 
+  /**
+   * Get task counts for all projects in a single batch request
+   * Optimized endpoint to avoid N+1 query problem
+   */
+  async getTaskCountsForAllProjects(): Promise<Record<string, TaskCounts>> {
+    try {
+      const response = await callAPI<Record<string, TaskCounts>>('/api/projects/task-counts');
+      return response || {};
+    } catch (error) {
+      console.error('Failed to get task counts for all projects:', error);
+      throw error;
+    }
+  },
+
 
   // ==================== DOCUMENT OPERATIONS ====================
 

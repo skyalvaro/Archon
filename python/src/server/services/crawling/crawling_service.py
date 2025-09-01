@@ -8,8 +8,8 @@ batch crawling, recursive crawling, and overall orchestration with progress trac
 
 import asyncio
 import uuid
-from typing import Any, Optional, Callable, Awaitable
-from urllib.parse import urlparse
+from collections.abc import Awaitable, Callable
+from typing import Any, Optional
 
 from ...config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
 from ...utils import get_supabase_client
@@ -167,7 +167,7 @@ class CrawlingService:
         )
 
     async def crawl_markdown_file(
-        self, url: str, progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None, start_progress: int = 10, end_progress: int = 20
+        self, url: str, progress_callback: Callable[[str, int, str], Awaitable[None]] | None = None, start_progress: int = 10, end_progress: int = 20
     ) -> list[dict[str, Any]]:
         """Crawl a .txt or markdown file."""
         return await self.single_page_strategy.crawl_markdown_file(
@@ -185,8 +185,8 @@ class CrawlingService:
     async def crawl_batch_with_progress(
         self,
         urls: list[str],
-        max_concurrent: Optional[int] = None,
-        progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None,
+        max_concurrent: int | None = None,
+        progress_callback: Callable[[str, int, str], Awaitable[None]] | None = None,
         start_progress: int = 15,
         end_progress: int = 60,
     ) -> list[dict[str, Any]]:
@@ -206,8 +206,8 @@ class CrawlingService:
         self,
         start_urls: list[str],
         max_depth: int = 3,
-        max_concurrent: Optional[int] = None,
-        progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None,
+        max_concurrent: int | None = None,
+        progress_callback: Callable[[str, int, str], Awaitable[None]] | None = None,
         start_progress: int = 10,
         end_progress: int = 60,
     ) -> list[dict[str, Any]]:
@@ -380,7 +380,7 @@ class CrawlingService:
 
             # Send heartbeat after document storage
             await send_heartbeat_if_needed()
-            
+
             # CRITICAL: Verify that chunks were actually stored
             actual_chunks_stored = storage_results.get("chunks_stored", 0)
             if storage_results["chunk_count"] > 0 and actual_chunks_stored == 0:
@@ -478,8 +478,8 @@ class CrawlingService:
             error_message = f"Crawl failed: {str(e)}"
             await self._handle_progress_update(
                 task_id, {
-                    "status": "error", 
-                    "percentage": -1, 
+                    "status": "error",
+                    "percentage": -1,
                     "log": error_message,
                     "error": str(e)
                 }

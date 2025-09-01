@@ -5,7 +5,6 @@ Handles source metadata, summaries, and management.
 Consolidates both utility functions and class-based service.
 """
 
-import os
 from typing import Any
 
 from supabase import Client
@@ -57,7 +56,7 @@ The above content is from the documentation for '{source_id}'. Please provide a 
             from .credential_service import credential_service
             rag_settings = await credential_service.get_credentials_by_category("rag_strategy")
             model_choice = rag_settings.get("MODEL_CHOICE", "gpt-4.1-nano")
-            
+
             search_logger.info(f"Generating summary for {source_id} using model: {model_choice}")
 
             # Call the LLM API to generate the summary
@@ -254,7 +253,7 @@ async def update_source_info(
                 source_type = "file"
             else:
                 source_type = "url"
-            
+
             metadata = {
                 "knowledge_type": knowledge_type,
                 "tags": tags or [],
@@ -273,13 +272,13 @@ async def update_source_info(
                 "metadata": metadata,
                 "updated_at": "now()",
             }
-            
+
             # Add new fields if provided
             if source_url:
                 update_data["source_url"] = source_url
             if source_display_name:
                 update_data["source_display_name"] = source_display_name
-            
+
             result = (
                 client.table("archon_sources")
                 .update(update_data)
@@ -295,7 +294,7 @@ async def update_source_info(
             if source_display_name:
                 # Use the display name directly as the title (truncated to prevent DB issues)
                 title = source_display_name[:100].strip()
-                
+
                 # Determine source_type based on source_url or original_url
                 if source_url and source_url.startswith("file://"):
                     source_type = "file"
@@ -303,7 +302,7 @@ async def update_source_info(
                     source_type = "file"
                 else:
                     source_type = "url"
-                
+
                 metadata = {
                     "knowledge_type": knowledge_type,
                     "tags": tags or [],
@@ -315,7 +314,7 @@ async def update_source_info(
                 title, metadata = await generate_source_title_and_metadata(
                     source_id, content, knowledge_type, tags, original_url, source_display_name
                 )
-                
+
                 # Override the source_type from AI with actual URL-based determination
                 if source_url and source_url.startswith("file://"):
                     metadata["source_type"] = "file"
@@ -338,13 +337,13 @@ async def update_source_info(
                 "total_word_count": word_count,
                 "metadata": metadata,
             }
-            
+
             # Add new fields if provided
             if source_url:
                 upsert_data["source_url"] = source_url
             if source_display_name:
                 upsert_data["source_display_name"] = source_display_name
-            
+
             client.table("archon_sources").upsert(upsert_data).execute()
             search_logger.info(f"Created/updated source {source_id} with title: {title}")
 

@@ -382,5 +382,5 @@ async def add_documents_to_supabase(
         span.set_attribute("success", True)
         span.set_attribute("total_processed", len(contents))
         span.set_attribute("total_stored", total_chunks_stored)
-        
+
         return {"chunks_stored": total_chunks_stored}

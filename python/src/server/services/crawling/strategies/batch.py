@@ -4,8 +4,8 @@ Batch Crawling Strategy
 Handles batch crawling of multiple URLs in parallel.
 """
 
-from collections.abc import Callable
-from typing import Any, Optional, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from crawl4ai import CacheMode, CrawlerRunConfig, MemoryAdaptiveDispatcher
 
@@ -129,9 +129,9 @@ class BatchCrawlStrategy:
             if progress_callback:
                 # Pass step information as flattened kwargs for consistency
                 await progress_callback(
-                    "crawling", 
-                    percentage, 
-                    message, 
+                    "crawling",
+                    percentage,
+                    message,
                     currentStep=message,
                     stepMessage=message,
                     **kwargs
@@ -156,7 +156,7 @@ class BatchCrawlStrategy:
             # Check for cancellation before processing each batch
             if cancellation_check:
                 cancellation_check()
-            
+
             batch_urls = transformed_urls[i : i + batch_size]
             batch_start = i
             batch_end = min(i + batch_size, total_urls)
@@ -188,7 +188,7 @@ class BatchCrawlStrategy:
                         # If cancelled, break out of the loop
                         logger.info("Batch crawl cancelled during processing")
                         break
-                
+
                 processed += 1
                 if result.success and result.markdown:
                     # Map back to original URL
