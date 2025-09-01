@@ -3,7 +3,6 @@ import { useDrop } from 'react-dnd';
 import { useToast } from '../../contexts/ToastContext';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { Trash2 } from 'lucide-react';
-import { projectService } from '../../services/projectService';
 import { Task } from './TaskTableView'; // Import Task interface
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
 import { DraggableTaskCard } from './DraggableTaskCard';
@@ -175,8 +174,13 @@ export const TaskBoardView = ({
     const tasksToDelete = tasks.filter(task => selectedTasks.has(task.id));
     
     try {
-      // Use onTaskDelete for each task so parent updates state/metrics
-      await Promise.all(tasksToDelete.map(task => onTaskDelete(task)));
+      const results = await Promise.allSettled(
+        tasksToDelete.map(task => Promise.resolve(onTaskDelete(task)))
+      );
+      const rejected = results.filter(r => r.status === 'rejected');
+      if (rejected.length) {
+        console.error('Some deletions failed:', rejected.length);
+      }
       clearSelection();
     } catch (error) {
       console.error('Failed to delete tasks:', error);

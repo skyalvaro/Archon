@@ -63,9 +63,9 @@ describe('DeleteConfirmModal', () => {
   it('calls onCancel when backdrop is clicked', () => {
     render(<DeleteConfirmModal {...defaultProps} />);
     
-    // Click the backdrop (the outer div)
-    const backdrop = screen.getByRole('dialog').parentElement;
-    fireEvent.click(backdrop!);
+    // Click the backdrop
+    const backdrop = screen.getByTestId('modal-backdrop');
+    fireEvent.click(backdrop);
     
     expect(defaultProps.onCancel).toHaveBeenCalledTimes(1);
   });

@@ -48,6 +48,13 @@ export function usePolling<T>(
   const cachedDataRef = useRef<T | undefined>(undefined);
   const lastFetchRef = useRef<number>(0);
 
+  // Reset ETag/cache on URL change to avoid cross-endpoint contamination
+  useEffect(() => {
+    etagRef.current = null;
+    cachedDataRef.current = undefined;
+    lastFetchRef.current = 0;
+  }, [url]);
+
   const fetchData = useCallback(async () => {
     // Don't fetch if URL is empty
     if (!url) {
@@ -259,14 +266,14 @@ export function useCrawlProgressPolling(progressId: string | null, options?: Use
   useEffect(() => {
     const status = result.data?.status;
     if (result.data) {
-      console.log('🔄 Crawl polling data received:', { 
+      console.debug('🔄 Crawl polling data received:', { 
         progressId, 
         status, 
         progress: result.data.progress 
       });
     }
     if (status === 'completed' || status === 'failed' || status === 'error' || status === 'cancelled') {
-      console.log('⏹️ Crawl polling stopping - status:', status);
+      console.debug('⏹️ Crawl polling stopping - status:', status);
       setIsComplete(true);
     }
   }, [result.data?.status, progressId]);

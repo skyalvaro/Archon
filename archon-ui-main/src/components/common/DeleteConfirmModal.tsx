@@ -34,6 +34,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       onClick={onCancel}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
       aria-hidden={false}
+      data-testid="modal-backdrop"
     >
       <div
         className="relative p-6 rounded-md backdrop-blur-md w-full max-w-md

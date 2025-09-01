@@ -215,11 +215,10 @@ export const TasksTab = ({
     
     console.log('REORDER: New position calculated:', newPosition);
     
-    // Create updated task with new position and timestamp
+    // Create updated task with new position
     const updatedTask = {
       ...movingTask,
-      task_order: newPosition,
-      lastUpdate: Date.now() // Add timestamp for conflict resolution
+      task_order: newPosition
     };
     
     // Immediate UI update without optimistic tracking interference
