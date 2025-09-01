@@ -1,35 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Table, LayoutGrid, Plus, List } from 'lucide-react';
+import { Table, LayoutGrid, Plus } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toggle } from '../ui/Toggle';
 import { projectService } from '../../services/projectService';
 import { useToast } from '../../contexts/ToastContext';
+import { debounce } from '../../utils/debounce';
 
-import type { CreateTaskRequest, UpdateTaskRequest, DatabaseTaskStatus } from '../../types/project';
+import type { CreateTaskRequest, UpdateTaskRequest } from '../../types/project';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
 
-// Assignee utilities
-const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
 
-// Helper to format task for UI display
-const formatTask = (dbTask: any): Task => {
-  return {
-    id: dbTask.id,
-    title: dbTask.title,
-    description: dbTask.description || '',
-    status: dbTask.status as Task['status'],
-    assignee: {
-      name: dbTask.assignee || 'User',
-      avatar: ''
-    },
-    feature: dbTask.feature || 'General',
-    featureColor: '#3b82f6',
-    task_order: dbTask.task_order || 0,
-  };
-};
 
 export const TasksTab = ({
   initialTasks,
@@ -48,9 +31,7 @@ export const TasksTab = ({
   const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
-  const [taskOperationError, setTaskOperationError] = useState<string | null>(null);
   const [optimisticTaskUpdates, setOptimisticTaskUpdates] = useState<Map<string, Task>>(new Map());
-  const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
   
   // Initialize tasks, but preserve optimistic updates
   useEffect(() => {
@@ -110,7 +91,6 @@ export const TasksTab = ({
     
     setIsSavingTask(true);
     try {
-      let parentTaskId = task.id;
       
       if (task.id) {
         // Update existing task
@@ -138,8 +118,7 @@ export const TasksTab = ({
           ...(task.featureColor && { featureColor: task.featureColor })
         };
         
-        const createdTask = await projectService.createTask(createData);
-        parentTaskId = createdTask.id;
+        await projectService.createTask(createData);
       }
       
       // Task saved - polling will pick up changes automatically
@@ -158,18 +137,6 @@ export const TasksTab = ({
     onTasksChange(newTasks);
   };
 
-  // Helper function to reorder tasks by status to ensure no gaps (1,2,3...)
-  const reorderTasksByStatus = async (status: Task['status']) => {
-    const tasksInStatus = tasks
-      .filter(task => task.status === status)
-      .sort((a, b) => a.task_order - b.task_order);
-    
-    const updatePromises = tasksInStatus.map((task, index) => 
-      projectService.updateTask(task.id, { task_order: index + 1 })
-    );
-    
-    await Promise.all(updatePromises);
-  };
 
   // Helper function to get next available order number for a status
   const getNextOrderForStatus = (status: Task['status']): number => {
@@ -183,14 +150,7 @@ export const TasksTab = ({
     return maxOrder + 1;
   };
 
-  // Simple debounce function
-  const debounce = (func: Function, delay: number) => {
-    let timeoutId: NodeJS.Timeout;
-    return (...args: any[]) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => func(...args), delay);
-    };
-  };
+  // Use shared debounce helper
 
   // Improved debounced persistence with better coordination
   const debouncedPersistSingleTask = useMemo(
@@ -307,8 +267,7 @@ export const TasksTab = ({
     const operationId = `${taskId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     console.log(`[TasksTab] Optimistically moving task ${taskId} to ${newStatus} (op: ${operationId})`);
     
-    // Clear any previous errors
-    setTaskOperationError(null);
+    // Clear any previous errors (removed local error state)
     
     // Find the task and validate
     const movingTask = tasks.find(task => task.id === taskId);
@@ -317,8 +276,7 @@ export const TasksTab = ({
       return;
     }
 
-    // Cancel any existing operations for this task (rapid moves)
-    setPendingOperations(prev => new Set(prev).add(operationId));
+    // (pendingOperations removed)
 
     // 1. Save current state for rollback
     const previousTasks = [...tasks]; // Shallow clone sufficient
@@ -374,7 +332,6 @@ export const TasksTab = ({
           newMap.delete(taskId);
           
           const errorMessage = error instanceof Error ? error.message : 'Failed to move task';
-          setTaskOperationError(errorMessage);
           showToast(`Failed to move task: ${errorMessage}`, 'error');
           
           return newMap;
@@ -383,12 +340,7 @@ export const TasksTab = ({
       });
       
     } finally {
-      // Clean up operation tracking
-      setPendingOperations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(operationId);
-        return newSet;
-      });
+      // (pendingOperations cleanup removed)
     }
   };
 

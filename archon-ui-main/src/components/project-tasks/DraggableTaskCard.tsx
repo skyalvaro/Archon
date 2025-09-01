@@ -15,6 +15,8 @@ export interface DraggableTaskCardProps {
   allTasks?: Task[];
   hoveredTaskId?: string | null;
   onTaskHover?: (taskId: string | null) => void;
+  selectedTasks?: Set<string>;
+  onTaskSelect?: (taskId: string) => void;
 }
 
 export const DraggableTaskCard = ({
@@ -26,6 +28,8 @@ export const DraggableTaskCard = ({
   allTasks = [],
   hoveredTaskId,
   onTaskHover,
+  selectedTasks,
+  onTaskSelect,
 }: DraggableTaskCardProps) => {
   
   const [{ isDragging }, drag] = useDrag({
@@ -74,6 +78,7 @@ export const DraggableTaskCard = ({
 
   const relatedTaskIds = getRelatedTaskIds();
   const isHighlighted = hoveredTaskId ? relatedTaskIds.has(hoveredTaskId) || hoveredTaskId === task.id : false;
+  const isSelected = selectedTasks?.has(task.id) || false;
 
   const handleMouseEnter = () => {
     onTaskHover?.(task.id);
@@ -81,6 +86,13 @@ export const DraggableTaskCard = ({
 
   const handleMouseLeave = () => {
     onTaskHover?.(null);
+  };
+
+  const handleTaskClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.stopPropagation();
+      onTaskSelect?.(task.id);
+    }
   };
 
   
@@ -93,6 +105,11 @@ export const DraggableTaskCard = ({
   // Subtle highlight effect for related tasks - applied to the card, not parent
   const highlightGlow = isHighlighted 
     ? 'border-cyan-400/50 shadow-[0_0_8px_rgba(34,211,238,0.2)]' 
+    : '';
+    
+  // Selection styling
+  const selectionGlow = isSelected
+    ? 'border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.4)] bg-blue-50/30 dark:bg-blue-900/20'
     : '';
     
   // Simplified hover effect - just a glowing border
@@ -114,12 +131,13 @@ export const DraggableTaskCard = ({
       className={`flip-card w-full min-h-[140px] cursor-move relative ${cardScale} ${cardOpacity} ${isDragging ? 'opacity-50 scale-90' : ''} ${transitionStyles} group`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleTaskClick}
     >
       <div 
         className={`relative w-full min-h-[140px] transform-style-preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}
       >
         {/* Front side with subtle hover effect */}
-        <div className={`absolute w-full h-full backface-hidden ${cardBaseStyles} ${transitionStyles} ${hoverEffectClasses} ${highlightGlow} rounded-lg`}>
+        <div className={`absolute w-full h-full backface-hidden ${cardBaseStyles} ${transitionStyles} ${hoverEffectClasses} ${highlightGlow} ${selectionGlow} rounded-lg`}>
           {/* Priority indicator */}
           <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${getOrderColor(task.task_order)} ${getOrderGlow(task.task_order)} rounded-l-lg opacity-80 group-hover:w-[4px] group-hover:opacity-100 transition-all duration-300`}></div>
           
@@ -222,7 +240,7 @@ export const DraggableTaskCard = ({
         
         {/* Back side */}
         {/* Back side with same hover effect */}
-        <div className={`absolute w-full h-full backface-hidden ${cardBaseStyles} ${transitionStyles} ${hoverEffectClasses} ${highlightGlow} rounded-lg rotate-y-180 ${isDragging ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute w-full h-full backface-hidden ${cardBaseStyles} ${transitionStyles} ${hoverEffectClasses} ${highlightGlow} ${selectionGlow} rounded-lg rotate-y-180 ${isDragging ? 'opacity-0' : 'opacity-100'}`}>
           {/* Priority indicator */}
           <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${getOrderColor(task.task_order)} ${getOrderGlow(task.task_order)} rounded-l-lg opacity-80 group-hover:w-[4px] group-hover:opacity-100 transition-all duration-300`}></div>
           

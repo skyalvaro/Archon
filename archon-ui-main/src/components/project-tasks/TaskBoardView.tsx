@@ -1,8 +1,8 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { useDrag, useDrop } from 'react-dnd';
+import { useDrop } from 'react-dnd';
 import { useToast } from '../../contexts/ToastContext';
-import { DeleteConfirmModal } from '../../pages/ProjectPage';
-import { CheckSquare, Square, Trash2, ArrowRight } from 'lucide-react';
+import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
+import { Trash2 } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import { Task } from './TaskTableView'; // Import Task interface
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
@@ -52,7 +52,7 @@ const ColumnDropZone = ({
   
   const [{ isOver }, drop] = useDrop({
     accept: ItemTypes.TASK,
-    drop: (item: { id: string; status: string }) => {
+    drop: (item: { id: string; status: Task['status'] }) => {
       if (item.status !== status) {
         // Moving to different status - use length of current column as new order
         onTaskMove(item.id, status);
@@ -121,6 +121,8 @@ const ColumnDropZone = ({
             allTasks={allTasks}
             hoveredTaskId={hoveredTaskId}
             onTaskHover={onTaskHover}
+            selectedTasks={selectedTasks}
+            onTaskSelect={onTaskSelect}
           />
         ))}
       </div>
