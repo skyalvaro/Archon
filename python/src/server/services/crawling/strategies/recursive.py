@@ -60,7 +60,7 @@ class RecursiveCrawlStrategy:
         if not self.crawler:
             logger.error("No crawler instance available for recursive crawling")
             if progress_callback:
-                await progress_callback("error", 0, "Crawler not available")
+                await progress_callback("error", 0, "Crawler not available", step_info={"currentStep": "error", "stepMessage": "Crawler not available"})
             return []
 
         # Load settings from database - fail fast on configuration errors
@@ -78,7 +78,8 @@ class RecursiveCrawlStrategy:
         except Exception as e:
             # For non-critical errors (e.g., network issues), use defaults but log prominently
             logger.error(
-                f"Failed to load crawl settings from database: {e}, using defaults", exc_info=True
+                f"Failed to load crawl settings from database: {e}, using defaults",
+                exc_info=True
             )
             batch_size = 50
             if max_concurrent is None:
@@ -126,11 +127,19 @@ class RecursiveCrawlStrategy:
         )
 
         async def report_progress(percentage: int, message: str, **kwargs):
-            """Helper to report progress if callback is available"""
+            """Helper to report progress if callback is available
+            
+            IMPORTANT: Never use "complete" or "completed" in messages here!
+            This is just an intermediate step in the overall crawl process.
+            Only the final orchestrator should send "completed" status.
+            """
             if progress_callback:
                 # Add step information for multi-progress tracking
-                step_info = {"currentStep": message, "stepMessage": message, **kwargs}
-                await progress_callback("crawling", percentage, message, **step_info)
+                step_info = {
+                    "currentStep": message,
+                    "stepMessage": message
+                }
+                await progress_callback("crawling", percentage, message, step_info=step_info, **kwargs)
 
         visited = set()
 
@@ -169,14 +178,6 @@ class RecursiveCrawlStrategy:
                 batch_urls = urls_to_crawl[batch_idx : batch_idx + batch_size]
                 batch_end_idx = min(batch_idx + batch_size, len(urls_to_crawl))
 
-                # Transform URLs and create mapping for this batch
-                url_mapping = {}
-                transformed_batch_urls = []
-                for url in batch_urls:
-                    transformed = transform_url_func(url)
-                    transformed_batch_urls.append(transformed)
-                    url_mapping[transformed] = url
-
                 # Calculate progress for this batch within the depth
                 batch_progress = depth_start + int(
                     (batch_idx / len(urls_to_crawl)) * (depth_end - depth_start)
@@ -191,14 +192,20 @@ class RecursiveCrawlStrategy:
                 # Use arun_many for native parallel crawling with streaming
                 logger.info(f"Starting parallel crawl of {len(batch_urls)} URLs with arun_many")
                 batch_results = await self.crawler.arun_many(
-                    urls=transformed_batch_urls, config=run_config, dispatcher=dispatcher
+                    urls=batch_urls,
+                    config=run_config,
+                    dispatcher=dispatcher
                 )
 
                 # Handle streaming results from arun_many
                 i = 0
                 async for result in batch_results:
-                    # Map back to original URL using the mapping dict
-                    original_url = url_mapping.get(result.url, result.url)
+                    # Map back to original URL if transformed
+                    original_url = result.url
+                    for orig_url in batch_urls:
+                        if transform_url_func(orig_url) == result.url:
+                            original_url = orig_url
+                            break
 
                     norm_url = normalize_url(original_url)
                     visited.add(norm_url)
@@ -213,14 +220,14 @@ class RecursiveCrawlStrategy:
                         depth_successful += 1
 
                         # Find internal links for next depth
-                        links = getattr(result, "links", {}) or {}
-                        for link in links.get("internal", []):
+                        for link in result.links.get("internal", []):
                             next_url = normalize_url(link["href"])
                             # Skip binary files and already visited URLs
-                            is_binary = self.url_handler.is_binary_file(next_url)
-                            if next_url not in visited and not is_binary:
+                            if next_url not in visited and not self.url_handler.is_binary_file(
+                                next_url
+                            ):
                                 next_level_urls.add(next_url)
-                            elif is_binary:
+                            elif self.url_handler.is_binary_file(next_url):
                                 logger.debug(f"Skipping binary file from crawl queue: {next_url}")
                     else:
                         logger.warning(
@@ -243,14 +250,16 @@ class RecursiveCrawlStrategy:
 
             current_urls = next_level_urls
 
-            # Report completion of this depth
+            # Report completion of this depth - IMPORTANT: Use "finished" not "completed"!
             await report_progress(
                 depth_end,
-                f"Depth {depth + 1} completed: {depth_successful} pages crawled, {len(next_level_urls)} URLs found for next depth",
+                f"Depth {depth + 1} finished: {depth_successful} pages crawled, {len(next_level_urls)} URLs found for next depth",
             )
 
+        # IMPORTANT: Use "finished" not "complete" - only the final orchestrator should say "completed"
         await report_progress(
             end_progress,
-            f"Recursive crawling completed: {len(results_all)} total pages crawled across {max_depth} depth levels",
+            f"Recursive crawl finished: {len(results_all)} pages successfully crawled",
         )
+
         return results_all

@@ -84,17 +84,10 @@ class RateLimiter:
         self.semaphore = asyncio.Semaphore(config.max_concurrent)
         self._lock = asyncio.Lock()
 
-    async def acquire(self, estimated_tokens: int = 8000, progress_callback: Callable | None = None) -> bool:
-        """Acquire permission to make API call with token awareness
-        
-        Args:
-            estimated_tokens: Estimated number of tokens for the operation
-            progress_callback: Optional async callback for progress updates during wait
-        """
-        while True:  # Loop instead of recursion to avoid stack overflow
-            wait_time_to_sleep = None
-            
-            async with self._lock:
+    async def acquire(self, estimated_tokens: int = 8000) -> bool:
+        """Acquire permission to make API call with token awareness"""
+        async with self._lock:
+            while True:  # Use a loop instead of recursion
                 now = time.time()
 
                 # Clean old entries
@@ -106,41 +99,30 @@ class RateLimiter:
                     self.request_times.append(now)
                     self.token_usage.append((now, estimated_tokens))
                     return True
-                
-                # Calculate wait time if we can't make the request
+
+                # Calculate wait time
                 wait_time = self._calculate_wait_time(estimated_tokens)
-                if wait_time > 0:
-                    logfire_logger.info(
-                        f"Rate limiting: waiting {wait_time:.1f}s",
-                        extra={
-                            "tokens": estimated_tokens,
-                            "current_usage": self._get_current_usage(),
-                        }
-                    )
-                    wait_time_to_sleep = wait_time
-                else:
+                if wait_time <= 0:
                     return False
-            
-            # Sleep outside the lock to avoid deadlock
-            if wait_time_to_sleep is not None:
-                # For long waits, break into smaller chunks with progress updates
-                if wait_time_to_sleep > 5 and progress_callback:
-                    chunks = int(wait_time_to_sleep / 5)  # 5 second chunks
-                    for i in range(chunks):
-                        await asyncio.sleep(5)
-                        remaining = wait_time_to_sleep - (i + 1) * 5
-                        if progress_callback:
-                            await progress_callback({
-                                "type": "rate_limit_wait",
-                                "remaining_seconds": max(0, remaining),
-                                "message": f"waiting {max(0, remaining):.1f}s more..."
-                            })
-                    # Sleep any remaining time
-                    if wait_time_to_sleep % 5 > 0:
-                        await asyncio.sleep(wait_time_to_sleep % 5)
-                else:
-                    await asyncio.sleep(wait_time_to_sleep)
-                # Continue the loop to try again
+
+                logfire_logger.info(
+                    f"Rate limiting: waiting {wait_time:.1f}s",
+                    extra={
+                        "tokens": estimated_tokens,
+                        "current_usage": self._get_current_usage(),
+                    }
+                )
+                
+                # Release the lock while sleeping to allow other operations
+                self._lock.release()
+                try:
+                    await asyncio.sleep(wait_time)
+                    logfire_logger.info(f"Rate limiting: resuming after {wait_time:.1f}s wait")
+                finally:
+                    # Re-acquire the lock before continuing
+                    await self._lock.acquire()
+                
+                # Loop will continue and re-check conditions
 
     def _can_make_request(self, estimated_tokens: int) -> bool:
         """Check if request can be made within limits"""
@@ -540,15 +522,10 @@ class ThreadingService:
         logfire_logger.info("Threading service stopped")
 
     @asynccontextmanager
-    async def rate_limited_operation(self, estimated_tokens: int = 8000, progress_callback: Callable | None = None):
-        """Context manager for rate-limited operations
-        
-        Args:
-            estimated_tokens: Estimated number of tokens for the operation
-            progress_callback: Optional async callback for progress updates during wait
-        """
+    async def rate_limited_operation(self, estimated_tokens: int = 8000):
+        """Context manager for rate-limited operations"""
         async with self.rate_limiter.semaphore:
-            can_proceed = await self.rate_limiter.acquire(estimated_tokens, progress_callback)
+            can_proceed = await self.rate_limiter.acquire(estimated_tokens)
             if not can_proceed:
                 raise Exception("Rate limit exceeded")
 

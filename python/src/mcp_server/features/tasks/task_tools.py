@@ -316,8 +316,8 @@ def register_task_tools(mcp: FastMCP):
 
         Args:
             task_id: UUID of the task to update
-            title: New title (optional)
-            description: New description (optional)
+            title: New task title (optional)
+            description: New task description (optional)
             status: New status - "todo" | "doing" | "review" | "done" (optional)
             assignee: New assignee (optional)
             task_order: New priority order (optional)
@@ -358,7 +358,7 @@ def register_task_tools(mcp: FastMCP):
             if not update_fields:
                 return MCPErrorFormatter.format_error(
                     error_type="validation_error",
-                    message="No fields to update",
+                    message="No fields provided to update",
                     suggestion="Provide at least one field to update",
                 )
 
