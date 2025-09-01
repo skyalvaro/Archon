@@ -321,10 +321,10 @@ function ProjectPage({
 
   // Load task counts for all projects using batch endpoint
   const loadTaskCountsForAllProjects = useCallback(
-    async (projectIds: string[]) => {
-      // Check cache first (5-minute TTL = 300000ms)
+    async (projectIds: string[], force = false) => {
+      // Check cache first (5-minute TTL = 300000ms) unless force refresh is requested
       const now = Date.now();
-      if (taskCountsCache.current && 
+      if (!force && taskCountsCache.current && 
           (now - taskCountsCache.current.timestamp) < 300000) {
         // Use cached data
         const cachedCounts = taskCountsCache.current.data;
@@ -377,8 +377,8 @@ function ProjectPage({
   
   // Create debounced version to avoid rapid API calls
   const debouncedLoadTaskCounts = useMemo(
-    () => debounce((projectIds: string[]) => {
-      loadTaskCountsForAllProjects(projectIds);
+    () => debounce((projectIds: string[], force = false) => {
+      loadTaskCountsForAllProjects(projectIds, force);
     }, 1000),
     [loadTaskCountsForAllProjects]
   );
@@ -395,9 +395,9 @@ function ProjectPage({
       return a.title.localeCompare(b.title);
     });
 
-    // Load task counts for all projects (debounced)
+    // Load task counts for all projects (debounced, no force since this is initial load)
     const projectIds = sortedProjects.map((p) => p.id);
-    debouncedLoadTaskCounts(projectIds);
+    debouncedLoadTaskCounts(projectIds, false);
 
     // Find pinned project - this is ALWAYS the default on page load
     const pinnedProject = sortedProjects.find((p) => p.pinned === true);
@@ -466,10 +466,9 @@ function ProjectPage({
         return prevTasks;
       });
       
-      const projectIds = projects
-        .map((p) => p.id)
-        .filter((id) => !id.startsWith("temp-"));
-      debouncedLoadTaskCounts(projectIds);
+      // Force refresh task counts when tasks change
+      const projectIds = projects.map((p) => p.id);
+      debouncedLoadTaskCounts(projectIds, true);
     }
   }, [tasksData, projects, selectedProject?.id]);
 
@@ -925,11 +924,9 @@ function ProjectPage({
                       initialTasks={tasks}
                       onTasksChange={(updatedTasks) => {
                         setTasks(updatedTasks);
-                        // Refresh task counts for all projects when tasks change
-                        const projectIds = projects
-                          .map((p) => p.id)
-                          .filter((id) => !id.startsWith("temp-"));
-                        debouncedLoadTaskCounts(projectIds);
+                        // Force refresh task counts for all projects when tasks change
+                        const projectIds = projects.map((p) => p.id);
+                        debouncedLoadTaskCounts(projectIds, true);
                       }}
                       projectId={selectedProject.id}
                     />

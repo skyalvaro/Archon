@@ -1,6 +1,6 @@
 # Optimistic Updates Pattern (Future State)
 
-**⚠️ STATUS: This is NOT currently implemented. This document describes the desired future state for handling optimistic updates in a simple, consistent way.**
+**⚠️ STATUS: This is NOT currently implemented. there is a POC in project page in the FE. This document describes the desired future state for handling optimistic updates in a simple, consistent way.**
 
 ## Mental Model
 
@@ -29,11 +29,9 @@ try {
 ## Implementation Approach
 
 ### Simple Hook Pattern
+
 ```typescript
-function useOptimistic<T>(
-  initialValue: T,
-  updateFn: (value: T) => Promise<T>
-) {
+function useOptimistic<T>(initialValue: T, updateFn: (value: T) => Promise<T>) {
   const [value, setValue] = useState(initialValue);
   const [isUpdating, setIsUpdating] = useState(false);
   const previousValueRef = useRef<T>(initialValue);
@@ -41,7 +39,7 @@ function useOptimistic<T>(
   const optimisticUpdate = async (newValue: T) => {
     // Save for rollback
     previousValueRef.current = value;
-    
+
     // Update immediately
     setValue(newValue);
     setIsUpdating(true);
@@ -63,17 +61,22 @@ function useOptimistic<T>(
 ```
 
 ### Usage Example
+
 ```typescript
 // In a component
-const { value: task, optimisticUpdate, isUpdating } = useOptimistic(
-  initialTask,
-  (task) => projectService.updateTask(task.id, task)
+const {
+  value: task,
+  optimisticUpdate,
+  isUpdating,
+} = useOptimistic(initialTask, (task) =>
+  projectService.updateTask(task.id, task),
 );
 
 // Handle user action
 const handleStatusChange = (newStatus: string) => {
-  optimisticUpdate({ ...task, status: newStatus })
-    .catch(error => showToast("Failed to update task", "error"));
+  optimisticUpdate({ ...task, status: newStatus }).catch((error) =>
+    showToast("Failed to update task", "error"),
+  );
 };
 ```
 
@@ -98,6 +101,7 @@ const handleStatusChange = (newStatus: string) => {
 ## When to Implement
 
 Implement optimistic updates when:
+
 - Users complain about UI feeling "slow"
 - Drag-and-drop or reordering feels laggy
 - Quick actions (like checkbox toggles) feel unresponsive
@@ -106,6 +110,7 @@ Implement optimistic updates when:
 ## Success Metrics
 
 When implemented correctly:
+
 - UI feels instant (< 100ms response)
 - Rollbacks are rare (< 1% of updates)
 - Error messages are clear
@@ -116,6 +121,7 @@ When implemented correctly:
 The examples above are simplified for clarity. Production implementations should consider:
 
 1. **Deep cloning**: Use `structuredClone()` or a deep clone utility for complex state
+
    ```typescript
    const previousState = structuredClone(currentState); // Proper deep clone
    ```
