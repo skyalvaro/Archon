@@ -22,7 +22,6 @@ interface ColumnDropZoneProps {
   tasks: Task[];
   onTaskMove: (taskId: string, newStatus: Task['status']) => void;
   onTaskView: (task: Task) => void;
-  onTaskComplete: (taskId: string) => void;
   onTaskDelete: (task: Task) => void;
   onTaskReorder: (taskId: string, targetIndex: number, status: Task['status']) => void;
   allTasks: Task[];
@@ -38,7 +37,6 @@ const ColumnDropZone = ({
   tasks,
   onTaskMove,
   onTaskView,
-  onTaskComplete,
   onTaskDelete,
   onTaskReorder,
   allTasks,
@@ -116,8 +114,6 @@ const ColumnDropZone = ({
             onComplete={() => onTaskComplete(task.id)}
             onDelete={onTaskDelete}
             onTaskReorder={onTaskReorder}
-            tasksInStatus={organizedTasks}
-            allTasks={allTasks}
             hoveredTaskId={hoveredTaskId}
             onTaskHover={onTaskHover}
             selectedTasks={selectedTasks}
@@ -195,14 +191,14 @@ export const TaskBoardView = ({
     
     try {
       // Call onTaskMove so optimistic UI and counts refresh immediately; parent persists
-      await Promise.all(
-        tasksToUpdate.map(task => onTaskMove(task.id, newStatus))
-      );
+      tasksToUpdate.forEach(task => onTaskMove(task.id, newStatus));
       clearSelection();
+      showToast(`Moved ${tasksToUpdate.length} task${tasksToUpdate.length !== 1 ? 's' : ''} to ${newStatus}`, 'success');
     } catch (error) {
       console.error('Failed to update tasks:', error);
+      showToast('Failed to move some tasks', 'error');
     }
-  }, [selectedTasks, tasks, onTaskMove, clearSelection]);
+  }, [selectedTasks, tasks, onTaskMove, clearSelection, showToast]);
 
   // No status mapping needed - using database values directly
 
@@ -303,7 +299,6 @@ export const TaskBoardView = ({
           tasks={getTasksByStatus('todo')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
-          onTaskComplete={onTaskComplete}
           onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
@@ -320,7 +315,6 @@ export const TaskBoardView = ({
           tasks={getTasksByStatus('doing')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
-          onTaskComplete={onTaskComplete}
           onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
@@ -337,7 +331,6 @@ export const TaskBoardView = ({
           tasks={getTasksByStatus('review')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
-          onTaskComplete={onTaskComplete}
           onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}
@@ -354,7 +347,6 @@ export const TaskBoardView = ({
           tasks={getTasksByStatus('done')}
           onTaskMove={onTaskMove}
           onTaskView={onTaskView}
-          onTaskComplete={onTaskComplete}
           onTaskDelete={handleDeleteTask}
           onTaskReorder={onTaskReorder}
           allTasks={tasks}

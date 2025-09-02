@@ -12,8 +12,6 @@ export interface DraggableTaskCardProps {
   onComplete: () => void;
   onDelete: (task: Task) => void;
   onTaskReorder: (taskId: string, targetIndex: number, status: Task['status']) => void;
-  tasksInStatus: Task[];
-  allTasks?: Task[];
   hoveredTaskId?: string | null;
   onTaskHover?: (taskId: string | null) => void;
   selectedTasks?: Set<string>;
@@ -24,9 +22,9 @@ export const DraggableTaskCard = ({
   task,
   index,
   onView,
+  onComplete,
   onDelete,
   onTaskReorder,
-  allTasks = [],
   hoveredTaskId,
   onTaskHover,
   selectedTasks,
@@ -212,7 +210,18 @@ export const DraggableTaskCard = ({
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
-                    await navigator.clipboard.writeText(task.id);
+                    if (navigator.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(task.id);
+                    } else {
+                      const ta = document.createElement('textarea');
+                      ta.value = task.id;
+                      ta.style.position = 'fixed';
+                      ta.style.opacity = '0';
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(ta);
+                    }
                     showToast('Task ID copied to clipboard', 'success');
                   } catch (error) {
                     showToast('Failed to copy Task ID', 'error');
