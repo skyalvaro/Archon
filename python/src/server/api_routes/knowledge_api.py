@@ -27,11 +27,15 @@ from ..services.crawler_manager import get_crawler
 
 # Import unified logging
 from ..config.logfire_config import get_logger, safe_logfire_error, safe_logfire_info
+from ..services.crawler_manager import get_crawler
+from ..services.search.rag_service import RAGService
+from ..services.storage import DocumentStorageService
+from ..utils import get_supabase_client
 from ..utils.document_processing import extract_text_from_document
 
 # Get logger for this module
 logger = get_logger(__name__)
-from ..socketio_app import get_socketio_instance
+from ..socketio_app import sio
 from .socketio_handlers import (
     complete_crawl_progress,
     error_crawl_progress,
@@ -42,8 +46,6 @@ from .socketio_handlers import (
 # Create router
 router = APIRouter(prefix="/api", tags=["knowledge"])
 
-# Get Socket.IO instance
-sio = get_socketio_instance()
 
 # Create a semaphore to limit concurrent crawls
 # This prevents the server from becoming unresponsive during heavy crawling
@@ -862,22 +864,7 @@ async def get_database_metrics():
 
 @router.get("/health")
 async def knowledge_health():
-    """Knowledge API health check with migration detection."""
-    # Check for database migration needs
-    from ..main import _check_database_schema
-    
-    schema_status = await _check_database_schema()
-    if not schema_status["valid"]:
-        return {
-            "status": "migration_required",
-            "service": "knowledge-api", 
-            "timestamp": datetime.now().isoformat(),
-            "ready": False,
-            "migration_required": True,
-            "message": schema_status["message"],
-            "migration_instructions": "Open Supabase Dashboard → SQL Editor → Run: migration/add_source_url_display_name.sql"
-        }
-    
+    """Knowledge API health check."""
     # Removed health check logging to reduce console noise
     result = {
         "status": "healthy",
