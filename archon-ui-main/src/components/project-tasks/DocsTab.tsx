@@ -617,29 +617,19 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // Prepare document data for API
-      const documentData = {
+      // Create the document in the database first
+      const newDocument = await projectService.createDocument(project.id, {
         title: template.name,
         content: template.content,
-        document_type: template.document_type
-      };
+        document_type: template.document_type,
+        tags: []
+      });
       
-      // ACTUALLY CALL THE FUCKING API
-      const createdDocument = await projectService.createDocument(project.id, documentData);
+      // Add to documents list with the real document from the database
+      setDocuments(prev => [...prev, newDocument]);
+      setSelectedDocument(newDocument);
       
-      // Only update UI after successful API response
-      setDocuments(prev => [...prev, createdDocument]);
-      setSelectedDocument(createdDocument);
-      
-      // Emit socket event for real-time sync to other clients
-      if (isInRoom) {
-        emitToRoom('document_created', { 
-          document: createdDocument,
-          project_id: project.id 
-        });
-      }
-      
-      // Only show success after API confirms
+      console.log('Document created successfully:', newDocument);
       showToast('Document created successfully', 'success');
       setShowTemplateModal(false);
       
@@ -662,18 +652,19 @@ export const DocsTab = ({
     try {
       setIsSaving(true);
       
-      // ACTUALLY CALL THE FUCKING API TO UPDATE THE DOCUMENT
+      // Call backend API to persist changes
       const updatedDocument = await projectService.updateDocument(
-        project.id, 
-        selectedDocument.id, 
+        project.id,
+        selectedDocument.id,
         {
           title: selectedDocument.title,
           content: selectedDocument.content,
-          document_type: selectedDocument.document_type
+          tags: selectedDocument.tags,
+          author: selectedDocument.author
         }
       );
       
-      // Only update UI after successful API response
+      // Update local state with backend response
       setDocuments(prev => prev.map(doc => 
         doc.id === selectedDocument.id ? updatedDocument : doc
       ));
@@ -1089,18 +1080,19 @@ export const DocsTab = ({
                 try {
                   setIsSaving(true);
                   
-                  // ACTUALLY CALL THE FUCKING API
+                  // Call backend API to persist changes
                   const savedDocument = await projectService.updateDocument(
                     project.id,
                     updatedDocument.id,
                     {
                       title: updatedDocument.title,
                       content: updatedDocument.content,
-                      document_type: updatedDocument.document_type
+                      tags: updatedDocument.tags,
+                      author: updatedDocument.author
                     }
                   );
                   
-                  // Only update UI after successful API response
+                  // Update local state with backend response
                   setSelectedDocument(savedDocument);
                   setDocuments(prev => prev.map(doc => 
                     doc.id === updatedDocument.id ? savedDocument : doc

@@ -8,8 +8,10 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
+  <a href="#upgrading">Upgrading</a> •
   <a href="#whats-included">What's Included</a> •
-  <a href="#architecture">Architecture</a>
+  <a href="#architecture">Architecture</a> •
+  <a href="#troubleshooting">Troubleshooting</a>
 </p>
 
 ---
@@ -43,8 +45,10 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Node.js 18+](https://nodejs.org/) (for hybrid development mode)
 - [Supabase](https://supabase.com/) account (free tier or local Supabase both work)
 - [OpenAI API key](https://platform.openai.com/api-keys) (Gemini and Ollama are supported too!)
+- (OPTIONAL) [Make](https://www.gnu.org/software/make/) (see [Installing Make](#installing-make) below)
 
 ### Setup Instructions
 
@@ -64,30 +68,94 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
    # SUPABASE_SERVICE_KEY=your-service-key-here
    ```
 
-   NOTE: Supabase introduced a new type of service key but use the legacy one (the longer one).
-
-   OPTIONAL: If you want to enable the reranking RAG strategy, uncomment lines 20-22 in `python\requirements.server.txt`. This will significantly increase the size of the Archon Server container which is why it's off by default.
+   IMPORTANT NOTES:
+   - For cloud Supabase: they recently introduced a new type of service role key but use the legacy one (the longer one).
+   - For local Supabase: set SUPABASE_URL to http://host.docker.internal:8000 (unless you have an IP address set up).
 
 3. **Database Setup**: In your [Supabase project](https://supabase.com/dashboard) SQL Editor, copy, paste, and execute the contents of `migration/complete_setup.sql`
 
-4. **Start Services**:
+4. **Start Services** (choose one):
+
+   **Full Docker Mode (Recommended for Normal Archon Usage)**
 
    ```bash
-   docker-compose up --build -d
+   docker compose up --build -d
    ```
 
-   This starts the core microservices:
+   This starts all core microservices in Docker:
    - **Server**: Core API and business logic (Port: 8181)
    - **MCP Server**: Protocol interface for AI clients (Port: 8051)
-   - **Agents (coming soon!)**: AI operations and streaming (Port: 8052)
    - **UI**: Web interface (Port: 3737)
 
    Ports are configurable in your .env as well!
 
 5. **Configure API Keys**:
    - Open http://localhost:3737
-   - Go to **Settings** → Select your LLM/embedding provider and set the API key (OpenAI is default)
-   - Test by uploading a document or crawling a website
+   - You'll automatically be brought through an onboarding flow to set your API key (OpenAI is default)
+
+## ⚡ Quick Test
+
+Once everything is running:
+
+1. **Test Web Crawling**: Go to http://localhost:3737 → Knowledge Base → "Crawl Website" → Enter a doc URL (such as https://ai.pydantic.dev/llms-full.txt)
+2. **Test Document Upload**: Knowledge Base → Upload a PDF
+3. **Test Projects**: Projects → Create a new project and add tasks
+4. **Integrate with your AI coding assistant**: MCP Dashboard → Copy connection config for your AI coding assistant 
+
+## Installing Make
+
+<details>
+<summary><strong>🛠️ Make installation (OPTIONAL - For Dev Workflows)</strong></summary>
+
+### Windows
+
+```bash
+# Option 1: Using Chocolatey
+choco install make
+
+# Option 2: Using Scoop
+scoop install make
+
+# Option 3: Using WSL2
+wsl --install
+# Then in WSL: sudo apt-get install make
+```
+
+### macOS
+
+```bash
+# Make comes pre-installed on macOS
+# If needed: brew install make
+```
+
+### Linux
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install make
+
+# RHEL/CentOS/Fedora
+sudo yum install make
+```
+
+</details>
+
+<details>
+<summary><strong>🚀 Quick Command Reference for Make</strong></summary>
+<br/>
+
+| Command           | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `make dev`        | Start hybrid dev (backend in Docker, frontend local) ⭐ |
+| `make dev-docker` | Everything in Docker                                    |
+| `make stop`       | Stop all services                                       |
+| `make test`       | Run all tests                                           |
+| `make lint`       | Run linters                                             |
+| `make install`    | Install dependencies                                    |
+| `make check`      | Check environment setup                                 |
+| `make clean`      | Remove containers and volumes (with confirmation)       |
+
+</details>
 
 ## 🔄 Database Reset (Start Fresh if Needed)
 
@@ -105,7 +173,7 @@ If you need to completely reset your database and start fresh:
 3. **Restart Services**:
 
    ```bash
-   docker-compose up -d
+   docker compose --profile full up -d
    ```
 
 4. **Reconfigure**:
@@ -116,15 +184,6 @@ The reset script safely removes all tables, functions, triggers, and policies wi
 
 </details>
 
-## ⚡ Quick Test
-
-Once everything is running:
-
-1. **Test Web Crawling**: Go to http://localhost:3737 → Knowledge Base → "Crawl Website" → Enter a doc URL (such as https://ai.pydantic.dev/llms-full.txt)
-2. **Test Document Upload**: Knowledge Base → Upload a PDF
-3. **Test Projects**: Projects → Create a new project and add tasks
-4. **Integrate with your AI coding assistant**: MCP Dashboard → Copy connection config for your AI coding assistant
-
 ## 📚 Documentation
 
 ### Core Services
@@ -134,7 +193,25 @@ Once everything is running:
 | **Web Interface**  | archon-ui      | http://localhost:3737 | Main dashboard and controls       |
 | **API Service**    | archon-server  | http://localhost:8181 | Web crawling, document processing |
 | **MCP Server**     | archon-mcp     | http://localhost:8051 | Model Context Protocol interface  |
-| **Agents Service** | archon-agents  | http://localhost:8052 | AI/ML operations, reranking       |
+| **Agents Service** | archon-agents  | http://localhost:8052 | AI/ML operations, reranking       |  
+
+## Upgrading
+
+To upgrade Archon to the latest version:
+
+1. **Pull latest changes**:
+   ```bash
+   git pull
+   ```
+
+2. **Check for migrations**: Look in the `migration/` folder for any SQL files newer than your last update. Check the file created dates to determine if you need to run them. You can run these in the SQL editor just like you did when you first set up Archon. We are also working on a way to make handling these migrations automatic!
+
+3. **Rebuild and restart**:
+   ```bash
+   docker compose up -d --build
+   ```
+
+This is the same command used for initial setup - it rebuilds containers with the latest code and restarts services.
 
 ## What's Included
 
@@ -149,7 +226,7 @@ Once everything is running:
 ### 🤖 AI Integration
 
 - **Model Context Protocol (MCP)**: Connect any MCP-compatible client (Claude Code, Cursor, even non-AI coding assistants like Claude Desktop)
-- **10 MCP Tools**: Comprehensive yet simple set of tools for RAG queries, task management, and project operations
+- **MCP Tools**: Comprehensive yet simple set of tools for RAG queries, task management, and project operations
 - **Multi-LLM Support**: Works with OpenAI, Ollama, and Google Gemini models
 - **RAG Strategies**: Hybrid search, contextual embeddings, and result reranking for optimal AI responses
 - **Real-time Streaming**: Live responses from AI agents with progress tracking
@@ -200,7 +277,7 @@ Archon uses true microservices architecture with clear separation of concerns:
 | -------------- | -------------------- | ---------------------------- | ------------------------------------------------------------------ |
 | **Frontend**   | `archon-ui-main/`    | Web interface and dashboard  | React, TypeScript, TailwindCSS, Socket.IO client                   |
 | **Server**     | `python/src/server/` | Core business logic and APIs | FastAPI, service layer, Socket.IO broadcasts, all ML/AI operations |
-| **MCP Server** | `python/src/mcp/`    | MCP protocol interface       | Lightweight HTTP wrapper, 10 MCP tools, session management         |
+| **MCP Server** | `python/src/mcp/`    | MCP protocol interface       | Lightweight HTTP wrapper, MCP tools, session management         |
 | **Agents**     | `python/src/agents/` | PydanticAI agent hosting     | Document and RAG agents, streaming responses                       |
 
 ### Communication Patterns
@@ -221,11 +298,11 @@ Archon uses true microservices architecture with clear separation of concerns:
 
 By default, Archon services run on the following ports:
 
-- **Archon-UI**: 3737
-- **Archon-Server**: 8181
-- **Archon-MCP**: 8051
-- **Archon-Agents**: 8052
-- **Archon-Docs**: 3838 (optional)
+- **archon-ui**: 3737
+- **archon-server**: 8181
+- **archon-mcp**: 8051
+- **archon-agents**: 8052
+- **archon-docs**: 3838 (optional)
 
 ### Changing Ports
 
@@ -269,26 +346,139 @@ This is useful when:
 
 After changing hostname or ports:
 
-1. Restart Docker containers: `docker-compose down && docker-compose up -d`
+1. Restart Docker containers: `docker compose down && docker compose --profile full up -d`
 2. Access the UI at: `http://${HOST}:${ARCHON_UI_PORT}`
 3. Update your AI client configuration with the new hostname and MCP port
 
 ## 🔧 Development
 
-For development with hot reload:
+### Quick Start
 
 ```bash
-# Backend services (with auto-reload)
-docker-compose up archon-server archon-mcp archon-agents --build
+# Install dependencies
+make install
 
-# Frontend (with hot reload)
-cd archon-ui-main && npm run dev
+# Start development (recommended)
+make dev        # Backend in Docker, frontend local with hot reload
 
-# Documentation (with hot reload)
-cd docs && npm start
+# Alternative: Everything in Docker
+make dev-docker # All services in Docker
+
+# Stop everything (local FE needs to be stopped manually)
+make stop
+```
+
+### Development Modes
+
+#### Hybrid Mode (Recommended) - `make dev`
+
+Best for active development with instant frontend updates:
+
+- Backend services run in Docker (isolated, consistent)
+- Frontend runs locally with hot module replacement
+- Instant UI updates without Docker rebuilds
+
+#### Full Docker Mode - `make dev-docker`
+
+For all services in Docker environment:
+
+- All services run in Docker containers
+- Better for integration testing
+- Slower frontend updates
+
+### Testing & Code Quality
+
+```bash
+# Run tests
+make test       # Run all tests
+make test-fe    # Run frontend tests
+make test-be    # Run backend tests
+
+# Run linters
+make lint       # Lint all code
+make lint-fe    # Lint frontend code
+make lint-be    # Lint backend code
+
+# Check environment
+make check      # Verify environment setup
+
+# Clean up
+make clean      # Remove containers and volumes (asks for confirmation)
+```
+
+### Viewing Logs
+
+```bash
+# View logs using Docker Compose directly
+docker compose logs -f              # All services
+docker compose logs -f archon-server # API server
+docker compose logs -f archon-mcp    # MCP server
+docker compose logs -f archon-ui     # Frontend
 ```
 
 **Note**: The backend services are configured with `--reload` flag in their uvicorn commands and have source code mounted as volumes for automatic hot reloading when you make changes.
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Port Conflicts
+
+If you see "Port already in use" errors:
+
+```bash
+# Check what's using a port (e.g., 3737)
+lsof -i :3737
+
+# Stop all containers and local services
+make stop
+
+# Change the port in .env
+```
+
+#### Docker Permission Issues (Linux)
+
+If you encounter permission errors with Docker:
+
+```bash
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# Log out and back in, or run
+newgrp docker
+```
+
+#### Windows-Specific Issues
+
+- **Make not found**: Install Make via Chocolatey, Scoop, or WSL2 (see [Installing Make](#installing-make))
+- **Line ending issues**: Configure Git to use LF endings:
+  ```bash
+  git config --global core.autocrlf false
+  ```
+
+#### Frontend Can't Connect to Backend
+
+- Check backend is running: `curl http://localhost:8181/health`
+- Verify port configuration in `.env`
+- For custom ports, ensure both `ARCHON_SERVER_PORT` and `VITE_ARCHON_SERVER_PORT` are set
+
+#### Docker Compose Hangs
+
+If `docker compose` commands hang:
+
+```bash
+# Reset Docker Compose
+docker compose down --remove-orphans
+docker system prune -f
+
+# Restart Docker Desktop (if applicable)
+```
+
+#### Hot Reload Not Working
+
+- **Frontend**: Ensure you're running in hybrid mode (`make dev`) for best HMR experience
+- **Backend**: Check that volumes are mounted correctly in `docker-compose.yml`
+- **File permissions**: On some systems, mounted volumes may have permission issues
 
 ## 📈 Progress
 

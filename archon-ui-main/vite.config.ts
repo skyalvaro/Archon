@@ -15,7 +15,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   // Get host and port from environment variables or use defaults
   // For internal Docker communication, use the service name
   // For external access, use the HOST from environment
-  const isDocker = process.env.DOCKER_ENV === 'true' || !!process.env.HOSTNAME;
+  const isDocker = process.env.DOCKER_ENV === 'true' || existsSync('/.dockerenv');
   const internalHost = 'archon-server';  // Docker service name for internal communication
   const externalHost = process.env.HOST || 'localhost';  // Host for external access
   const host = isDocker ? internalHost : externalHost;
@@ -278,8 +278,18 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     ],
     server: {
       host: '0.0.0.0', // Listen on all network interfaces with explicit IP
-      port: 5173, // Match the port expected in Docker
+      port: parseInt(process.env.ARCHON_UI_PORT || env.ARCHON_UI_PORT || '3737'), // Use configurable port
       strictPort: true, // Exit if port is in use
+      allowedHosts: (() => {
+        const defaultHosts = ['localhost', '127.0.0.1', '::1'];
+        const customHosts = env.VITE_ALLOWED_HOSTS?.trim()
+          ? env.VITE_ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(Boolean)
+          : [];
+        const hostFromEnv = (process.env.HOST ?? env.HOST) && (process.env.HOST ?? env.HOST) !== 'localhost' 
+          ? [process.env.HOST ?? env.HOST] 
+          : [];
+        return [...new Set([...defaultHosts, ...hostFromEnv, ...customHosts])];
+      })(),
       proxy: {
         '/api': {
           target: `http://${host}:${port}`,
@@ -308,6 +318,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     define: {
       'import.meta.env.VITE_HOST': JSON.stringify(host),
       'import.meta.env.VITE_PORT': JSON.stringify(port),
+      'import.meta.env.PROD': env.PROD === 'true',
     },
     resolve: {
       alias: {
