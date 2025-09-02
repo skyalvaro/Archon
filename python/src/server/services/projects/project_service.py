@@ -346,12 +346,17 @@ class ProjectService:
 
             # Handle pinning logic - only one project can be pinned at a time
             if update_fields.get("pinned") is True:
-                # Unpin any other pinned projects
-                self.supabase_client.table("archon_projects").update({"pinned": False}).neq(
-                    "id", project_id
-                ).eq("pinned", True).execute()
+                # Unpin any other pinned projects first
+                unpin_response = (
+                    self.supabase_client.table("archon_projects")
+                    .update({"pinned": False})
+                    .neq("id", project_id)
+                    .eq("pinned", True)
+                    .execute()
+                )
+                logger.debug(f"Unpinned {len(unpin_response.data or [])} other projects before pinning {project_id}")
 
-            # Update the project
+            # Update the target project
             response = (
                 self.supabase_client.table("archon_projects")
                 .update(update_data)
@@ -359,11 +364,22 @@ class ProjectService:
                 .execute()
             )
 
-            if response.data:
+            if response.data and len(response.data) > 0:
                 project = response.data[0]
                 return True, {"project": project, "message": "Project updated successfully"}
             else:
-                return False, {"error": f"Project with ID {project_id} not found"}
+                # If update didn't return data, fetch the project to ensure it exists and get current state
+                get_response = (
+                    self.supabase_client.table("archon_projects")
+                    .select("*")
+                    .eq("id", project_id)
+                    .execute()
+                )
+                if get_response.data and len(get_response.data) > 0:
+                    project = get_response.data[0]
+                    return True, {"project": project, "message": "Project updated successfully"}
+                else:
+                    return False, {"error": f"Project with ID {project_id} not found"}
 
         except Exception as e:
             logger.error(f"Error updating project: {e}")

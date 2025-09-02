@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useStaggeredEntrance } from "../hooks/useStaggeredEntrance";
 import { useProjectPolling, useTaskPolling } from "../hooks/usePolling";
 import { useDatabaseMutation } from "../hooks/useDatabaseMutation";
@@ -44,6 +45,9 @@ function ProjectPage({
   className = "",
   "data-id": dataId,
 }: ProjectPageProps) {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  
   // State management for real data
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -62,7 +66,6 @@ function ProjectPage({
 
   // UI state
   const [activeTab, setActiveTab] = useState("tasks");
-  const [showProjectDetails, setShowProjectDetails] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   // New project form state
@@ -103,8 +106,6 @@ function ProjectPage({
   const {
     data: tasksData,
     isLoading: isPollingTasks,
-    error: tasksPollingError,
-    refetch: refetchTasks,
   } = useTaskPolling(selectedProject?.id || "", {
     enabled: !!selectedProject && !isSwitchingProject,
     onError: (error) => {
@@ -127,7 +128,8 @@ function ProjectPage({
       onSuccess: () => {
         if (selectedProject?.id === projectToDelete?.id) {
           setSelectedProject(null);
-          setShowProjectDetails(false);
+          // Navigate back to projects without a specific ID
+          navigate('/projects', { replace: true });
         }
         setShowDeleteConfirm(false);
         setProjectToDelete(null);
@@ -146,13 +148,15 @@ function ProjectPage({
     {
       onSuccess: (data, variables) => {
         const message = variables.pinned
-          ? `Pinned "${data.title}" to top`
-          : `Removed "${data.title}" from pinned projects`;
+          ? `Pinned "${data.title}" as default project`
+          : `Removed "${data.title}" from default selection`;
         showToast(message, "info");
       },
       onError: (error) => {
         console.error("Failed to update project pin status:", error);
       },
+      // Disable default success message since we have a custom one
+      successMessage: '',
     },
   );
 
@@ -218,8 +222,10 @@ function ProjectPage({
     
     try {
       setSelectedProject(project);
-      setShowProjectDetails(true);
       setActiveTab("tasks");
+      
+      // Update URL to reflect selected project
+      navigate(`/projects/${project.id}`, { replace: true });
       
       // Load tasks for the new project
       await loadTasksForProject(project.id);
@@ -229,7 +235,7 @@ function ProjectPage({
     } finally {
       setIsSwitchingProject(false);
     }
-  }, [selectedProject?.id, loadTasksForProject, showToast]);
+  }, [selectedProject?.id, loadTasksForProject, showToast, navigate]);
 
   // Load task counts for all projects using batch endpoint
   const loadTaskCountsForAllProjects = useCallback(
@@ -295,15 +301,15 @@ function ProjectPage({
     [loadTaskCountsForAllProjects]
   );
 
-  // Auto-select pinned project or first project when projects load
+  // Auto-select project based on URL or default to leftmost
   useEffect(() => {
     if (!projects?.length) return;
 
-
-    // Sort projects - pinned first, then alphabetically
+    // Sort projects - single pinned project first, then alphabetically
     const sortedProjects = [...projects].sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
+      // With single pin, this is simpler: pinned project always comes first
+      if (a.pinned) return -1;
+      if (b.pinned) return 1;
       return a.title.localeCompare(b.title);
     });
 
@@ -311,21 +317,22 @@ function ProjectPage({
     const projectIds = sortedProjects.map((p) => p.id);
     debouncedLoadTaskCounts(projectIds, false);
 
-    // Find pinned project - this is ALWAYS the default on page load
-    const pinnedProject = sortedProjects.find((p) => p.pinned === true);
-
-    // On page load, ALWAYS select pinned project if it exists
-    if (
-      pinnedProject &&
-      (!selectedProject || selectedProject.id !== pinnedProject.id)
-    ) {
-      handleProjectSelect(pinnedProject);
-    } else if (!selectedProject && sortedProjects.length > 0) {
-      // No pinned project, select first one
-      const firstProject = sortedProjects[0];
-      handleProjectSelect(firstProject);
+    // If we have a projectId in the URL, try to select that project
+    if (projectId) {
+      const urlProject = sortedProjects.find(p => p.id === projectId);
+      if (urlProject && selectedProject?.id !== urlProject.id) {
+        handleProjectSelect(urlProject);
+        return;
+      }
+      // If URL project not found, fall through to default selection
     }
-  }, [projects, selectedProject, handleProjectSelect]);
+
+    // Select the leftmost (first) project if none is selected
+    if (!selectedProject && sortedProjects.length > 0) {
+      const leftmostProject = sortedProjects[0];
+      handleProjectSelect(leftmostProject);
+    }
+  }, [projects, selectedProject, handleProjectSelect, projectId]);
 
   // Update loading state based on polling
   useEffect(() => {
@@ -387,7 +394,7 @@ function ProjectPage({
       setProjectToDelete({ id: projectId, title: projectTitle });
       setShowDeleteConfirm(true);
     },
-    [setProjectToDelete, setShowDeleteConfirm],
+    [],
   );
 
   const confirmDeleteProject = useCallback(async () => {
@@ -403,22 +410,33 @@ function ProjectPage({
   const cancelDeleteProject = useCallback(() => {
     setShowDeleteConfirm(false);
     setProjectToDelete(null);
-  }, [setShowDeleteConfirm, setProjectToDelete]);
+  }, []);
 
   const handleTogglePin = useCallback(
     async (e: React.MouseEvent, project: Project) => {
       e.stopPropagation();
+      
+      const isPinning = !project.pinned;
+      
       try {
+        // Backend handles single-pin enforcement automatically
         await togglePinMutation.mutateAsync({
           projectId: project.id,
-          pinned: !project.pinned,
+          pinned: isPinning,
         });
+        
+        // Force immediate refresh of projects to update UI positioning
+        // This ensures the pinned project moves to leftmost position immediately
+        refetchProjects();
+        
       } catch (error) {
         console.error("Failed to toggle pin:", error);
         showToast("Failed to update pin status", "error");
+        // On error, still refresh to ensure UI is consistent with backend
+        refetchProjects();
       }
     },
-    [togglePinMutation, showToast],
+    [togglePinMutation, showToast, refetchProjects],
   );
 
   const handleCreateProject = async () => {
@@ -676,16 +694,27 @@ function ProjectPage({
                         {/* Pin button */}
                         <button
                           onClick={(e) => handleTogglePin(e, project)}
-                          className={`p-1.5 rounded-full ${project.pinned === true ? "bg-purple-100 text-purple-700 dark:bg-purple-700/30 dark:text-purple-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800/70 dark:text-gray-400"} hover:bg-purple-200 hover:text-purple-800 dark:hover:bg-purple-800/50 dark:hover:text-purple-300 transition-colors`}
+                          disabled={togglePinMutation.isPending}
+                          className={`p-1.5 rounded-full ${
+                            togglePinMutation.isPending
+                              ? "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-800/50 dark:text-gray-500"
+                              : project.pinned === true 
+                                ? "bg-purple-100 text-purple-700 dark:bg-purple-700/30 dark:text-purple-400 hover:bg-purple-200 hover:text-purple-800 dark:hover:bg-purple-800/50 dark:hover:text-purple-300" 
+                                : "bg-gray-100 text-gray-500 dark:bg-gray-800/70 dark:text-gray-400 hover:bg-purple-200 hover:text-purple-800 dark:hover:bg-purple-800/50 dark:hover:text-purple-300"
+                          } transition-colors`}
                           title={
-                            project.pinned === true
-                              ? "Unpin project"
-                              : "Pin project"
+                            togglePinMutation.isPending
+                              ? "Updating pin status..."
+                              : project.pinned === true
+                                ? "Unpin project"
+                                : "Pin project"
                           }
                           aria-label={
-                            project.pinned === true
-                              ? "Unpin project"
-                              : "Pin project"
+                            togglePinMutation.isPending
+                              ? "Updating pin status..."
+                              : project.pinned === true
+                                ? "Unpin project"
+                                : "Pin project"
                           }
                           data-pinned={project.pinned}
                         >
@@ -749,7 +778,7 @@ function ProjectPage({
       )}
 
       {/* Project Details Section */}
-      {showProjectDetails && selectedProject && (
+      {selectedProject && (
         <motion.div variants={itemVariants} className="relative">
           {/* Loading overlay when switching projects */}
           {isSwitchingProject && (

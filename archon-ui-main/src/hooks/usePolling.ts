@@ -72,8 +72,8 @@ export function usePolling<T>(
         Accept: 'application/json',
       };
 
-      // Include ETag if we have one for this URL
-      if (etagRef.current) {
+      // Include ETag if we have one for this URL (unless forcing refresh)
+      if (etagRef.current && !force) {
         headers['If-None-Match'] = etagRef.current;
       }
 

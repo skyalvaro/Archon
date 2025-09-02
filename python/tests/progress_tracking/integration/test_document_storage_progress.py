@@ -19,8 +19,8 @@ def create_mock_embedding_result(embedding_count: int) -> EmbeddingBatchResult:
 
 
 @pytest.fixture
-def mock_supabase_client():
-    """Create a mock Supabase client."""
+def progress_mock_supabase_client():
+    """Create a mock Supabase client for progress tracking tests."""
     client = MagicMock()
     
     # Mock table operations

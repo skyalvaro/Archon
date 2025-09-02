@@ -41,11 +41,14 @@ def test_batch_task_counts_endpoint(client, mock_supabase_client):
     mock_select.or_.return_value = mock_or
     mock_supabase_client.table.return_value.select.return_value = mock_select
     
-    # Make the request
-    response = client.get("/api/projects/task-counts")
-    
-    # Should succeed
-    assert response.status_code == 200
+    # Explicitly patch the client creation for this specific test to ensure isolation
+    with patch("src.server.utils.get_supabase_client", return_value=mock_supabase_client):
+        with patch("src.server.services.client_manager.get_supabase_client", return_value=mock_supabase_client):
+            # Make the request
+            response = client.get("/api/projects/task-counts")
+            
+            # Should succeed
+            assert response.status_code == 200
     
     # Check response format and data
     data = response.json()
@@ -93,16 +96,19 @@ def test_batch_task_counts_etag_caching(client, mock_supabase_client):
     mock_select.or_.return_value = mock_or
     mock_supabase_client.table.return_value.select.return_value = mock_select
     
-    # First request - should return data with ETag
-    response1 = client.get("/api/projects/task-counts")
-    assert response1.status_code == 200
-    assert "ETag" in response1.headers
-    etag = response1.headers["ETag"]
-    
-    # Second request with If-None-Match header - should return 304
-    response2 = client.get("/api/projects/task-counts", headers={"If-None-Match": etag})
-    assert response2.status_code == 304
-    assert response2.headers.get("ETag") == etag
-    
-    # Verify no body is returned on 304
-    assert response2.content == b''
+    # Explicitly patch the client creation for this specific test to ensure isolation
+    with patch("src.server.utils.get_supabase_client", return_value=mock_supabase_client):
+        with patch("src.server.services.client_manager.get_supabase_client", return_value=mock_supabase_client):
+            # First request - should return data with ETag
+            response1 = client.get("/api/projects/task-counts")
+            assert response1.status_code == 200
+            assert "ETag" in response1.headers
+            etag = response1.headers["ETag"]
+            
+            # Second request with If-None-Match header - should return 304
+            response2 = client.get("/api/projects/task-counts", headers={"If-None-Match": etag})
+            assert response2.status_code == 304
+            assert response2.headers.get("ETag") == etag
+            
+            # Verify no body is returned on 304
+            assert response2.content == b''

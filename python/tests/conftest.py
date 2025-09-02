@@ -6,17 +6,55 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-# Set test environment
+# Set test environment - always override to ensure test isolation
 os.environ["TEST_MODE"] = "true"
 os.environ["TESTING"] = "true"
 # Set fake database credentials to prevent connection attempts
 os.environ["SUPABASE_URL"] = "https://test.supabase.co"
 os.environ["SUPABASE_SERVICE_KEY"] = "test-key"
 # Set required port environment variables for ServiceDiscovery
-os.environ.setdefault("ARCHON_SERVER_PORT", "8181")
-os.environ.setdefault("ARCHON_MCP_PORT", "8051")
-os.environ.setdefault("ARCHON_AGENTS_PORT", "8052")
+os.environ["ARCHON_SERVER_PORT"] = "8181"
+os.environ["ARCHON_MCP_PORT"] = "8051"
+os.environ["ARCHON_AGENTS_PORT"] = "8052"
 
+# Global patches that need to be active during module imports and app initialization
+# This ensures that any code that runs during FastAPI app startup is mocked
+mock_client = MagicMock()
+mock_table = MagicMock()
+mock_select = MagicMock()
+mock_execute = MagicMock()
+mock_execute.data = []
+mock_select.execute.return_value = mock_execute
+mock_select.eq.return_value = mock_select
+mock_select.order.return_value = mock_select
+mock_table.select.return_value = mock_select
+mock_client.table.return_value = mock_table
+
+# Apply global patches immediately
+from unittest.mock import patch
+_global_patches = [
+    patch("supabase.create_client", return_value=mock_client),
+    patch("src.server.services.client_manager.get_supabase_client", return_value=mock_client),
+    patch("src.server.utils.get_supabase_client", return_value=mock_client),
+]
+
+for p in _global_patches:
+    p.start()
+
+
+@pytest.fixture(autouse=True)
+def ensure_test_environment():
+    """Ensure test environment is properly set for each test."""
+    # Force test environment settings - this runs before each test
+    os.environ["TEST_MODE"] = "true"
+    os.environ["TESTING"] = "true"
+    os.environ["SUPABASE_URL"] = "https://test.supabase.co"
+    os.environ["SUPABASE_SERVICE_KEY"] = "test-key"
+    os.environ["ARCHON_SERVER_PORT"] = "8181"
+    os.environ["ARCHON_MCP_PORT"] = "8051"
+    os.environ["ARCHON_AGENTS_PORT"] = "8052"
+    yield
+    
 
 @pytest.fixture(autouse=True)
 def prevent_real_db_calls():

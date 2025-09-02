@@ -18,8 +18,8 @@ def mock_crawler():
 
 
 @pytest.fixture
-def mock_supabase_client():
-    """Create a mock Supabase client."""
+def crawl_progress_mock_supabase_client():
+    """Create a mock Supabase client for crawl orchestration progress tests."""
     client = MagicMock()
     
     # Mock table operations
@@ -33,11 +33,11 @@ def mock_supabase_client():
 
 
 @pytest.fixture
-def crawling_service(mock_crawler, mock_supabase_client):
+def crawling_service(mock_crawler, crawl_progress_mock_supabase_client):
     """Create a CrawlingService instance for testing."""
     service = CrawlingService(
         crawler=mock_crawler,
-        supabase_client=mock_supabase_client,
+        supabase_client=crawl_progress_mock_supabase_client,
         progress_id="test-crawl-123"
     )
     # Initialize progress tracker for testing
