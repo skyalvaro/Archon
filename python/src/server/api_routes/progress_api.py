@@ -54,6 +54,9 @@ async def get_progress(
         # Convert to dict with camelCase fields for API response
         response_data = progress_response.model_dump(by_alias=True, exclude_none=True)
         
+        # Debug logging for code extraction fields
+        if operation_type == "crawl" and operation.get("status") == "code_extraction":
+            logger.info(f"Code extraction response fields: completedSummaries={response_data.get('completedSummaries')}, totalSummaries={response_data.get('totalSummaries')}, codeBlocksFound={response_data.get('codeBlocksFound')}")
 
         # Generate ETag from stable data (excluding timestamp)
         etag_data = {k: v for k, v in response_data.items() if k != "timestamp"}

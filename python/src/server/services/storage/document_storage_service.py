@@ -175,7 +175,7 @@ async def add_documents_to_supabase(
                         "total_batches": total_batches,
                         "completed_batches": completed_batches,
                         "chunks_in_batch": len(batch_contents),
-                        "max_workers": max_workers if use_contextual_embeddings else 0,
+                        "active_workers": max_workers if use_contextual_embeddings else 1,
                     }
                 )
                 except Exception as e:
@@ -353,7 +353,7 @@ async def add_documents_to_supabase(
                         "total_batches": total_batches,
                         "current_batch": batch_num,
                         "chunks_processed": len(batch_data),
-                        "max_workers": max_workers if use_contextual_embeddings else 0,
+                        "active_workers": max_workers if use_contextual_embeddings else 1,
                     }
                     await report_progress(complete_msg, new_progress, batch_info)
                     break

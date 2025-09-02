@@ -72,8 +72,8 @@ class CrawlProgressResponse(BaseProgressResponse):
 
     status: Literal[
         "starting", "analyzing", "crawling", "processing",
-        "source_creation", "document_storage", "code_extraction",
-        "finalization", "completed", "failed", "cancelled", "stopping"
+        "source_creation", "document_storage", "code_extraction", "code_storage",
+        "finalization", "completed", "failed", "cancelled", "stopping", "error"
     ]
 
     # Crawl-specific fields
@@ -230,6 +230,12 @@ def create_progress_response(
 
     # Create the response, the model will handle field mapping
     try:
+        # Debug logging for code extraction fields
+        if operation_type == "crawl" and "completed_summaries" in progress_data:
+            from ..config.logfire_config import get_logger
+            logger = get_logger(__name__)
+            logger.info(f"Code extraction progress fields present: completed_summaries={progress_data.get('completed_summaries')}, total_summaries={progress_data.get('total_summaries')}")
+        
         return model_class(**progress_data)
     except Exception as e:
         # Log validation errors for debugging

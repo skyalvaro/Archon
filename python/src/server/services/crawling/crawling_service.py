@@ -413,6 +413,9 @@ class CrawlingService:
             # Extract code examples if requested
             code_examples_count = 0
             if request.get("extract_code_examples", True) and actual_chunks_stored > 0:
+                # Check for cancellation before starting code extraction
+                self._check_cancellation()
+                
                 await update_mapped_progress("code_extraction", 0, "Starting code extraction...")
 
                 # Create progress callback for code extraction
@@ -437,8 +440,12 @@ class CrawlingService:
                     code_progress_callback,
                     85,
                     95,
+                    self._check_cancellation,
                 )
 
+                # Check for cancellation after code extraction
+                self._check_cancellation()
+                
                 # Send heartbeat after code extraction
                 await send_heartbeat_if_needed()
 
