@@ -138,7 +138,12 @@ class BatchCrawlStrategy:
                 )
 
         total_urls = len(urls)
-        await report_progress(start_progress, f"Starting to crawl {total_urls} URLs...")
+        await report_progress(
+            start_progress, 
+            f"Starting to crawl {total_urls} URLs...",
+            total_pages=total_urls,
+            processed_pages=0
+        )
 
         # Use configured batch size
         successful_results = []
@@ -168,6 +173,8 @@ class BatchCrawlStrategy:
             await report_progress(
                 progress_percentage,
                 f"Processing batch {batch_start + 1}-{batch_end} of {total_urls} URLs...",
+                total_pages=total_urls,
+                processed_pages=processed
             )
 
             # Crawl this batch using arun_many with streaming
@@ -214,10 +221,16 @@ class BatchCrawlStrategy:
                     await report_progress(
                         progress_percentage,
                         f"Crawled {processed}/{total_urls} pages ({len(successful_results)} successful)",
+                        total_pages=total_urls,
+                        processed_pages=processed,
+                        successful_count=len(successful_results)
                     )
 
         await report_progress(
             end_progress,
             f"Batch crawling completed: {len(successful_results)}/{total_urls} pages successful",
+            total_pages=total_urls,
+            processed_pages=processed,
+            successful_count=len(successful_results)
         )
         return successful_results

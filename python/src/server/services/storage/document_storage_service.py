@@ -50,7 +50,13 @@ async def add_documents_to_supabase(
         # Simple progress reporting helper with batch info support
         async def report_progress(message: str, progress: int, batch_info: dict = None):
             if progress_callback and asyncio.iscoroutinefunction(progress_callback):
-                await progress_callback(message, progress, batch_info)
+                try:
+                    if batch_info:
+                        await progress_callback("document_storage", progress, message, **batch_info)
+                    else:
+                        await progress_callback("document_storage", progress, message)
+                except Exception as e:
+                    search_logger.warning(f"Progress callback failed: {e}. Storage continuing...")
 
         # Load settings from database
         try:
@@ -159,17 +165,21 @@ async def add_documents_to_supabase(
 
             # Report batch start with simplified progress
             if progress_callback and asyncio.iscoroutinefunction(progress_callback):
-                await progress_callback(
-                    f"Processing batch {batch_num}/{total_batches} ({len(batch_contents)} chunks)",
-                    current_progress,
-                    {
+                try:
+                    await progress_callback(
+                        "document_storage",  # status (will be overridden by base_status anyway)
+                        current_progress,    # progress
+                        f"Processing batch {batch_num}/{total_batches} ({len(batch_contents)} chunks)",  # message
+                    **{  # **kwargs - these will be stored at top level
                         "current_batch": batch_num,
                         "total_batches": total_batches,
                         "completed_batches": completed_batches,
                         "chunks_in_batch": len(batch_contents),
                         "max_workers": max_workers if use_contextual_embeddings else 0,
-                    },
+                    }
                 )
+                except Exception as e:
+                    search_logger.warning(f"Progress callback failed: {e}. Storage continuing...")
 
             # Skip batch start progress to reduce traffic
             # Only report on completion
@@ -239,11 +249,16 @@ async def add_documents_to_supabase(
             async def embedding_progress_wrapper(message: str, percentage: float):
                 # Forward rate limiting messages to the main progress callback
                 if progress_callback and "rate limit" in message.lower():
-                    await progress_callback(
-                        message,
-                        current_progress,  # Use current batch progress
-                        {"batch": batch_num, "type": "rate_limit_wait"}
+                    try:
+                        await progress_callback(
+                            "document_storage",
+                            current_progress,  # Use current batch progress
+                            message,
+                        batch=batch_num,
+                        type="rate_limit_wait"
                     )
+                    except Exception as e:
+                        search_logger.warning(f"Progress callback failed during rate limiting: {e}")
             
             # Pass progress callback for rate limiting updates
             result = await create_embeddings_batch(
@@ -381,17 +396,19 @@ async def add_documents_to_supabase(
 
         # Send final 100% progress report to ensure UI shows completion
         if progress_callback and asyncio.iscoroutinefunction(progress_callback):
-            await progress_callback(
-                f"Document storage completed: {len(contents)} chunks stored in {total_batches} batches",
-                100,  # Ensure we report 100%
-                {
-                    "completed_batches": total_batches,
-                    "total_batches": total_batches,
-                    "current_batch": total_batches,
-                    "chunks_processed": len(contents),
-                    # DON'T send 'status': 'completed' - that's for the orchestration service only!
-                },
+            try:
+                await progress_callback(
+                    "document_storage",
+                    100,  # Ensure we report 100%
+                    f"Document storage completed: {len(contents)} chunks stored in {total_batches} batches",
+                completed_batches=total_batches,
+                total_batches=total_batches,
+                current_batch=total_batches,
+                chunks_processed=len(contents),
+                # DON'T send 'status': 'completed' - that's for the orchestration service only!
             )
+            except Exception as e:
+                search_logger.warning(f"Progress callback failed during completion: {e}. Storage still successful.")
 
         span.set_attribute("success", True)
         span.set_attribute("total_processed", len(contents))

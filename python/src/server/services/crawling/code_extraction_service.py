@@ -175,6 +175,9 @@ class CodeExtractionService:
                     "status": "code_extraction",
                     "progress": end_progress,
                     "log": "No code examples found to extract",
+                    "code_blocks_found": 0,
+                    "completed_documents": len(crawl_results),
+                    "total_documents": len(crawl_results),
                 })
             return 0
 
@@ -331,9 +334,10 @@ class CodeExtractionService:
                     await progress_callback({
                         "status": "code_extraction",
                         "progress": mapped_progress,
-                        "log": f"Extracted code from {completed_docs}/{total_docs} documents",
+                        "log": f"Extracted code from {completed_docs}/{total_docs} documents ({len(all_code_blocks)} code blocks found)",
                         "completed_documents": completed_docs,
                         "total_documents": total_docs,
+                        "code_blocks_found": len(all_code_blocks),
                     })
 
             except Exception as e:
@@ -1521,6 +1525,8 @@ class CodeExtractionService:
                     "status": "code_extraction",  # Keep status as code_extraction, not completed
                     "progress": end_progress,
                     "log": f"Code extraction phase completed. Stored {len(storage_data['examples'])} code examples.",
+                    "code_blocks_found": len(storage_data['examples']),
+                    "code_examples_stored": len(storage_data['examples']),
                 })
 
             safe_logfire_info(f"Successfully stored {len(storage_data['examples'])} code examples")

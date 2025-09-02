@@ -30,8 +30,9 @@ class ProgressTracker:
         self.progress_id = progress_id
         self.operation_type = operation_type
         self.state = {
-            "progressId": progress_id,
-            "startTime": datetime.now().isoformat(),
+            "progress_id": progress_id,
+            "type": operation_type,  # Store operation type for progress model selection
+            "start_time": datetime.now().isoformat(),
             "status": "initializing",
             "progress": 0,
             "logs": [],
@@ -58,7 +59,7 @@ class ProgressTracker:
             initial_data: Optional initial data to include
         """
         self.state["status"] = "starting"
-        self.state["startTime"] = datetime.now().isoformat()
+        self.state["start_time"] = datetime.now().isoformat()
 
         if initial_data:
             self.state.update(initial_data)
@@ -78,9 +79,25 @@ class ProgressTracker:
             log: Log message describing current operation
             **kwargs: Additional data to include in update
         """
+        # CRITICAL: Never allow progress to go backwards
+        current_progress = self.state.get("progress", 0)
+        new_progress = min(100, max(0, progress))  # Ensure 0-100
+
+        # Only update if new progress is greater than or equal to current
+        # (equal allows status updates without progress regression)
+        if new_progress < current_progress:
+            safe_logfire_info(
+                f"Progress backwards prevented: {current_progress}% -> {new_progress}% | "
+                f"progress_id={self.progress_id} | status={status}"
+            )
+            # Keep the higher progress value
+            actual_progress = current_progress
+        else:
+            actual_progress = new_progress
+
         self.state.update({
             "status": status,
-            "progress": min(100, max(0, progress)),  # Ensure 0-100
+            "progress": actual_progress,
             "log": log,
             "timestamp": datetime.now().isoformat(),
         })
@@ -98,6 +115,7 @@ class ProgressTracker:
         # Add any additional data
         for key, value in kwargs.items():
             self.state[key] = value
+        
 
         self._update_state()
 
@@ -110,22 +128,22 @@ class ProgressTracker:
         """
         self.state["status"] = "completed"
         self.state["progress"] = 100
-        self.state["endTime"] = datetime.now().isoformat()
+        self.state["end_time"] = datetime.now().isoformat()
 
         if completion_data:
             self.state.update(completion_data)
 
         # Calculate duration
-        if "startTime" in self.state:
-            start = datetime.fromisoformat(self.state["startTime"])
-            end = datetime.fromisoformat(self.state["endTime"])
+        if "start_time" in self.state:
+            start = datetime.fromisoformat(self.state["start_time"])
+            end = datetime.fromisoformat(self.state["end_time"])
             duration = (end - start).total_seconds()
-            self.state["duration"] = duration
-            self.state["durationFormatted"] = self._format_duration(duration)
+            self.state["duration"] = str(duration)  # Convert to string for Pydantic model
+            self.state["duration_formatted"] = self._format_duration(duration)
 
         self._update_state()
         safe_logfire_info(
-            f"Progress completed | progress_id={self.progress_id} | type={self.operation_type} | duration={self.state.get('durationFormatted', 'unknown')}"
+            f"Progress completed | progress_id={self.progress_id} | type={self.operation_type} | duration={self.state.get('duration_formatted', 'unknown')}"
         )
 
     async def error(self, error_message: str, error_details: dict[str, Any] | None = None):
@@ -139,11 +157,11 @@ class ProgressTracker:
         self.state.update({
             "status": "error",
             "error": error_message,
-            "errorTime": datetime.now().isoformat(),
+            "error_time": datetime.now().isoformat(),
         })
 
         if error_details:
-            self.state["errorDetails"] = error_details
+            self.state["error_details"] = error_details
 
         self._update_state()
         safe_logfire_error(
@@ -167,9 +185,9 @@ class ProgressTracker:
             status="processing_batch",
             progress=progress_val,
             log=message,
-            currentBatch=current_batch,
-            totalBatches=total_batches,
-            batchSize=batch_size,
+            current_batch=current_batch,
+            total_batches=total_batches,
+            batch_size=batch_size,
         )
 
     async def update_crawl_stats(
@@ -192,9 +210,9 @@ class ProgressTracker:
             status="crawling",
             progress=progress_val,
             log=log,
-            processedPages=processed_pages,
-            totalPages=total_pages,
-            currentUrl=current_url,
+            processed_pages=processed_pages,
+            total_pages=total_pages,
+            current_url=current_url,
         )
 
     async def update_storage_progress(
@@ -213,8 +231,8 @@ class ProgressTracker:
             status="document_storage",
             progress=progress_val,
             log=f"{operation}: {chunks_stored}/{total_chunks} chunks",
-            chunksStored=chunks_stored,
-            totalChunks=total_chunks,
+            chunks_stored=chunks_stored,
+            total_chunks=total_chunks,
         )
 
     def _update_state(self):

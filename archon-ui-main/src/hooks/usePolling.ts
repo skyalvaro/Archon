@@ -47,6 +47,7 @@ export function usePolling<T>(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cachedDataRef = useRef<T | undefined>(undefined);
   const lastFetchRef = useRef<number>(0);
+  const notFoundCountRef = useRef<number>(0);  // Track consecutive 404s
 
   // Reset ETag/cache on URL change to avoid cross-endpoint contamination
   useEffect(() => {
@@ -55,20 +56,20 @@ export function usePolling<T>(
     lastFetchRef.current = 0;
   }, [url]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     // Don't fetch if URL is empty
     if (!url) {
       return;
     }
     
     // Check stale time
-    if (staleTime > 0 && Date.now() - lastFetchRef.current < staleTime) {
+    if (!force && staleTime > 0 && Date.now() - lastFetchRef.current < staleTime) {
       return; // Data is still fresh
     }
 
     try {
       const headers: HeadersInit = {
-        'Content-Type': 'application/json',
+        Accept: 'application/json',
       };
 
       // Include ETag if we have one for this URL
@@ -97,14 +98,32 @@ export function usePolling<T>(
       }
 
       if (!response.ok) {
-        // For 404s, don't throw an error - just continue polling
-        // This can happen briefly during initialization
+        // For 404s, track consecutive failures
         if (response.status === 404) {
-          console.log(`Resource not found (404), will retry: ${url}`);
+          notFoundCountRef.current++;
+          
+          // After 5 consecutive 404s (5 seconds), stop polling and call error handler
+          if (notFoundCountRef.current >= 5) {
+            console.error(`Resource permanently not found after ${notFoundCountRef.current} attempts: ${url}`);
+            const error = new Error('Resource no longer exists');
+            setError(error);
+            setPollInterval(0); // Stop polling
+            if (onError) {
+              onError(error);
+            }
+            return;
+          }
+          
+          console.log(`Resource not found (404), attempt ${notFoundCountRef.current}/5: ${url}`);
+          lastFetchRef.current = Date.now();
+          setError(null);
           return;
         }
-        throw new Error(`Failed to fetch: ${response.statusText}`);
+        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
       }
+      
+      // Reset 404 counter on successful response
+      notFoundCountRef.current = 0;
 
       // Store ETag for next request
       const etag = response.headers.get('ETag');
@@ -201,7 +220,7 @@ export function usePolling<T>(
     isLoading,
     isError: !!error,
     isSuccess: !isLoading && !error && data !== undefined,
-    refetch: fetchData
+    refetch: () => fetchData(true)
   };
 }
 
@@ -237,23 +256,47 @@ export function useProjectPolling(options?: UsePollingOptions<any>) {
  * Hook for polling crawl progress updates
  */
 export function useCrawlProgressPolling(progressId: string | null, options?: UsePollingOptions<any>) {
-  const url = progressId ? `/api/crawl-progress/${progressId}` : '';
+  const url = progressId ? `/api/progress/${progressId}` : '';
+  
+  console.log(`🔍 useCrawlProgressPolling called with progressId: ${progressId}, url: ${url}`);
   
   // Track if crawl is complete to disable polling
   const [isComplete, setIsComplete] = useState(false);
   
   // Reset complete state when progressId changes
   useEffect(() => {
+    console.log(`📊 Progress ID changed to: ${progressId}, resetting complete state`);
     setIsComplete(false);
   }, [progressId]);
   
   // Memoize the error handler to prevent recreating it on every render
   const handleError = useCallback((error: Error) => {
+    // Handle permanent resource not found (after 5 consecutive 404s)
+    if (error.message === 'Resource no longer exists') {
+      console.log(`Crawl progress no longer exists for: ${progressId}`);
+      
+      // Clean up from localStorage
+      if (progressId) {
+        localStorage.removeItem(`crawl_progress_${progressId}`);
+        const activeCrawls = JSON.parse(localStorage.getItem('active_crawls') || '[]');
+        const updated = activeCrawls.filter((id: string) => id !== progressId);
+        localStorage.setItem('active_crawls', JSON.stringify(updated));
+      }
+      
+      // Pass error to parent if provided
+      options?.onError?.(error);
+      return;
+    }
+    
+    // Log other errors
     if (!error.message.includes('404') && !error.message.includes('Not Found') && 
         !error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
       console.error('Crawl progress error:', error);
     }
-  }, []);
+    
+    // Pass error to parent if provided
+    options?.onError?.(error);
+  }, [progressId, options]);
   
   const result = usePolling(url, {
     interval: 1000, // 1 second for crawl progress
@@ -278,5 +321,18 @@ export function useCrawlProgressPolling(progressId: string | null, options?: Use
     }
   }, [result.data?.status, progressId]);
 
-  return result;
+  // Backend now returns flattened, camelCase response - no transformation needed!
+  const transformedData = result.data ? {
+    ...result.data,
+    // Ensure we have required fields with defaults
+    progress: result.data.progress || 0,
+    logs: result.data.logs || [],
+    message: result.data.message || '',
+  } : null;
+
+  return {
+    ...result,
+    data: transformedData,
+    isComplete
+  };
 }

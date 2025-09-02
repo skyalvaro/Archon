@@ -235,13 +235,18 @@ class SinglePageCrawlStrategy:
             logger.info(f"Crawling markdown file: {url}")
 
             # Define local report_progress helper like in other methods
-            async def report_progress(progress: int, message: str):
+            async def report_progress(progress: int, message: str, **kwargs):
                 """Helper to report progress if callback is available"""
                 if progress_callback:
-                    await progress_callback('crawling', progress, message)
+                    await progress_callback('crawling', progress, message, **kwargs)
 
-            # Report initial progress
-            await report_progress(start_progress, f"Fetching text file: {url}")
+            # Report initial progress (single file = 1 page)
+            await report_progress(
+                start_progress, 
+                f"Fetching text file: {url}",
+                total_pages=1,
+                processed_pages=0
+            )
 
             # Use consistent configuration even for text files
             crawl_config = CrawlerRunConfig(
@@ -254,7 +259,12 @@ class SinglePageCrawlStrategy:
                 logger.info(f"Successfully crawled markdown file: {url}")
 
                 # Report completion progress
-                await report_progress(end_progress, f"Text file crawled successfully: {original_url}")
+                await report_progress(
+                    end_progress, 
+                    f"Text file crawled successfully: {original_url}",
+                    total_pages=1,
+                    processed_pages=1
+                )
 
                 return [{'url': original_url, 'markdown': result.markdown, 'html': result.html}]
             else:

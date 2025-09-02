@@ -68,7 +68,8 @@ export const useTerminalScroll = <T = any>(
         }
       });
     }
-  }, [...dependencies, isUserScrolling]);
+  // Use length of dependencies array instead of spreading to avoid React warnings
+  }, [dependencies.length, enabled, isUserScrolling]);
 
   return scrollContainerRef;
 }; 

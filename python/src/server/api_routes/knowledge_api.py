@@ -97,6 +97,7 @@ async def get_crawl_progress(progress_id: str):
     """
     try:
         from ..utils.progress.progress_tracker import ProgressTracker
+        from ..models.progress_models import create_progress_response
 
         # Get progress from the tracker's in-memory storage
         progress_data = ProgressTracker.get_progress(progress_id)
@@ -106,7 +107,25 @@ async def get_crawl_progress(progress_id: str):
             # Return 404 if no progress exists - this is correct behavior
             raise HTTPException(status_code=404, detail={"error": f"No progress found for ID: {progress_id}"})
 
-        return progress_data
+        # Ensure we have the progress_id in the data
+        progress_data["progress_id"] = progress_id
+        
+        # Get operation type for proper model selection
+        operation_type = progress_data.get("type", "crawl")
+        
+        # Create standardized response using Pydantic model
+        progress_response = create_progress_response(operation_type, progress_data)
+        
+        # Convert to dict with camelCase fields for API response
+        response_data = progress_response.model_dump(by_alias=True, exclude_none=True)
+        
+        safe_logfire_info(
+            f"Progress retrieved | operation_id={progress_id} | status={response_data.get('status')} | "
+            f"progress={response_data.get('progress')} | totalPages={response_data.get('totalPages')} | "
+            f"processedPages={response_data.get('processedPages')}"
+        )
+
+        return response_data
     except Exception as e:
         safe_logfire_error(f"Failed to get crawl progress | error={str(e)} | progress_id={progress_id}")
         raise HTTPException(status_code=500, detail={"error": str(e)})
@@ -292,7 +311,8 @@ async def refresh_knowledge_item(source_id: str):
             "progress": 0,
             "log": f"Starting refresh for {url}",
             "source_id": source_id,
-            "operation": "refresh"
+            "operation": "refresh",
+            "crawl_type": "refresh"
         })
 
         # Get crawler from CrawlerManager - same pattern as _perform_crawl_with_progress
@@ -374,8 +394,19 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         # Initialize progress tracker IMMEDIATELY so it's available for polling
         from ..utils.progress.progress_tracker import ProgressTracker
         tracker = ProgressTracker(progress_id, operation_type="crawl")
+        
+        # Detect crawl type from URL
+        url_str = str(request.url)
+        crawl_type = "normal"
+        if "sitemap.xml" in url_str:
+            crawl_type = "sitemap"
+        elif url_str.endswith(".txt"):
+            crawl_type = "llms-txt" if "llms" in url_str.lower() else "text_file"
+        
         await tracker.start({
-            "url": str(request.url),
+            "url": url_str,
+            "current_url": url_str,
+            "crawl_type": crawl_type,
             "status": "initializing",
             "progress": 0,
             "log": f"Starting crawl for {request.url}"
@@ -388,13 +419,26 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         safe_logfire_info(
             f"Crawl started successfully | progress_id={progress_id} | url={str(request.url)}"
         )
-        response_data = {
-            "success": True,
-            "progressId": progress_id,
-            "message": "Crawling started",
-            "estimatedDuration": "3-5 minutes",
-        }
-        return response_data
+        # Create a proper response that will be converted to camelCase
+        from pydantic import BaseModel, Field
+        
+        class CrawlStartResponse(BaseModel):
+            success: bool
+            progress_id: str = Field(alias="progressId")
+            message: str
+            estimated_duration: str = Field(alias="estimatedDuration")
+            
+            class Config:
+                populate_by_name = True
+        
+        response = CrawlStartResponse(
+            success=True,
+            progress_id=progress_id,
+            message="Crawling started",
+            estimated_duration="3-5 minutes"
+        )
+        
+        return response.model_dump(by_alias=True)
     except Exception as e:
         safe_logfire_error(f"Failed to start crawl | error={str(e)} | url={str(request.url)}")
         raise HTTPException(status_code=500, detail=str(e))

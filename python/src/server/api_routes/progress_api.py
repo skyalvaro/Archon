@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi import status as http_status
 
 from ..config.logfire_config import get_logger, logfire
+from ..models.progress_models import create_progress_response
 from ..utils.etag_utils import check_etag, generate_etag
 from ..utils.progress import ProgressTracker
 
@@ -30,7 +31,7 @@ async def get_progress(
         logfire.info(f"Getting progress for operation | operation_id={operation_id}")
 
         # Get operation progress from ProgressTracker
-        operation = ProgressTracker.get_progress_state(operation_id)
+        operation = ProgressTracker.get_progress(operation_id)
 
         if not operation:
             logfire.warning(f"Operation not found | operation_id={operation_id}")
@@ -38,17 +39,21 @@ async def get_progress(
                 status_code=404,
                 detail={"error": f"Operation {operation_id} not found"}
             )
+        
 
-        # Build response data
-        response_data = {
-            "operation_id": operation_id,
-            "status": operation.get("status", "unknown"),  # "running", "completed", "failed"
-            "progress": operation.get("percentage", 0),
-            "message": operation.get("log", "Processing..."),
-            "metadata": operation,
-            "error": operation.get("error") if operation.get("status") == "failed" else None,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        # Ensure we have the progress_id in the data
+        operation["progress_id"] = operation_id
+        
+        # Get operation type for proper model selection
+        operation_type = operation.get("type", "crawl")
+        
+        # Create standardized response using Pydantic model
+        progress_response = create_progress_response(operation_type, operation)
+        
+        
+        # Convert to dict with camelCase fields for API response
+        response_data = progress_response.model_dump(by_alias=True, exclude_none=True)
+        
 
         # Generate ETag from stable data (excluding timestamp)
         etag_data = {k: v for k, v in response_data.items() if k != "timestamp"}
@@ -74,10 +79,7 @@ async def get_progress(
             # No need to poll completed/failed operations
             response.headers["X-Poll-Interval"] = "0"
 
-        logfire.info(
-            f"Progress retrieved | operation_id={operation_id} | "
-            f"status={operation.get('status')} | percentage={operation.get('percentage')}"
-        )
+        logfire.info(f"Progress retrieved | operation_id={operation_id} | status={response_data.get('status')} | progress={response_data.get('progress')}")
 
         return response_data
 
@@ -108,7 +110,7 @@ async def list_active_operations():
                     "operation_id": op_id,
                     "operation_type": operation.get("type", "unknown"),
                     "status": operation.get("status"),
-                    "progress": operation.get("percentage", 0),
+                    "progress": operation.get("progress", 0),
                     "message": operation.get("log", "Processing..."),
                     "started_at": operation.get("start_time", datetime.utcnow()).isoformat() if operation.get("start_time") else None
                 })

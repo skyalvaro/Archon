@@ -138,8 +138,8 @@ class RecursiveCrawlStrategy:
                     "crawling",
                     progress_val,
                     message,
-                    currentStep=message,
-                    stepMessage=message,
+                    current_step=message,
+                    step_message=message,
                     **kwargs
                 )
 
@@ -148,9 +148,10 @@ class RecursiveCrawlStrategy:
         def normalize_url(url):
             return urldefrag(url)[0]
 
-        current_urls = set([normalize_url(u) for u in start_urls])
+        current_urls = {normalize_url(u) for u in start_urls}
         results_all = []
         total_processed = 0
+        total_discovered = len(start_urls)  # Track total URLs discovered
 
         for depth in range(max_depth):
             # Check for cancellation at the start of each depth level
@@ -174,6 +175,8 @@ class RecursiveCrawlStrategy:
             await report_progress(
                 depth_start,
                 f"Crawling depth {depth + 1}/{max_depth}: {len(urls_to_crawl)} URLs to process",
+                total_pages=total_discovered,
+                processed_pages=total_processed,
             )
 
             # Use configured batch size for recursive crawling
@@ -203,8 +206,8 @@ class RecursiveCrawlStrategy:
                 await report_progress(
                     batch_progress,
                     f"Depth {depth + 1}: crawling URLs {batch_idx + 1}-{batch_end_idx} of {len(urls_to_crawl)}",
-                    totalPages=total_processed + batch_idx,
-                    processedPages=len(results_all),
+                    total_pages=total_discovered,
+                    processed_pages=total_processed,
                 )
 
                 # Use arun_many for native parallel crawling with streaming
@@ -247,7 +250,9 @@ class RecursiveCrawlStrategy:
                             # Skip binary files and already visited URLs
                             is_binary = self.url_handler.is_binary_file(next_url)
                             if next_url not in visited and not is_binary:
-                                next_level_urls.add(next_url)
+                                if next_url not in next_level_urls:
+                                    next_level_urls.add(next_url)
+                                    total_discovered += 1  # Increment when we discover a new URL
                             elif is_binary:
                                 logger.debug(f"Skipping binary file from crawl queue: {next_url}")
                     else:
@@ -264,8 +269,8 @@ class RecursiveCrawlStrategy:
                         await report_progress(
                             current_progress,
                             f"Depth {depth + 1}: processed {current_idx}/{len(urls_to_crawl)} URLs ({depth_successful} successful)",
-                            totalPages=total_processed,
-                            processedPages=len(results_all),
+                            total_pages=total_discovered,
+                            processed_pages=total_processed,
                         )
                     i += 1
 
@@ -275,10 +280,14 @@ class RecursiveCrawlStrategy:
             await report_progress(
                 depth_end,
                 f"Depth {depth + 1} completed: {depth_successful} pages crawled, {len(next_level_urls)} URLs found for next depth",
+                total_pages=total_discovered,
+                processed_pages=total_processed,
             )
 
         await report_progress(
             end_progress,
             f"Recursive crawling completed: {len(results_all)} total pages crawled across {max_depth} depth levels",
+            total_pages=total_discovered,
+            processed_pages=total_processed,
         )
         return results_all
