@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useCreateTask, useUpdateTask } from "./useTaskQueries";
-import { useProjectFeatures } from "../../../../hooks/useProjectQueries";
+import { useProjectFeatures } from "../../hooks/useProjectQueries";
 import { useToast } from "../../../../contexts/ToastContext";
 import type { Task, Assignee, CreateTaskRequest } from "../types";
 import type { UseTaskEditorReturn } from "../types";

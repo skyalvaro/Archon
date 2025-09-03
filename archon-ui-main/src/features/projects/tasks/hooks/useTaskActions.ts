@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import {
   useUpdateTask,
   useDeleteTask,
-} from "../../../../hooks/useProjectQueries";
+} from "./useTaskQueries";
 import { useToast } from "../../../../contexts/ToastContext";
-import type { Task } from "../../../../types/project";
+import type { Task } from "../types";
 import type { UseTaskActionsReturn } from "../types";
 
 export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
@@ -47,8 +47,9 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
         setTaskToDelete(null);
       },
       onError: (error) => {
-        console.error("Failed to delete task:", error);
-        showToast(`Failed to delete task "${taskToDelete.title}"`, "error");
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Failed to delete task:", error, { taskToDelete });
+        showToast(`Failed to delete task "${taskToDelete.title}": ${errorMessage}`, "error");
         // Modal stays open on error so user can retry
       },
     });

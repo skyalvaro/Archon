@@ -8,10 +8,15 @@
  * - Project dashboard and routing
  */
 
-// Main exports will be added as components are migrated
-// export * from "./types"; // Currently empty, will add exports as types are migrated
+// Views
+export { ProjectsView } from './views/ProjectsView';
 
-// Future exports:
-// export * from './components';
-// export * from './hooks';
-// export * from './services';
+// Components
+export * from './components';
+
+// Hooks
+export * from './hooks';
+
+// Sub-features
+export * from './tasks';
+export * from './documents';

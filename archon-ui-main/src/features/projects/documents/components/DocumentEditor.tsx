@@ -27,6 +27,7 @@ import ReactMarkdown from 'react-markdown';
 import { Button } from '../../../ui/primitives';
 import { Save, Eye, Edit3 } from 'lucide-react';
 import { cn, glassmorphism } from '../../../ui/primitives/styles';
+import { useToast } from '../../../../contexts/ToastContext';
 import type { ProjectDocument } from '../types';
 
 interface DocumentEditorProps {
@@ -42,12 +43,13 @@ export const DocumentEditor = ({
   isDarkMode = false,
   className
 }: DocumentEditorProps) => {
+  const { showToast } = useToast();
   const [content, setContent] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
 
-  // Convert document content to markdown string
+  // Convert document content to markdown string with proper type checking
   const getMarkdownContent = () => {
     // If content is already a string, return it
     if (typeof document.content === 'string') {
@@ -81,7 +83,7 @@ export const DocumentEditor = ({
           });
           markdown += '\n';
         } else if (typeof value === 'object' && value !== null) {
-          Object.entries(value as any).forEach(([subKey, subValue]) => {
+          Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
             markdown += `**${subKey}:** ${subValue}\n\n`;
           });
         } else {
@@ -113,7 +115,9 @@ export const DocumentEditor = ({
       });
       setHasChanges(false);
     } catch (error) {
-      console.error('Failed to save document:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to save document:', error, { documentId: document.id });
+      showToast(`Failed to save document: ${errorMessage}`, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -190,7 +194,9 @@ export const DocumentEditor = ({
         {viewMode === 'edit' ? (
           <div className={cn(
             "h-full",
-            "bg-white dark:bg-gray-900"
+            // Just make text white in dark mode
+            "dark:[&_.mdxeditor]:text-white",
+            "dark:[&_.mdxeditor-root-contenteditable]:text-white"
           )}>
             <MDXEditor
               className="h-full"

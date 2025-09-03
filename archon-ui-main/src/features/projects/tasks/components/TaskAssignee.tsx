@@ -1,6 +1,6 @@
 import React from "react";
 import { User, Bot } from "lucide-react";
-import type { Assignee } from "../../../../types/project";
+import type { Assignee } from "../types";
 import {
   Select,
   SelectTrigger,

@@ -5,7 +5,7 @@
  * Priority is for display and user understanding, not for ordering logic.
  */
 
-export type TaskPriority = "urgent" | "high" | "medium" | "low";
+export type TaskPriority = "critical" | "high" | "medium" | "low";
 
 export interface TaskPriorityOption {
   value: number; // Maps to task_order values for backwards compatibility
@@ -14,7 +14,7 @@ export interface TaskPriorityOption {
 }
 
 export const TASK_PRIORITY_OPTIONS: readonly TaskPriorityOption[] = [
-  { value: 1, label: "Urgent", color: "text-red-600" },
+  { value: 1, label: "Critical", color: "text-red-600" },
   { value: 25, label: "High", color: "text-orange-600" },
   { value: 50, label: "Medium", color: "text-blue-600" },
   { value: 100, label: "Low", color: "text-gray-600" },
@@ -24,7 +24,7 @@ export const TASK_PRIORITY_OPTIONS: readonly TaskPriorityOption[] = [
  * Convert task_order value to TaskPriority enum
  */
 export function getTaskPriorityFromTaskOrder(taskOrder: number): TaskPriority {
-  if (taskOrder <= 1) return "urgent";
+  if (taskOrder <= 1) return "critical";
   if (taskOrder <= 25) return "high";
   if (taskOrder <= 50) return "medium";
   return "low";

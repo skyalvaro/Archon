@@ -227,8 +227,9 @@ export const DocsTab = ({ project }: DocsTabProps) => {
         },
       });
     } catch (error) {
-      console.error('Failed to upload file:', error);
-      showToast('Failed to upload file', 'error');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to upload file:', error, { file: file.name });
+      showToast(`Failed to upload file: ${errorMessage}`, 'error');
     }
   };
 

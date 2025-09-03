@@ -4,7 +4,7 @@
  * Type definitions for task-related hooks
  */
 
-import type { Task } from "../../../../types/project";
+import type { Task } from "./task";
 
 /**
  * Return type for useTaskActions hook
@@ -30,7 +30,7 @@ export interface UseTaskActionsReturn {
  */
 export interface UseTaskEditorReturn {
   // Data
-  projectFeatures: any[];
+  projectFeatures: unknown[];
 
   // Actions
   saveTask: (

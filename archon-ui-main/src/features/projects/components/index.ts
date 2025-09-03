@@ -13,4 +13,8 @@
  * - VersionHistory: Document versioning
  */
 
-// Components will be exported here as they're migrated
+export { ProjectCard } from './ProjectCard';
+export { ProjectCardActions } from './ProjectCardActions';
+export { ProjectList } from './ProjectList';
+export { NewProjectModal } from './NewProjectModal';
+export { ProjectHeader } from './ProjectHeader';

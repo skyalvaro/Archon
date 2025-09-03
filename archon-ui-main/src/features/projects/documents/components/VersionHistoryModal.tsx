@@ -12,7 +12,7 @@ interface Version {
   change_type: string;
   created_by: string;
   created_at: string;
-  content: any;
+  content: unknown;  // Can be document content or other versioned data
   document_id?: string;
 }
 

@@ -14,6 +14,7 @@ import type { Task } from './types';
 import { BoardView, TableView } from './views';
 import { TaskEditModal } from './components/TaskEditModal';
 import { DeleteConfirmModal } from '../../ui/components/DeleteConfirmModal';
+import { getDefaultTaskOrder, validateTaskOrder } from './utils';
 
 interface TasksTabProps {
   projectId: string;
@@ -142,8 +143,9 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         }
       });
     } catch (error) {
-      console.error('Failed to reorder task:', error);
-      showToast('Failed to reorder task', 'error');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to reorder task:', error, { taskId, newPosition });
+      showToast(`Failed to reorder task: ${errorMessage}`, 'error');
     }
   }, [tasks, updateTaskMutation, showToast]);
 
@@ -168,8 +170,9 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
       
       showToast(`Task moved to ${newStatus}`, 'success');
     } catch (error) {
-      console.error('Failed to move task:', error);
-      showToast('Failed to move task', 'error');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to move task:', error, { taskId, newStatus });
+      showToast(`Failed to move task: ${errorMessage}`, 'error');
     }
   };
 
@@ -180,10 +183,10 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
   // Inline update for task fields
   const updateTaskInline = async (taskId: string, updates: Partial<Task>) => {
     try {
-      // Ensure task_order is an integer if present
-      const processedUpdates: any = { ...updates };
+      // Validate task_order if present (ensures integer precision)
+      const processedUpdates = { ...updates };
       if (processedUpdates.task_order !== undefined) {
-        processedUpdates.task_order = Math.round(processedUpdates.task_order);
+        processedUpdates.task_order = validateTaskOrder(processedUpdates.task_order);
       }
       
       await updateTaskMutation.mutateAsync({
@@ -191,8 +194,9 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         updates: processedUpdates
       });
     } catch (error) {
-      console.error('Failed to update task:', error);
-      showToast('Failed to update task', 'error');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to update task:', error, { taskId, updates });
+      showToast(`Failed to update task: ${errorMessage}`, 'error');
     }
   };
 

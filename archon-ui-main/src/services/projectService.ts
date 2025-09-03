@@ -10,16 +10,25 @@ import type {
   UpdateTaskRequest,
   DatabaseTaskStatus,
   TaskCounts
-} from '../types/project';
+} from '../features/projects/types';
 
 import { 
   validateCreateProject, 
-  validateUpdateProject, 
+  validateUpdateProject,
+} from '../features/projects/schemas';
+
+import {
   validateCreateTask, 
   validateUpdateTask,
   validateUpdateTaskStatus,
-  formatValidationErrors
-} from '../lib/projectSchemas';
+} from '../features/projects/tasks/schemas';
+
+// Helper function to format validation errors
+function formatValidationErrors(errors: any): string {
+  return errors.errors
+    .map((error: any) => `${error.path.join('.')}: ${error.message}`)
+    .join(', ');
+}
 
 // No status mapping needed - using database values directly
 

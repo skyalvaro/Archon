@@ -1,0 +1,58 @@
+import { useEffect, useState } from 'react';
+
+/**
+ * Smart polling hook that adjusts interval based on page visibility and focus
+ * 
+ * Reduces unnecessary API calls when user is not actively using the app
+ */
+export function useSmartPolling(baseInterval: number = 10000) {
+  const [isVisible, setIsVisible] = useState(true);
+  const [hasFocus, setHasFocus] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+
+    const handleFocus = () => setHasFocus(true);
+    const handleBlur = () => setHasFocus(false);
+
+    // Set initial state
+    setIsVisible(!document.hidden);
+    setHasFocus(document.hasFocus());
+
+    // Add event listeners
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  // Calculate smart interval based on visibility and focus
+  const getSmartInterval = () => {
+    if (!isVisible) {
+      // Page is hidden - disable polling
+      return false;
+    }
+    
+    if (!hasFocus) {
+      // Page is visible but not focused - poll less frequently
+      return baseInterval * 3; // 30 seconds instead of 10
+    }
+    
+    // Page is active - use normal interval
+    return baseInterval;
+  };
+
+  return {
+    refetchInterval: getSmartInterval(),
+    isActive: isVisible && hasFocus,
+    isVisible,
+    hasFocus
+  };
+}

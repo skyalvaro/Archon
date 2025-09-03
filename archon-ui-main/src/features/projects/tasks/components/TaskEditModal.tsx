@@ -23,7 +23,7 @@ import {
 } from "../../../ui/primitives";
 import { FeatureSelect } from "./FeatureSelect";
 import { Priority } from "./TaskPriority";
-import type { Task, Assignee } from "../../../../types/project";
+import type { Task, Assignee } from "../types";
 import { useTaskEditor } from "../hooks";
 
 interface TaskEditModalProps {

@@ -4,15 +4,17 @@
  * All task-related types for the projects feature.
  */
 
-// Re-export core task types from project types
+// Core task types (vertical slice architecture)
 export type { 
   Task, 
   Assignee, 
   TaskPriority,
+  TaskSource,
+  TaskCodeExample,
   CreateTaskRequest,
   UpdateTaskRequest,
   DatabaseTaskStatus
-} from "../../../../types/project";
+} from "./task";
 
 // Hook return types
 export type { UseTaskActionsReturn, UseTaskEditorReturn } from "./hooks";

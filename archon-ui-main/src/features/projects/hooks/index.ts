@@ -9,4 +9,12 @@
  * - Business logic hooks (useTaskDragDrop, useDocumentEditor)
  */
 
-// Task management business logic hooks are now in tasks/hooks subdirectory
+export {
+  projectKeys,
+  useProjects,
+  useTaskCounts,
+  useProjectFeatures,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+} from './useProjectQueries';

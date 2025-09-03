@@ -2,9 +2,26 @@
  * Project Feature Types
  *
  * Central barrel export for all project-related types.
- * Only contains new types introduced during vertical slice migration.
- * Existing types remain in src/types/project.ts until full migration.
+ * Following vertical slice architecture - types are co-located with features.
  */
 
-// Task-related types are now in the tasks feature subdirectory
-// export from tasks/types instead
+// Core project types (vertical slice architecture)
+export type {
+  Project,
+  ProjectPRD,
+  ProjectDocs,
+  ProjectFeatures,
+  ProjectData,
+  ProjectCreationProgress,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  TaskCounts,
+  MCPToolResponse,
+  PaginatedResponse
+} from "./project";
+
+// Task-related types from tasks feature
+export type * from "../tasks/types";
+
+// Document-related types from documents feature  
+export type * from "../documents/types";
