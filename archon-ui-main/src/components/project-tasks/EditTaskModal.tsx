@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ArchonLoadingSpinner } from '../animations/Animations';
 import { DebouncedInput, FeatureInput } from './TaskInputComponents';
-import type { Task } from './TaskTableView';
+import type { Task, Assignee } from '../../types/project';
 
 interface EditTaskModalProps {
   isModalOpen: boolean;
@@ -12,13 +12,11 @@ interface EditTaskModalProps {
   isLoadingFeatures: boolean;
   isSavingTask: boolean;
   onClose: () => void;
-  onSave: (task: Task) => Promise<void>;
-  getTasksForPrioritySelection: (status: Task['status']) => Array<{value: number, label: string}>;
+  onSave: (task: Partial<Task>) => Promise<void>;
+  getTasksForPrioritySelection?: (status: Task['status']) => Array<{value: number, label: string}>;
 }
 
 const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
-
-// Removed debounce utility - now using DebouncedInput component
 
 export const EditTaskModal = memo(({
   isModalOpen,
@@ -30,51 +28,50 @@ export const EditTaskModal = memo(({
   onSave,
   getTasksForPrioritySelection
 }: EditTaskModalProps) => {
-  const [localTask, setLocalTask] = useState<Task | null>(null);
-  
-  // Diagnostic: Track render count
-  const renderCount = useRef(0);
-  
-  useEffect(() => {
-    renderCount.current++;
-    console.log(`[EditTaskModal] Render #${renderCount.current}`, {
-      localTask: localTask?.title,
-      isModalOpen,
-      timestamp: Date.now()
-    });
-  });
+  const [localTask, setLocalTask] = useState<Partial<Task> | null>(null);
   
   // Sync local state with editingTask when it changes
   useEffect(() => {
     if (editingTask) {
       setLocalTask(editingTask);
+    } else {
+      // Reset for new task
+      setLocalTask({
+        title: '',
+        description: '',
+        status: 'todo',
+        assignee: 'User' as Assignee,
+        feature: '',
+        task_order: 100
+      });
     }
   }, [editingTask]);
   
   const priorityOptions = useMemo(() => {
-    console.log(`[EditTaskModal] Recalculating priorityOptions for status: ${localTask?.status || 'todo'}`);
+    if (!getTasksForPrioritySelection) {
+      // Fallback if function not provided
+      return [{ value: 100, label: 'Default Priority' }];
+    }
     return getTasksForPrioritySelection(localTask?.status || 'todo');
   }, [localTask?.status, getTasksForPrioritySelection]);
 
   // Memoized handlers for input changes
   const handleTitleChange = useCallback((value: string) => {
-    console.log('[EditTaskModal] Title changed via DebouncedInput:', value);
     setLocalTask(prev => prev ? { ...prev, title: value } : null);
   }, []);
   
   const handleDescriptionChange = useCallback((value: string) => {
-    console.log('[EditTaskModal] Description changed via DebouncedInput:', value);
     setLocalTask(prev => prev ? { ...prev, description: value } : null);
   }, []);
   
   const handleFeatureChange = useCallback((value: string) => {
-    console.log('[EditTaskModal] Feature changed via FeatureInput:', value);
     setLocalTask(prev => prev ? { ...prev, feature: value } : null);
   }, []);
   
   const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Task['status'];
-    const newOrder = getTasksForPrioritySelection(newStatus)[0]?.value || 1;
+    const newOrder = getTasksForPrioritySelection ? 
+      getTasksForPrioritySelection(newStatus)[0]?.value || 100 : 100;
     setLocalTask(prev => prev ? { ...prev, status: newStatus, task_order: newOrder } : null);
   }, [getTasksForPrioritySelection]);
   
@@ -85,7 +82,7 @@ export const EditTaskModal = memo(({
   const handleAssigneeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocalTask(prev => prev ? {
       ...prev,
-      assignee: { name: e.target.value as 'User' | 'Archon' | 'AI IDE Agent', avatar: '' }
+      assignee: e.target.value as Assignee
     } : null);
   }, []);
   
@@ -153,7 +150,7 @@ export const EditTaskModal = memo(({
               <div>
                 <label className="block text-gray-700 dark:text-gray-300 mb-1">Priority</label>
                 <select 
-                  value={localTask?.task_order || 1} 
+                  value={localTask?.task_order || 100} 
                   onChange={handlePriorityChange}
                   className="w-full bg-white/50 dark:bg-black/70 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-white rounded-md py-2 px-3 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(34,211,238,0.2)] transition-all duration-300"
                 >
@@ -168,7 +165,7 @@ export const EditTaskModal = memo(({
               <div>
                 <label className="block text-gray-700 dark:text-gray-300 mb-1">Assignee</label>
                 <select 
-                  value={localTask?.assignee?.name || 'User'} 
+                  value={localTask?.assignee || 'User'} 
                   onChange={handleAssigneeChange}
                   className="w-full bg-white/50 dark:bg-black/70 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-white rounded-md py-2 px-3 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(34,211,238,0.2)] transition-all duration-300"
                 >
@@ -192,23 +189,21 @@ export const EditTaskModal = memo(({
             </div>
           </div>
 
-
           <div className="flex justify-end gap-3 mt-6">
             <Button onClick={handleClose} variant="ghost" disabled={isSavingTask}>Cancel</Button>
             <Button 
               onClick={handleSave} 
-              variant="primary" 
-              accentColor="cyan" 
-              className="shadow-lg shadow-cyan-500/20"
-              disabled={isSavingTask}
+              variant="primary"
+              className="flex items-center gap-2"
+              disabled={isSavingTask || !localTask?.title}
             >
               {isSavingTask ? (
-                <span className="flex items-center">
-                  <ArchonLoadingSpinner size="sm" className="mr-2" />
-                  {localTask?.id ? 'Saving...' : 'Creating...'}
-                </span>
+                <>
+                  <ArchonLoadingSpinner size="sm" />
+                  <span>Saving...</span>
+                </>
               ) : (
-                localTask?.id ? 'Save Changes' : 'Create Task'
+                <span>{editingTask?.id ? 'Update Task' : 'Create Task'}</span>
               )}
             </Button>
           </div>
@@ -216,28 +211,6 @@ export const EditTaskModal = memo(({
       </div>
     </div>
   );
-}, (prevProps, nextProps) => {
-  // Custom comparison function to prevent unnecessary re-renders
-  // Only re-render if these specific props change
-  const isEqual = (
-    prevProps.isModalOpen === nextProps.isModalOpen &&
-    prevProps.editingTask?.id === nextProps.editingTask?.id &&
-    prevProps.editingTask?.title === nextProps.editingTask?.title &&
-    prevProps.editingTask?.description === nextProps.editingTask?.description &&
-    prevProps.editingTask?.status === nextProps.editingTask?.status &&
-    prevProps.editingTask?.assignee?.name === nextProps.editingTask?.assignee?.name &&
-    prevProps.editingTask?.feature === nextProps.editingTask?.feature &&
-    prevProps.editingTask?.task_order === nextProps.editingTask?.task_order &&
-    prevProps.isSavingTask === nextProps.isSavingTask &&
-    prevProps.isLoadingFeatures === nextProps.isLoadingFeatures &&
-    prevProps.projectFeatures === nextProps.projectFeatures // Reference equality check
-  );
-  
-  if (!isEqual) {
-    console.log('[EditTaskModal] Props changed, re-rendering');
-  }
-  
-  return isEqual;
 });
 
 EditTaskModal.displayName = 'EditTaskModal';

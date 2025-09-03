@@ -7,19 +7,11 @@ import { projectService } from '../../services/projectService';
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
 import { DraggableTaskCard } from './DraggableTaskCard';
 
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: 'todo' | 'doing' | 'review' | 'done';
-  assignee: {
-    name: 'User' | 'Archon' | 'AI IDE Agent';
-    avatar: string;
-  };
-  feature: string;
-  featureColor: string;
-  task_order: number;
-}
+// Import Task from types instead of redefining
+import type { Task, Assignee } from '../../types/project';
+
+// Re-export Task for components that import from here
+export type { Task } from '../../types/project';
 
 interface TaskTableViewProps {
   tasks: Task[];
@@ -78,7 +70,7 @@ const reorderTasks = (tasks: Task[], fromIndex: number, toIndex: number): Task[]
 interface EditableCellProps {
   value: string;
   onSave: (value: string) => void;
-  type?: 'text' | 'textarea' | 'select';
+  type?: 'text' | 'textarea' | 'select' | 'assignee';
   options?: string[];
   placeholder?: string;
   isEditing: boolean;
@@ -96,14 +88,19 @@ const EditableCell = ({
   onEdit,
   onCancel
 }: EditableCellProps) => {
-  const [editValue, setEditValue] = useState(value);
+  const [editValue, setEditValue] = useState(value || '');
+
+  // Update editValue when value prop changes
+  React.useEffect(() => {
+    setEditValue(value || '');
+  }, [value]);
 
   const handleSave = () => {
     onSave(editValue);
   };
 
   const handleCancel = () => {
-    setEditValue(value);
+    setEditValue(value || '');
     onCancel();
   };
 
@@ -124,6 +121,22 @@ const EditableCell = ({
   };
 
   if (!isEditing) {
+    // Special display for assignee type
+    if (type === 'assignee') {
+      return (
+        <div 
+          onClick={onEdit}
+          className="cursor-pointer flex items-center justify-center"
+          title={`Assignee: ${value}`}
+        >
+          <div className={`flex items-center gap-2 px-2 py-1 rounded-full border transition-all duration-300 hover:scale-105 ${getAssigneeGlassStyle(value as any)} ${getAssigneeGlow(value as any)}`}>
+            {getAssigneeIcon(value as any)}
+            <span className="text-xs">{value}</span>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div 
         onClick={onEdit}
@@ -139,7 +152,7 @@ const EditableCell = ({
 
   return (
     <div className="flex items-center w-full">
-      {type === 'select' ? (
+      {(type === 'select' || type === 'assignee') ? (
         <select
           value={editValue}
           onChange={(e) => {
@@ -252,7 +265,8 @@ const DraggableTaskRow = ({
       } else if (field === 'status') {
         updates.status = value as Task['status'];
       } else if (field === 'assignee') {
-        updates.assignee = { name: value as 'User' | 'Archon' | 'AI IDE Agent', avatar: '' };
+        // Assignee is a string in the Task interface
+        updates.assignee = value as Assignee;
       } else if (field === 'feature') {
         updates.feature = value;
       }
@@ -281,18 +295,11 @@ const DraggableTaskRow = ({
       onMouseLeave={() => setIsHovering(false)}
       style={style}
     >
-      <td className="p-3">
-        <div className="flex items-center justify-center">
-          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all duration-300 ${getOrderGlassStyle(task.task_order)} ${getOrderTextColor(task.task_order)} ${getOrderGlow(task.task_order)}`}>
-            {task.task_order}
-          </div>
-        </div>
-      </td>
       <td className="p-3 text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors relative">
         <div className="min-w-0 flex items-center">
           <div className="truncate flex-1">
             <EditableCell
-              value={task.title}
+              value={task.title || ''}
               onSave={(value) => handleUpdateField('title', value)}
               isEditing={editingField === 'title'}
               onEdit={() => setEditingField('title')}
@@ -304,7 +311,7 @@ const DraggableTaskRow = ({
       </td>
       <td className="p-3">
         <EditableCell
-          value={task.status}
+          value={task.status || 'todo'}
           onSave={(value) => {
             handleUpdateField('status', value as Task['status']);
           }}
@@ -318,7 +325,7 @@ const DraggableTaskRow = ({
       <td className="p-3">
         <div className="truncate">
           <EditableCell
-            value={task.feature}
+            value={task.feature || ''}
             onSave={(value) => handleUpdateField('feature', value)}
             isEditing={editingField === 'feature'}
             onEdit={() => setEditingField('feature')}
@@ -328,32 +335,15 @@ const DraggableTaskRow = ({
         </div>
       </td>
       <td className="p-3">
-        <div className="flex items-center justify-center">
-          <div 
-            className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all duration-300 cursor-pointer hover:scale-110 ${getAssigneeGlassStyle(task.assignee?.name || 'User')} ${getAssigneeGlow(task.assignee?.name || 'User')}`}
-            onClick={() => setEditingField('assignee')}
-            title={`Assignee: ${task.assignee?.name || 'User'}`}
-          >
-            {getAssigneeIcon(task.assignee?.name || 'User')}
-          </div>
-          {editingField === 'assignee' && (
-            <div className="absolute z-50 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2">
-              <select
-                value={task.assignee?.name || 'User'}
-                onChange={(e) => {
-                  handleUpdateField('assignee', e.target.value);
-                  setEditingField(null);
-                }}
-                className="bg-white/90 dark:bg-black/90 border border-cyan-300 dark:border-cyan-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-cyan-500"
-                autoFocus
-              >
-                <option value="User">User</option>
-                <option value="Archon">Archon</option>
-                <option value="AI IDE Agent">AI IDE Agent</option>
-              </select>
-            </div>
-          )}
-        </div>
+        <EditableCell
+          value={task.assignee || 'User'}
+          onSave={(value) => handleUpdateField('assignee', value)}
+          type="assignee"
+          options={['User', 'Archon', 'AI IDE Agent']}
+          isEditing={editingField === 'assignee'}
+          onEdit={() => setEditingField('assignee')}
+          onCancel={() => setEditingField(null)}
+        />
       </td>
       <td className="p-3">
         <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -422,7 +412,7 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
     title: '',
     description: '',
     status: statusFilter === 'all' ? 'todo' : statusFilter,
-    assignee: { name: 'AI IDE Agent', avatar: '' },
+    assignee: 'AI IDE Agent' as Assignee,
     feature: '',
     featureColor: '#3b82f6',
     task_order: 1
@@ -434,7 +424,7 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
     // Calculate the next order number for the target status
     const targetStatus = newTask.status;
     const tasksInStatus = tasks.filter(t => t.status === targetStatus);
-    const nextOrder = tasksInStatus.length > 0 ? Math.max(...tasksInStatus.map(t => t.task_order)) + 1 : 1;
+    const nextOrder = tasksInStatus.length > 0 ? Math.max(...tasksInStatus.map(t => t.task_order)) + 100 : 100;
     
     try {
       await onTaskCreate({
@@ -442,11 +432,12 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
         task_order: nextOrder
       });
       
-      // Reset only the title to allow quick adding
+      // Reset the form for quick adding
       setNewTask(prev => ({
         ...prev,
         title: '',
-        description: ''
+        description: '',
+        feature: ''
       }));
     } catch (error) {
       console.error('Failed to create task:', error);
@@ -471,28 +462,26 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
     <>
       <tr className="border-t border-cyan-400 dark:border-cyan-500 bg-cyan-50/30 dark:bg-cyan-900/10 relative">
         {/* Toned down neon blue line separator */}
-        <td colSpan={6} className="p-0 relative">
+        <td colSpan={5} className="p-0 relative">
           <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_4px_1px_rgba(34,211,238,0.4)] dark:shadow-[0_0_6px_2px_rgba(34,211,238,0.5)]"></div>
         </td>
       </tr>
       <tr className="bg-cyan-50/20 dark:bg-cyan-900/5">
       <td className="p-3">
-        <div className="flex items-center justify-center">
+        <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.5)]">
             +
           </div>
+          <input
+            type="text"
+            value={newTask.title}
+            onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+            onKeyPress={handleKeyPress}
+            placeholder="Type task title and press Enter..."
+            className="w-full bg-white/90 dark:bg-black/90 border border-cyan-300 dark:border-cyan-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_5px_rgba(34,211,238,0.3)] transition-all duration-200"
+            autoFocus
+          />
         </div>
-      </td>
-      <td className="p-3">
-        <input
-          type="text"
-          value={newTask.title}
-          onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-          onKeyPress={handleKeyPress}
-          placeholder="Type task title and press Enter..."
-          className="w-full bg-white/90 dark:bg-black/90 border border-cyan-300 dark:border-cyan-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_5px_rgba(34,211,238,0.3)] transition-all duration-200"
-          autoFocus
-        />
       </td>
       <td className="p-3">
         <select
@@ -520,10 +509,10 @@ const AddTaskRow = ({ onTaskCreate, tasks, statusFilter }: AddTaskRowProps) => {
       </td>
       <td className="p-3">
         <select
-          value={newTask.assignee.name}
+          value={newTask.assignee}
           onChange={(e) => setNewTask(prev => ({ 
             ...prev, 
-            assignee: { name: e.target.value as 'User' | 'Archon' | 'AI IDE Agent', avatar: '' }
+            assignee: e.target.value as Assignee
           }))}
           className="w-full bg-white/90 dark:bg-black/90 border border-cyan-300 dark:border-cyan-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_5px_rgba(34,211,238,0.3)]"
         >
@@ -551,7 +540,7 @@ export const TaskTableView = ({
   onTaskCreate,
   onTaskUpdate
 }: TaskTableViewProps) => {
-  const [statusFilter, setStatusFilter] = useState<Task['status'] | 'all'>('todo');
+  const [statusFilter, setStatusFilter] = useState<Task['status'] | 'all'>('all');
 
   // State for delete confirmation modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -775,7 +764,6 @@ export const TaskTableView = ({
       >
         <table ref={tableRef} className="w-full border-collapse table-fixed">
           <colgroup>
-            <col className="w-16" />
             <col className="w-auto" />
             <col className="w-24" />
             <col className="w-28" />
@@ -784,14 +772,6 @@ export const TaskTableView = ({
           </colgroup>
           <thead>
             <tr className="bg-white/80 dark:bg-black/80 backdrop-blur-sm sticky top-0 z-10">
-              <th className="text-left p-3 font-mono border-b border-gray-300 dark:border-gray-800 relative">
-                <div className="flex items-center gap-2">
-                  <span className={getHeaderColor('secondary')}>Order</span>
-                  <span className={`w-1 h-1 rounded-full ${getHeaderGlow('secondary')}`}></span>
-                </div>
-                {/* Header divider with glow matching board view */}
-                <div className={`absolute bottom-0 left-[15%] right-[15%] w-[70%] mx-auto h-[1px] bg-purple-500/30 shadow-[0_0_10px_2px_rgba(168,85,247,0.2)]`}></div>
-              </th>
               <th className="text-left p-3 font-mono border-b border-gray-300 dark:border-gray-800 relative">
                 <div className="flex items-center gap-2">
                   <span className={getHeaderColor('primary')}>Task</span>

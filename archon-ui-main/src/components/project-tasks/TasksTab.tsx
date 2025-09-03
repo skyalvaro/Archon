@@ -1,83 +1,42 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Table, LayoutGrid, Plus } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Plus, Table, LayoutGrid } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Toggle } from '../ui/Toggle';
-import { projectService } from '../../services/projectService';
+import { debounce } from 'lodash';
 import { useToast } from '../../contexts/ToastContext';
-import { debounce } from '../../utils/debounce';
-import { calculateReorderPosition, getDefaultTaskOrder } from '../../utils/taskOrdering';
+import { 
+  useProjectTasks,
+  useProjectFeatures,
+  useCreateTask, 
+  useUpdateTask, 
+  useDeleteTask 
+} from '../../hooks/useProjectQueries';
 
 import type { CreateTaskRequest, UpdateTaskRequest } from '../../types/project';
 import { TaskTableView, Task } from './TaskTableView';
 import { TaskBoardView } from './TaskBoardView';
 import { EditTaskModal } from './EditTaskModal';
 
-// Type for optimistic task updates with operation tracking
-type OptimisticTask = Task & { _optimisticOperationId: string };
-
-
-
-export const TasksTab = ({
-  initialTasks,
-  onTasksChange,
-  projectId
-}: {
-  initialTasks: Task[];
-  onTasksChange: (tasks: Task[]) => void;
-  projectId: string;
-}) => {
+export const TasksTab = ({ projectId }: { projectId: string }) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [projectFeatures, setProjectFeatures] = useState<any[]>([]);
-  const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
-  const [optimisticTaskUpdates, setOptimisticTaskUpdates] = useState<Map<string, OptimisticTask>>(new Map());
   
-  // Initialize tasks, but preserve optimistic updates
-  useEffect(() => {
-    if (optimisticTaskUpdates.size === 0) {
-      // No optimistic updates, use incoming data as-is
-      setTasks(initialTasks);
-    } else {
-      // Merge incoming data with optimistic updates
-      const mergedTasks = initialTasks.map(task => {
-        const optimisticUpdate = optimisticTaskUpdates.get(task.id);
-        if (optimisticUpdate) {
-          console.log(`[TasksTab] Preserving optimistic update for task ${task.id}:`, optimisticUpdate.status);
-          // Clean up internal tracking field before returning
-          const { _optimisticOperationId, ...cleanTask } = optimisticUpdate;
-          return cleanTask as Task; // Keep optimistic version without internal fields
-        }
-        return task; // Use polling data for non-optimistic tasks
-      });
-      setTasks(mergedTasks);
-    }
-  }, [initialTasks, optimisticTaskUpdates]);
+  // Fetch tasks and features using TanStack Query
+  const { data: tasks = [], isLoading: isLoadingTasks } = useProjectTasks(projectId);
+  const { data: featuresData, isLoading: isLoadingFeatures } = useProjectFeatures(projectId);
+  
+  // Mutations
+  const createTaskMutation = useCreateTask();
+  const updateTaskMutation = useUpdateTask(projectId);
+  const deleteTaskMutation = useDeleteTask(projectId);
 
-  // Load project features on component mount
-  useEffect(() => {
-    loadProjectFeatures();
-  }, [projectId]);
-
-
-  const loadProjectFeatures = async () => {
-    if (!projectId) return;
-    
-    setIsLoadingFeatures(true);
-    try {
-      const response = await projectService.getProjectFeatures(projectId);
-      setProjectFeatures(response.features || []);
-    } catch (error) {
-      console.error('Failed to load project features:', error);
-      setProjectFeatures([]);
-    } finally {
-      setIsLoadingFeatures(false);
-    }
-  };
+  // Transform features data
+  const projectFeatures = useMemo(() => {
+    return featuresData?.features || [];
+  }, [featuresData]);
 
   // Modal management functions
   const openEditModal = async (task: Task) => {
@@ -85,356 +44,242 @@ export const TasksTab = ({
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const openCreateModal = () => {
     setEditingTask(null);
+    setIsModalOpen(true);
   };
 
-  const saveTask = async (task: Task) => {
-    setEditingTask(task);
+  const closeModal = () => {
+    setEditingTask(null);
+    setIsModalOpen(false);
+  };
+
+  // Get default order for new tasks in a status
+  const getDefaultTaskOrder = (statusTasks: Task[], status: Task['status']) => {
+    if (statusTasks.length === 0) return 100;
+    const maxOrder = Math.max(...statusTasks.map(t => t.task_order));
+    return maxOrder + 100;
+  };
+
+  // Calculate position between two tasks for reordering
+  const calculateReorderPosition = (statusTasks: Task[], fromIndex: number, toIndex: number) => {
+    // Moving to the beginning
+    if (toIndex === 0) {
+      return Math.max(1, Math.floor(statusTasks[0].task_order / 2));
+    }
     
+    // Moving to the end
+    if (toIndex >= statusTasks.length) {
+      return statusTasks[statusTasks.length - 1].task_order + 100;
+    }
+    
+    // Moving between two tasks
+    // When moving down (fromIndex < toIndex), insert after toIndex
+    // When moving up (fromIndex > toIndex), insert before toIndex
+    if (fromIndex < toIndex) {
+      // Moving down - insert after toIndex
+      const afterTask = statusTasks[toIndex];
+      const nextTask = statusTasks[toIndex + 1];
+      if (nextTask) {
+        return Math.floor((afterTask.task_order + nextTask.task_order) / 2);
+      } else {
+        return afterTask.task_order + 100;
+      }
+    } else {
+      // Moving up - insert before toIndex
+      const beforeTask = toIndex > 0 ? statusTasks[toIndex - 1] : null;
+      const targetTask = statusTasks[toIndex];
+      if (beforeTask) {
+        return Math.floor((beforeTask.task_order + targetTask.task_order) / 2);
+      } else {
+        return Math.max(1, Math.floor(targetTask.task_order / 2));
+      }
+    }
+  };
+
+  // Save task (create or update)
+  const saveTask = async (taskData: Partial<Task>) => {
     setIsSavingTask(true);
     try {
-      
-      if (task.id) {
-        // Update existing task
-        const updateData: UpdateTaskRequest = {
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          assignee: task.assignee?.name || 'User',
-          task_order: task.task_order,
-          ...(task.feature && { feature: task.feature }),
-          ...(task.featureColor && { featureColor: task.featureColor })
-        };
+      if (editingTask) {
+        // Update existing task - build updates object with only changed values
+        const updates: any = {};
         
-        await projectService.updateTask(task.id, updateData);
+        // Only include fields that are defined (not null or undefined)
+        if (taskData.title !== undefined) updates.title = taskData.title;
+        if (taskData.description !== undefined) updates.description = taskData.description;
+        if (taskData.status !== undefined) updates.status = taskData.status;
+        if (taskData.assignee !== undefined) updates.assignee = taskData.assignee || 'User';
+        if (taskData.task_order !== undefined) updates.task_order = taskData.task_order;
+        
+        // Feature can be empty string but not null/undefined
+        if (taskData.feature !== undefined && taskData.feature !== null) {
+          updates.feature = taskData.feature || '';  // Convert empty/null to empty string
+        }
+        
+        await updateTaskMutation.mutateAsync({
+          taskId: editingTask.id,
+          updates
+        });
+        closeModal();
       } else {
-        // Create new task first to get UUID
-        const createData: CreateTaskRequest = {
+        // Create new task
+        const statusTasks = tasks.filter(t => t.status === (taskData.status || 'todo'));
+        const newTaskData: CreateTaskRequest = {
           project_id: projectId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          assignee: task.assignee?.name || 'User',
-          task_order: task.task_order,
-          ...(task.feature && { feature: task.feature }),
-          ...(task.featureColor && { featureColor: task.featureColor })
+          title: taskData.title || '',
+          description: taskData.description || '',
+          status: taskData.status || 'todo',
+          assignee: taskData.assignee || 'User',
+          feature: taskData.feature || '',
+          task_order: taskData.task_order || getDefaultTaskOrder(statusTasks, taskData.status || 'todo')
         };
         
-        await projectService.createTask(createData);
+        await createTaskMutation.mutateAsync(newTaskData);
+        closeModal();
       }
-      
-      // Task saved - polling will pick up changes automatically
-      closeModal();
     } catch (error) {
       console.error('Failed to save task:', error);
-      showToast(`Failed to save task: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast('Failed to save task', 'error');
     } finally {
       setIsSavingTask(false);
     }
   };
 
-  // Update tasks helper
-  const updateTasks = (newTasks: Task[]) => {
-    setTasks(newTasks);
-    onTasksChange(newTasks);
-  };
-
-
-  // Helper function to get next available order number for a status
-  const getNextOrderForStatus = (status: Task['status']): number => {
-    const tasksInStatus = tasks.filter(task => 
-      task.status === status
-    );
-    
-    if (tasksInStatus.length === 0) return 1;
-    
-    const maxOrder = Math.max(...tasksInStatus.map(task => task.task_order));
-    return maxOrder + 1;
-  };
-
-  // Use shared debounce helper
-
-  // Improved debounced persistence with better coordination
-  const debouncedPersistSingleTask = useMemo(
-    () => debounce(async (task: Task) => {
-      try {
-        console.log('REORDER: Persisting position change for task:', task.title, 'new position:', task.task_order);
-        
-        // Update only the moved task with server timestamp for conflict resolution
-        await projectService.updateTask(task.id, { 
-          task_order: task.task_order,
-          client_timestamp: Date.now()
-        });
-        console.log('REORDER: Single task position persisted successfully');
-        
-      } catch (error) {
-        console.error('REORDER: Failed to persist task position:', error);
-        // Polling will eventually sync the correct state
-      }
-    }, 800), // Slightly reduced delay for better responsiveness
-    []
-  );
-
-  // Optimized task reordering without optimistic update conflicts
-  const handleTaskReorder = useCallback((taskId: string, targetIndex: number, status: Task['status']) => {
-    console.log('REORDER: Moving task', taskId, 'to index', targetIndex, 'in status', status);
-    
+  // Task reordering - immediate update
+  const handleTaskReorder = useCallback(async (taskId: string, targetIndex: number, status: Task['status']) => {
     // Get all tasks in the target status, sorted by current order
     const statusTasks = tasks
       .filter(task => task.status === status)
       .sort((a, b) => a.task_order - b.task_order);
     
-    const otherTasks = tasks.filter(task => task.status !== status);
-    
-    // Find the moving task
     const movingTaskIndex = statusTasks.findIndex(task => task.id === taskId);
-    if (movingTaskIndex === -1) {
-      console.log('REORDER: Task not found in status');
-      return;
-    }
+    if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex >= statusTasks.length) return;
+    if (movingTaskIndex === targetIndex) return;
     
-    // Prevent invalid moves
-    if (targetIndex < 0 || targetIndex >= statusTasks.length) {
-      console.log('REORDER: Invalid target index', targetIndex);
-      return;
-    }
-    
-    // Skip if moving to same position
-    if (movingTaskIndex === targetIndex) {
-      console.log('REORDER: Task already in target position');
-      return;
-    }
-    
-    const movingTask = statusTasks[movingTaskIndex];
-    console.log('REORDER: Moving', movingTask.title, 'from', movingTaskIndex, 'to', targetIndex);
-    
-    // Calculate new position using shared ordering utility
+    // Calculate new position
     const newPosition = calculateReorderPosition(statusTasks, movingTaskIndex, targetIndex);
     
-    console.log('REORDER: New position calculated:', newPosition);
-    
-    // Create updated task with new position
-    const updatedTask = {
-      ...movingTask,
-      task_order: newPosition
-    };
-    
-    // Immediate UI update without optimistic tracking interference
-    const allUpdatedTasks = otherTasks.concat(
-      statusTasks.map(task => task.id === taskId ? updatedTask : task)
-    );
-    updateTasks(allUpdatedTasks);
-    
-    // Persist to backend (single API call)
-    debouncedPersistSingleTask(updatedTask);
-  }, [tasks, updateTasks, debouncedPersistSingleTask]);
-
-  // Task move function (for board view) - Optimistic Updates with Concurrent Operation Protection
-  const moveTask = async (taskId: string, newStatus: Task['status']) => {
-    // Generate unique operation ID to handle concurrent operations
-    const operationId = `${taskId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[TasksTab] Optimistically moving task ${taskId} to ${newStatus} (op: ${operationId})`);
-    
-    // Clear any previous errors (removed local error state)
-    
-    // Find the task and validate
-    const movingTask = tasks.find(task => task.id === taskId);
-    if (!movingTask) {
-      showToast('Task not found', 'error');
-      return;
-    }
-
-    // (pendingOperations removed)
-
-    // 1. Save current state for rollback
-    const previousTasks = [...tasks]; // Shallow clone sufficient
-    const newOrder = getNextOrderForStatus(newStatus);
-
-    // 2. Update UI immediately (optimistic update - no loader!)
-    const optimisticTask: OptimisticTask = { 
-      ...movingTask, 
-      status: newStatus, 
-      task_order: newOrder,
-      _optimisticOperationId: operationId // Track which operation created this
-    };
-    const optimisticTasks = tasks.map(task => 
-      task.id === taskId ? optimisticTask : task
-    );
-    
-    // Track this as an optimistic update with operation ID
-    setOptimisticTaskUpdates(prev => new Map(prev).set(taskId, optimisticTask));
-    updateTasks(optimisticTasks);
-
-    // 3. Call API in background
+    // Update immediately with optimistic updates
     try {
-      await projectService.updateTask(taskId, {
-        status: newStatus,
-        task_order: newOrder,
-        client_timestamp: Date.now()
-      });
-      
-      console.log(`[TasksTab] Successfully moved task ${taskId} (op: ${operationId})`);
-      
-      // Only clear if this is still the current operation (no newer operation started)
-      setOptimisticTaskUpdates(prev => {
-        const currentOptimistic = prev.get(taskId);
-        if (currentOptimistic?._optimisticOperationId === operationId) {
-          const newMap = new Map(prev);
-          newMap.delete(taskId);
-          return newMap;
+      await updateTaskMutation.mutateAsync({
+        taskId,
+        updates: { 
+          task_order: newPosition
         }
-        return prev; // Don't clear, newer operation is active
       });
-      
     } catch (error) {
-      console.error(`[TasksTab] Failed to move task ${taskId} (op: ${operationId}):`, error);
+      console.error('Failed to reorder task:', error);
+      showToast('Failed to reorder task', 'error');
+    }
+  }, [tasks, updateTaskMutation, showToast]);
+
+  // Move task to different status
+  const moveTask = async (taskId: string, newStatus: Task['status']) => {
+    const movingTask = tasks.find(task => task.id === taskId);
+    if (!movingTask || movingTask.status === newStatus) return;
+
+    try {
+      // Calculate position for new status
+      const tasksInNewStatus = tasks.filter(t => t.status === newStatus);
+      const newOrder = getDefaultTaskOrder(tasksInNewStatus, newStatus);
       
-      // Only rollback if this is still the current operation
-      setOptimisticTaskUpdates(prev => {
-        const currentOptimistic = prev.get(taskId);
-        if (currentOptimistic?._optimisticOperationId === operationId) {
-          // 4. Rollback on failure - revert to exact previous state
-          updateTasks(previousTasks);
-          
-          const newMap = new Map(prev);
-          newMap.delete(taskId);
-          
-          const errorMessage = error instanceof Error ? error.message : 'Failed to move task';
-          showToast(`Failed to move task: ${errorMessage}`, 'error');
-          
-          return newMap;
+      // Update via mutation (handles optimistic updates)
+      await updateTaskMutation.mutateAsync({
+        taskId,
+        updates: {
+          status: newStatus,
+          task_order: newOrder
         }
-        return prev; // Don't rollback, newer operation is active
       });
       
-    } finally {
-      // (pendingOperations cleanup removed)
+      showToast(`Task moved to ${newStatus}`, 'success');
+    } catch (error) {
+      console.error('Failed to move task:', error);
+      showToast('Failed to move task', 'error');
     }
   };
 
-  const completeTask = (taskId: string) => {
-    console.log(`[TasksTab] Calling completeTask for ${taskId}`);
+  const completeTask = useCallback((taskId: string) => {
     moveTask(taskId, 'done');
-  };
+  }, []);
 
   const deleteTask = async (task: Task) => {
     try {
-      await projectService.deleteTask(task.id);
-      updateTasks(tasks.filter(t => t.id !== task.id));
-      showToast(`Task "${task.title}" deleted`, 'success');
+      await deleteTaskMutation.mutateAsync(task.id);
     } catch (error) {
       console.error('Failed to delete task:', error);
-      showToast('Failed to delete task', 'error');
+      // Error handled by mutation
     }
   };
 
-  // Inline task creation function
-  const createTaskInline = async (newTask: Omit<Task, 'id'>) => {
-    try {
-      // Auto-assign next order number if not provided
-      const nextOrder = newTask.task_order || getNextOrderForStatus(newTask.status);
-      
-      const createData: CreateTaskRequest = {
-        project_id: projectId,
-        title: newTask.title,
-        description: newTask.description,
-        status: newTask.status,
-        assignee: newTask.assignee?.name || 'User',
-        task_order: nextOrder,
-        ...(newTask.feature && { feature: newTask.feature }),
-        ...(newTask.featureColor && { featureColor: newTask.featureColor })
-      };
-      
-      await projectService.createTask(createData);
-      
-      // Task created - polling will pick up changes automatically
-      console.log('[TasksTab] Task created successfully');
-      
-    } catch (error) {
-      console.error('Failed to create task:', error);
-      throw error;
-    }
-  };
-
-  // Inline task update function
-  const updateTaskInline = async (taskId: string, updates: Partial<Task>) => {
-    console.log(`[TasksTab] Inline update for task ${taskId} with updates:`, updates);
-    try {
-      const updateData: Partial<UpdateTaskRequest> = {
-        client_timestamp: Date.now()
-      };
-      
-      if (updates.title !== undefined) updateData.title = updates.title;
-      if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.status !== undefined) {
-        console.log(`[TasksTab] Setting status for ${taskId}: ${updates.status}`);
-        updateData.status = updates.status;
-      }
-      if (updates.assignee !== undefined) updateData.assignee = updates.assignee.name;
-      if (updates.task_order !== undefined) updateData.task_order = updates.task_order;
-      if (updates.feature !== undefined) updateData.feature = updates.feature;
-      if (updates.featureColor !== undefined) updateData.featureColor = updates.featureColor;
-      
-      console.log(`[TasksTab] Sending update request for task ${taskId} to projectService:`, updateData);
-      await projectService.updateTask(taskId, updateData);
-      console.log(`[TasksTab] projectService.updateTask successful for ${taskId}.`);
-      
-      // Task updated - polling will pick up changes automatically
-      console.log(`[TasksTab] Task ${taskId} updated successfully`);
-      
-    } catch (error) {
-      console.error(`[TasksTab] Failed to update task ${taskId} inline:`, error);
-      showToast(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
-      throw error;
-    }
-  };
-
-  // Get tasks for priority selection with descriptive labels
-  const getTasksForPrioritySelection = (status: Task['status']): Array<{value: number, label: string}> => {
+  // Get task priority selection options
+  const getTasksForPrioritySelection = useCallback((status: Task['status']) => {
     const tasksInStatus = tasks
-      .filter(task => task.status === status && task.id !== editingTask?.id) // Exclude current task if editing
+      .filter(task => task.status === status && task.id !== editingTask?.id)
       .sort((a, b) => a.task_order - b.task_order);
     
     const options: Array<{value: number, label: string}> = [];
     
     if (tasksInStatus.length === 0) {
       // No tasks in this status
-      options.push({ value: 1, label: "1 - First task in this status" });
+      options.push({ value: 100, label: "First task in this status" });
     } else {
       // Add option to be first
       options.push({ 
-        value: 1, 
-        label: `1 - Before "${tasksInStatus[0].title.substring(0, 30)}${tasksInStatus[0].title.length > 30 ? '...' : ''}"` 
+        value: Math.max(1, Math.floor(tasksInStatus[0].task_order / 2)), 
+        label: `Before "${tasksInStatus[0].title.substring(0, 30)}${tasksInStatus[0].title.length > 30 ? '...' : ''}"` 
       });
       
       // Add options between existing tasks
       for (let i = 0; i < tasksInStatus.length - 1; i++) {
         const currentTask = tasksInStatus[i];
         const nextTask = tasksInStatus[i + 1];
+        const midPoint = Math.floor((currentTask.task_order + nextTask.task_order) / 2);
         options.push({ 
-          value: i + 2, 
-          label: `${i + 2} - After "${currentTask.title.substring(0, 20)}${currentTask.title.length > 20 ? '...' : ''}", Before "${nextTask.title.substring(0, 20)}${nextTask.title.length > 20 ? '...' : ''}"` 
+          value: midPoint, 
+          label: `Between "${currentTask.title.substring(0, 20)}${currentTask.title.length > 20 ? '...' : ''}" and "${nextTask.title.substring(0, 20)}${nextTask.title.length > 20 ? '...' : ''}"` 
         });
       }
       
       // Add option to be last
       const lastTask = tasksInStatus[tasksInStatus.length - 1];
       options.push({ 
-        value: tasksInStatus.length + 1, 
-        label: `${tasksInStatus.length + 1} - After "${lastTask.title.substring(0, 30)}${lastTask.title.length > 30 ? '...' : ''}"` 
+        value: lastTask.task_order + 100, 
+        label: `After "${lastTask.title.substring(0, 30)}${lastTask.title.length > 30 ? '...' : ''}"` 
       });
     }
     
     return options;
+  }, [tasks, editingTask?.id]);
+
+  // Inline update for task fields
+  const updateTaskInline = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Ensure task_order is an integer if present
+      const processedUpdates: any = { ...updates };
+      if (processedUpdates.task_order !== undefined) {
+        processedUpdates.task_order = Math.round(processedUpdates.task_order);
+      }
+      // Assignee is already a string, no conversion needed
+      
+      await updateTaskMutation.mutateAsync({
+        taskId,
+        updates: processedUpdates
+      });
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      showToast('Failed to update task', 'error');
+    }
   };
 
-  // Memoized version of getTasksForPrioritySelection to prevent recalculation on every render
-  const memoizedGetTasksForPrioritySelection = useMemo(
-    () => getTasksForPrioritySelection,
-    [tasks, editingTask?.id]
-  );
+  if (isLoadingTasks) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -448,16 +293,23 @@ export const TasksTab = ({
               onTaskComplete={completeTask}
               onTaskDelete={deleteTask}
               onTaskReorder={handleTaskReorder}
-              onTaskCreate={createTaskInline}
+              onTaskCreate={async (task) => {
+                await createTaskMutation.mutateAsync({
+                  ...task,
+                  project_id: projectId,
+                  assignee: task.assignee || 'User',  // Already a string
+                  task_order: Math.round(task.task_order)  // Ensure integer
+                });
+              }}
               onTaskUpdate={updateTaskInline}
             />
           ) : (
             <TaskBoardView
               tasks={tasks}
               onTaskView={openEditModal}
+              onTaskMove={moveTask}
               onTaskComplete={completeTask}
               onTaskDelete={deleteTask}
-              onTaskMove={moveTask}
               onTaskReorder={handleTaskReorder}
             />
           )}
@@ -470,17 +322,9 @@ export const TasksTab = ({
             {/* Add Task Button with Luminous Style */}
             <button 
               onClick={() => {
-                const defaultOrder = getDefaultTaskOrder(tasks.filter(t => t.status === 'todo'));
-                setEditingTask({
-                  id: '',
-                  title: '',
-                  description: '',
-                  status: 'todo',
-                  assignee: { name: 'AI IDE Agent', avatar: '' },
-                  feature: '',
-                  featureColor: '#3b82f6',
-                  task_order: defaultOrder
-                });
+                const statusTasks = tasks.filter(t => t.status === 'todo');
+                const defaultOrder = getDefaultTaskOrder(statusTasks, 'todo');
+                setEditingTask(null);
                 setIsModalOpen(true);
               }}
               className="relative px-5 py-2.5 flex items-center gap-2 bg-white/80 dark:bg-black/90 border border-gray-200 dark:border-gray-800 rounded-lg shadow-[0_0_20px_rgba(0,0,0,0.1)] dark:shadow-[0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md pointer-events-auto text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-all duration-300"
@@ -512,7 +356,7 @@ export const TasksTab = ({
           </div>
         </div>
 
-        {/* Edit Task Modal */}
+        {/* Edit/Create Task Modal */}
         <EditTaskModal
           isModalOpen={isModalOpen}
           editingTask={editingTask}
@@ -521,7 +365,7 @@ export const TasksTab = ({
           isSavingTask={isSavingTask}
           onClose={closeModal}
           onSave={saveTask}
-          getTasksForPrioritySelection={memoizedGetTasksForPrioritySelection}
+          getTasksForPrioritySelection={getTasksForPrioritySelection}
         />
       </div>
     </DndProvider>

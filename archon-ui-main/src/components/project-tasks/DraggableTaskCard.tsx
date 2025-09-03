@@ -145,12 +145,6 @@ export const DraggableTaskCard = ({
                 <Tag className="w-3 h-3" />
                 {task.feature}
               </div>
-              
-              {/* Task order display */}
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${getOrderColor(task.task_order)}`}>
-                {task.task_order}
-              </div>
-              
               {/* Action buttons group */}
               <div className="ml-auto flex items-center gap-1.5">
                 <button 

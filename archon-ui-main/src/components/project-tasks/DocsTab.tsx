@@ -8,7 +8,7 @@ import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Select } from '../ui/Select';
-import { useCrawlProgressPolling } from '../../hooks/usePolling';
+import { useCrawlProgressPolling } from '../../hooks/useCrawlQueries';
 import { MilkdownEditor } from './MilkdownEditor';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { PRPViewer } from '../prp';

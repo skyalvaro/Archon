@@ -131,9 +131,11 @@ export const projectService = {
   async listProjects(): Promise<Project[]> {
     try {
       console.log('[PROJECT SERVICE] Fetching projects from API');
-      const projects = await callAPI<Project[]>('/api/projects');
-      console.log('[PROJECT SERVICE] Raw API response:', projects);
-      console.log('[PROJECT SERVICE] Raw API response length:', projects.length);
+      const response = await callAPI<{ projects: Project[] }>('/api/projects');
+      console.log('[PROJECT SERVICE] Raw API response:', response);
+      
+      const projects = response.projects || [];
+      console.log('[PROJECT SERVICE] Projects array length:', projects.length);
       
       // Debug raw pinned values
       projects.forEach((p: any) => {
