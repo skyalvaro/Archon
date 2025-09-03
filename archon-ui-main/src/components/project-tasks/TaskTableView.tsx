@@ -5,7 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { projectService } from '../../services/projectService';
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
-import { DraggableTaskCard } from './DraggableTaskCard';
+import { TaskCard } from '../../features/projects/components/tasks/TaskCard';
 
 // Import Task from types instead of redefining
 import type { Task, Assignee } from '../../types/project';

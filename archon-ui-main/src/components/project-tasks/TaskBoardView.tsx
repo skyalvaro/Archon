@@ -5,7 +5,7 @@ import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { Trash2 } from 'lucide-react';
 import { Task } from './TaskTableView'; // Import Task interface
 import { ItemTypes, getAssigneeIcon, getAssigneeGlow, getOrderColor, getOrderGlow } from '../../lib/task-utils';
-import { DraggableTaskCard } from './DraggableTaskCard';
+import { TaskCard } from '../../features/projects/components/tasks/TaskCard';
 
 interface TaskBoardViewProps {
   tasks: Task[];
@@ -106,12 +106,11 @@ const ColumnDropZone = ({
       
       <div className="px-1 flex-1 overflow-y-auto space-y-3 py-3">
         {organizedTasks.map((task, index) => (
-          <DraggableTaskCard
+          <TaskCard
             key={task.id}
             task={task}
             index={index}
             onView={() => onTaskView(task)}
-            onComplete={() => onTaskComplete(task.id)}
             onDelete={onTaskDelete}
             onTaskReorder={onTaskReorder}
             hoveredTaskId={hoveredTaskId}
