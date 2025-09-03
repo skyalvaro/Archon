@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../ui/primitives/styles';
 import { ProjectCardActions } from './ProjectCardActions';
-import type { Project } from '../../../types/project';
+import type { Project } from '../types';
 
 interface ProjectCardProps {
   project: Project;

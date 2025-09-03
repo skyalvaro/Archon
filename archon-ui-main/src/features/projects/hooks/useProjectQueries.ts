@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../../../services/projectService';
-import type { Project, CreateProjectRequest, UpdateProjectRequest } from '../../../types/project';
+import type { Project, CreateProjectRequest, UpdateProjectRequest } from '../types';
 import { useToast } from '../../../contexts/ToastContext';
 import { useSmartPolling } from '../../ui/hooks';
 

@@ -23,7 +23,7 @@ import { ProjectList } from '../components/ProjectList';
 import { NewProjectModal } from '../components/NewProjectModal';
 import { DocsTab } from '../documents/DocsTab';
 import { TasksTab } from '../tasks/TasksTab';
-import type { Project } from '../../../types/project';
+import type { Project } from '../types';
 
 interface ProjectsViewProps {
   className?: string;

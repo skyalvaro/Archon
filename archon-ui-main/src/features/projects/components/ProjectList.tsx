@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '../../ui/primitives';
 import { ProjectCard } from './ProjectCard';
-import type { Project } from '../../../types/project';
+import type { Project } from '../types';
 
 interface ProjectListProps {
   projects: Project[];

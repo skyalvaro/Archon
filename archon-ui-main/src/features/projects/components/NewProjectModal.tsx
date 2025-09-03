@@ -12,7 +12,7 @@ import { Button } from '../../ui/primitives/button';
 import { Input } from '../../ui/primitives/input';
 import { cn } from '../../ui/primitives/styles';
 import { useCreateProject } from '../hooks/useProjectQueries';
-import type { CreateProjectRequest } from '../../../types/project';
+import type { CreateProjectRequest } from '../types';
 
 interface NewProjectModalProps {
   open: boolean;
