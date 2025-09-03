@@ -17,9 +17,9 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from "../components/project-tasks/Tabs";
+} from "../features/ui/primitives";
 import { DocsTab } from "../components/project-tasks/DocsTab";
-import { TasksTab } from "../components/project-tasks/TasksTab";
+import { TasksTab } from "../features/projects/tasks/TasksTab";
 import { Button } from "../components/ui/Button";
 import {
   Plus,

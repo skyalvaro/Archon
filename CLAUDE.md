@@ -107,6 +107,9 @@ def process_batch(items):
 Archon V2 Alpha is a microservices-based knowledge management system with MCP (Model Context Protocol) integration:
 
 - **Frontend (port 3737)**: React + TypeScript + Vite + TailwindCSS
+  - **UI Strategy**: Radix UI primitives in `/features`, custom components in legacy `/components`
+  - **State Management**: TanStack Query for all data fetching in `/features`
+  - **Styling**: Tron-inspired glassmorphism with Tailwind CSS
 - **Main Server (port 8181)**: FastAPI with HTTP polling for updates
 - **MCP Server (port 8051)**: Lightweight HTTP-based MCP protocol server
 - **Agents Service (port 8052)**: PydanticAI agents for AI/ML operations
@@ -211,11 +214,33 @@ LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR
 
 ### Frontend Structure
 
-- `src/components/` - Reusable UI components
+- `src/components/` - Legacy UI components (custom-built)
+- `src/features/` - Modern vertical slice architecture with Radix UI
+  - `ui/primitives/` - Radix UI primitives with Tron glassmorphism
+  - `projects/` - Project management feature
+  - `tasks/` - Task management sub-feature
 - `src/pages/` - Main application pages
 - `src/services/` - API communication and business logic
 - `src/hooks/` - Custom React hooks
 - `src/contexts/` - React context providers
+
+### UI Libraries
+
+- **Radix UI** (@radix-ui/react-*) - Unstyled, accessible primitives for `/features`
+- **TanStack Query** - Data fetching and caching for `/features`
+- **React DnD** - Drag and drop for Kanban boards
+- **Tailwind CSS** - Utility-first styling with Tron-inspired glassmorphism
+- **Framer Motion** - Animations (minimal usage)
+
+### Theme Management
+
+- **ThemeContext** - Manages light/dark theme state
+- **Tailwind dark mode** - Uses `dark:` prefix with selector strategy
+- **Automatic switching** - All components respect theme via Tailwind classes
+- **Persistent** - Theme choice saved in localStorage
+- **Tron aesthetic** - Stronger neon glows in dark mode, subtle in light mode
+
+We're migrating to a vertical slice architecture where each feature is self-contained. Features are organized by domain hierarchy - main features contain their sub-features. For example, tasks are a sub-feature of projects, so they live at `features/projects/tasks/` rather than as separate siblings. Each feature level has its own components, hooks, types, and services folders. This keeps related code together and makes the codebase more maintainable as it scales.
 
 ### Backend Structure
 
@@ -264,6 +289,13 @@ Use database values directly (no UI mapping):
 
 ### Add a new UI component
 
+For **features** directory (preferred for new components):
+1. Use Radix UI primitives from `src/features/ui/primitives/`
+2. Create component in relevant feature folder under `src/features/`
+3. Use TanStack Query for data fetching
+4. Apply Tron-inspired glassmorphism styling with Tailwind
+
+For **legacy** components:
 1. Create component in `archon-ui-main/src/components/`
 2. Add to page in `archon-ui-main/src/pages/`
 3. Include any new API calls in services
@@ -304,3 +336,4 @@ When connected to Cursor/Windsurf:
 - Frontend uses Vite proxy for API calls in development
 - Python backend uses `uv` for dependency management
 - Docker Compose handles service orchestration
+- we use tanstack query NO PROP DRILLING! refacring in progress!

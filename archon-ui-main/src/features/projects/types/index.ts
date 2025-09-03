@@ -1,13 +1,10 @@
 /**
  * Project Feature Types
- * 
- * All TypeScript interfaces and types for the projects feature.
- * Will eventually replace/consolidate types from:
- * - src/types/project.ts
- * - Scattered interface definitions
+ *
+ * Central barrel export for all project-related types.
+ * Only contains new types introduced during vertical slice migration.
+ * Existing types remain in src/types/project.ts until full migration.
  */
 
-// Placeholder - types will be moved here during migration
-export interface ProjectFeatureTypes {
-  // Will be populated during migration
-}
+// Task-related types are now in the tasks feature subdirectory
+// export from tasks/types instead

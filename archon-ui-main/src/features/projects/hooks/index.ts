@@ -9,4 +9,4 @@
  * - Business logic hooks (useTaskDragDrop, useDocumentEditor)
  */
 
-// Hooks will be exported here as they're migrated
+// Task management business logic hooks are now in tasks/hooks subdirectory

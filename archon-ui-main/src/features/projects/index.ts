@@ -1,6 +1,6 @@
 /**
  * Projects Feature Module
- * 
+ *
  * Vertical slice containing all project-related functionality:
  * - Project management (CRUD, selection)
  * - Task management (CRUD, status, board, table views)
@@ -9,7 +9,7 @@
  */
 
 // Main exports will be added as components are migrated
-export * from './types';
+// export * from "./types"; // Currently empty, will add exports as types are migrated
 
 // Future exports:
 // export * from './components';

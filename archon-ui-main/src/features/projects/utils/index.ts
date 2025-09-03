@@ -1,6 +1,6 @@
 /**
  * Project Utilities
- * 
+ *
  * Shared utility functions for the projects feature.
  * Includes:
  * - Task status helpers

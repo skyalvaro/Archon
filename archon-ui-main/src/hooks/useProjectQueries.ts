@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import type { Project, CreateProjectRequest, UpdateProjectRequest } from '../types/project';
-import type { Task } from '../components/project-tasks/TaskTableView';
+import type { Task } from '../features/projects/tasks/types';
 import { useToast } from '../contexts/ToastContext';
 
 // Query keys factory for better organization
@@ -14,6 +14,7 @@ export const projectKeys = {
   tasks: (projectId: string) => [...projectKeys.detail(projectId), 'tasks'] as const,
   taskCounts: () => ['taskCounts'] as const,
   features: (projectId: string) => [...projectKeys.detail(projectId), 'features'] as const,
+  documents: (projectId: string) => [...projectKeys.detail(projectId), 'documents'] as const,
 };
 
 // Fetch all projects
@@ -249,6 +250,69 @@ export function useDeleteTask(projectId: string) {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: projectKeys.tasks(projectId) });
       queryClient.invalidateQueries({ queryKey: projectKeys.taskCounts() });
+    },
+  });
+}
+
+// Document-related hooks
+export function useProjectDocuments(projectId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: projectKeys.documents(projectId!),
+    queryFn: () => projectService.getProjectDocuments(projectId!),
+    enabled: !!projectId && enabled,
+  });
+}
+
+export function useDeleteDocument(projectId: string) {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+
+  return useMutation({
+    mutationFn: (documentId: string) => projectService.deleteDocument(projectId, documentId),
+    onMutate: async (documentId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: projectKeys.documents(projectId) });
+
+      // Snapshot the previous value
+      const previousDocuments = queryClient.getQueryData(projectKeys.documents(projectId));
+
+      // Optimistically remove the document
+      queryClient.setQueryData(projectKeys.documents(projectId), (old: any[] | undefined) => {
+        if (!old) return old;
+        return old.filter((doc: any) => doc.id !== documentId);
+      });
+
+      // Also update the project detail cache if it exists
+      const previousProject = queryClient.getQueryData(projectKeys.detail(projectId));
+      if (previousProject) {
+        queryClient.setQueryData(projectKeys.detail(projectId), (old: any) => {
+          if (!old || !old.docs) return old;
+          return {
+            ...old,
+            docs: old.docs.filter((doc: any) => doc.id !== documentId)
+          };
+        });
+      }
+
+      return { previousDocuments, previousProject };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousDocuments) {
+        queryClient.setQueryData(projectKeys.documents(projectId), context.previousDocuments);
+      }
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectKeys.detail(projectId), context.previousProject);
+      }
+      showToast('Failed to delete document', 'error');
+    },
+    onSuccess: () => {
+      showToast('Document deleted successfully', 'success');
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: projectKeys.documents(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     },
   });
 }

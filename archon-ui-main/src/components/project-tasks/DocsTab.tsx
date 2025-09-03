@@ -27,7 +27,9 @@ import { Select } from "../ui/Select";
 import { useCrawlProgressPolling } from "../../hooks/useCrawlQueries";
 import { MilkdownEditor } from "./MilkdownEditor";
 import { VersionHistoryModal } from "./VersionHistoryModal";
-import { DocumentCard, NewDocumentCard } from "./DocumentCard";
+import { DocumentCard, DocumentCreateTrigger } from "../../features/projects/documents/components";
+import { useDocumentActions } from "../../features/projects/documents/hooks";
+import { DeleteConfirmModal } from "../../features/ui/components/DeleteConfirmModal";
 
 interface ProjectDoc {
   id: string;
@@ -122,6 +124,30 @@ export const DocsTab = ({
 
   // Dark mode detection
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Document actions hook
+  const {
+    showDeleteConfirm,
+    documentToDelete,
+    initiateDelete,
+    confirmDelete: confirmDeleteBase,
+    cancelDelete,
+    isDeleting,
+  } = useDocumentActions(project?.id || '');
+  
+  // Wrap confirmDelete to handle local state updates
+  const confirmDelete = () => {
+    const deletingDocId = documentToDelete?.id;
+    confirmDeleteBase();
+    
+    // Update local state after deletion
+    if (deletingDocId) {
+      setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
+      if (selectedDocument?.id === deletingDocId) {
+        setSelectedDocument(documents.find((d) => d.id !== deletingDocId) || null);
+      }
+    }
+  };
 
   useEffect(() => {
     const checkDarkMode = () => {
@@ -532,30 +558,12 @@ export const DocsTab = ({
                 document={doc}
                 isActive={selectedDocument?.id === doc.id}
                 onSelect={setSelectedDocument}
-                onDelete={async (docId) => {
-                  try {
-                    // Call API to delete from database first
-                    await projectService.deleteDocument(project.id, docId);
-
-                    // Then remove from local state
-                    setDocuments((prev) => prev.filter((d) => d.id !== docId));
-                    if (selectedDocument?.id === docId) {
-                      setSelectedDocument(
-                        documents.find((d) => d.id !== docId) || null,
-                      );
-                    }
-                    showToast("Document deleted", "success");
-                  } catch (error) {
-                    console.error("Failed to delete document:", error);
-                    showToast("Failed to delete document", "error");
-                  }
-                }}
-                isDarkMode={isDarkMode}
+                onDelete={initiateDelete}
               />
             ))}
 
             {/* Add New Document Card */}
-            <NewDocumentCard onClick={() => setShowTemplateModal(true)} />
+            <DocumentCreateTrigger onClick={() => setShowTemplateModal(true)} />
           </div>
         </div>
 
@@ -708,6 +716,16 @@ export const DocsTab = ({
           }}
         />
       )}
+      
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        type="document"
+        itemName={documentToDelete?.title || ''}
+        open={showDeleteConfirm}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        onOpenChange={(open) => !open && cancelDelete()}
+      />
     </div>
   );
 };
