@@ -249,24 +249,40 @@ export const DocsTab = ({ project }: DocsTabProps) => {
     <div className="flex h-[calc(100vh-200px)]">
       {/* Left Sidebar - Document List */}
       <div className={cn(
-        "w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col",
-        glassmorphism.background.subtle
+        "w-80 flex flex-col",
+        "border-r border-gray-200 dark:border-gray-700",
+        glassmorphism.background.subtle,
+        "backdrop-blur-sm"
       )}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
+        <div className={cn(
+          "p-4 border-b border-gray-200 dark:border-gray-700",
+          glassmorphism.background.subtle
+        )}>
+          <h2 className={cn(
+            "text-lg font-semibold mb-3",
+            "text-gray-800 dark:text-cyan-300",
+            "flex items-center gap-2"
+          )}>
+            <FileText className="w-5 h-5" />
             Documents
           </h2>
           
           {/* Search */}
           <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             <Input
               type="text"
               placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className={cn(
+                "pl-9",
+                "bg-gray-50 dark:bg-gray-900/50",
+                "border-gray-300 dark:border-gray-600",
+                "focus:border-cyan-500 dark:focus:border-cyan-400",
+                "focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20"
+              )}
             />
           </div>
           
@@ -276,7 +292,10 @@ export const DocsTab = ({ project }: DocsTabProps) => {
               onClick={() => setShowTemplateModal(true)}
               variant="cyan"
               size="sm"
-              className="flex-1"
+              className={cn(
+                "flex-1",
+                "shadow-lg shadow-cyan-500/20 dark:shadow-cyan-400/20"
+              )}
             >
               <Plus className="w-4 h-4 mr-1" />
               New
@@ -285,7 +304,11 @@ export const DocsTab = ({ project }: DocsTabProps) => {
               onClick={() => setShowUploadModal(true)}
               variant="outline"
               size="sm"
-              className="flex-1"
+              className={cn(
+                "flex-1",
+                "hover:border-purple-500 dark:hover:border-purple-400",
+                "hover:text-purple-600 dark:hover:text-purple-400"
+              )}
             >
               <Upload className="w-4 h-4 mr-1" />
               Upload
@@ -294,10 +317,20 @@ export const DocsTab = ({ project }: DocsTabProps) => {
         </div>
         
         {/* Document List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className={cn(
+          "flex-1 overflow-y-auto p-4 space-y-2",
+          "scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600",
+          "scrollbar-track-transparent"
+        )}>
           {filteredDocuments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              {searchQuery ? 'No documents found' : 'No documents yet'}
+            <div className={cn(
+              "text-center py-8",
+              "text-gray-500 dark:text-gray-400"
+            )}>
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">
+                {searchQuery ? 'No documents found' : 'No documents yet'}
+              </p>
             </div>
           ) : (
             filteredDocuments.map((doc) => (
