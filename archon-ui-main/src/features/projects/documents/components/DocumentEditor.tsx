@@ -23,12 +23,11 @@ import {
   InsertThematicBreak,
   InsertCodeBlock,
   DiffSourceToggleWrapper,
-  BlockTypeSelect,
-  type MDXEditorMethods
+  BlockTypeSelect
 } from '@mdxeditor/editor';
 import '@mdxeditor/editor/style.css';
 import { Button } from '../../../ui/primitives';
-import { Save, Eye, Edit3, Code } from 'lucide-react';
+import { Save, Eye, Code } from 'lucide-react';
 import { cn } from '../../../ui/primitives/styles';
 import type { ProjectDocument } from '../types';
 
@@ -241,38 +240,6 @@ export const DocumentEditor = ({
         />
       </div>
 
-      {/* Custom styles for dark mode */}
-      <style jsx global>{`
-        .mdxeditor-dark {
-          --accentColor: #06b6d4;
-          --background-color: #111827;
-          --foreground-color: #f3f4f6;
-          --border-color: #374151;
-        }
-        
-        .mdxeditor-dark .mdxeditor {
-          background-color: var(--background-color);
-          color: var(--foreground-color);
-        }
-        
-        .mdxeditor-dark .mdxeditor-toolbar {
-          background-color: #1f2937;
-          border-color: var(--border-color);
-        }
-        
-        .mdxeditor-dark .mdxeditor-toolbar button {
-          color: var(--foreground-color);
-        }
-        
-        .mdxeditor-dark .mdxeditor-toolbar button:hover {
-          background-color: #374151;
-        }
-        
-        .mdxeditor-dark .mdxeditor-toolbar button[data-state="on"] {
-          background-color: #06b6d4;
-          color: white;
-        }
-      `}</style>
     </div>
   );
 };

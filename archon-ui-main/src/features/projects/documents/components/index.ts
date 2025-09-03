@@ -7,4 +7,6 @@
 
 export { DocumentCard } from "./DocumentCard";
 export { DocumentCreateTrigger } from "./DocumentCreateTrigger";
+export { DocumentEditor } from "./DocumentEditor";
+export { VersionHistoryModal } from "./VersionHistoryModal";
 export type { DocumentCardProps, DocumentCreateTriggerProps } from "../types";
