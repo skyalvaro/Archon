@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectService } from '../../../services/projectService';
+import { projectService, taskService } from '../services';
 import type { Project, CreateProjectRequest, UpdateProjectRequest } from '../types';
 import { useToast } from '../../../contexts/ToastContext';
 import { useSmartPolling } from '../../ui/hooks';
@@ -33,7 +33,7 @@ export function useProjects() {
 export function useTaskCounts() {
   return useQuery({
     queryKey: projectKeys.taskCounts(),
-    queryFn: () => projectService.getTaskCountsForAllProjects(),
+    queryFn: () => taskService.getTaskCountsForAllProjects(),
     refetchInterval: false, // Don't poll, only refetch manually
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });

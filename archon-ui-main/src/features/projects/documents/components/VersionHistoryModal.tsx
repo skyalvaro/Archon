@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, RotateCcw, Calendar, User, FileText, Diff, GitBranch, AlertTriangle } from 'lucide-react';
-// import { projectService } from '../../../../services/projectService'; // TODO: Uncomment when API methods are implemented
+import { documentService } from '../services';
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../../../ui/primitives';
 import { useToast } from '../../../../contexts/ToastContext';
 import { cn, glassmorphism } from '../../../ui/primitives/styles';
@@ -51,10 +51,8 @@ export const VersionHistoryModal = ({
   const loadVersions = async () => {
     setLoading(true);
     try {
-      // TODO: Implement getVersions in projectService
-      // const response = await projectService.getVersions(projectId, fieldName);
-      // setVersions(response.versions || []);
-      setVersions([]); // Temporary until API is implemented
+      const response = await documentService.getDocumentVersionHistory(projectId, fieldName);
+      setVersions(response || []);
     } catch (error) {
       console.error('Failed to load versions:', error);
       showToast('Failed to load version history', 'error');
@@ -73,15 +71,13 @@ export const VersionHistoryModal = ({
     
     setRestoring(true);
     try {
-      // TODO: Implement restoreVersion in projectService
-      // await projectService.restoreVersion(
-      //   projectId,
-      //   fieldName,
-      //   versionToRestore.version_number,
-      //   'User'
-      // );
+      await documentService.restoreDocumentVersion(
+        projectId,
+        versionToRestore.version_number,
+        fieldName
+      );
       
-      showToast(`Version restore not yet implemented`, 'info');
+      showToast(`Version ${versionToRestore.version_number} restored successfully`, 'success');
       setShowRestoreConfirm(false);
       setVersionToRestore(null);
       onRestore?.();

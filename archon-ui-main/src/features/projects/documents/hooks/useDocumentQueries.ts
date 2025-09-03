@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { projectService } from '../../../../services/projectService';
+import { projectService } from '../../services';
 import { useToast } from '../../../../contexts/ToastContext';
 import type { ProjectDocument } from '../types';
 

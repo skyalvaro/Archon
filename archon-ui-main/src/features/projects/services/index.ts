@@ -2,14 +2,15 @@
  * Project Services
  * 
  * All API communication and business logic for the projects feature.
- * Will replace/consolidate:
- * - src/services/projectService.ts (614 lines -> split into focused services)
- * 
- * Services:
- * - projectService: Project CRUD operations
- * - taskService: Task management operations  
- * - documentService: Document operations
- * - versionService: Document versioning
+ * Replaces the monolithic src/services/projectService.ts with focused services.
  */
 
-// Services will be exported here as they're migrated
+// Export project-specific services
+export { projectService } from './projectService';
+
+// Re-export other services for convenience
+export { taskService } from '../tasks/services/taskService';
+export { documentService } from '../documents/services/documentService';
+
+// Export shared utilities
+export * from '../shared/api';

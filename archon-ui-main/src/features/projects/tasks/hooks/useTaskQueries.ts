@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectService } from '../../../../services/projectService';
+import { taskService } from '../services';
 import { useToast } from '../../../../contexts/ToastContext';
 import { useSmartPolling } from '../../../ui/hooks';
 import type { Task, CreateTaskRequest, UpdateTaskRequest } from '../types';
@@ -16,7 +16,7 @@ export function useProjectTasks(projectId: string | undefined, enabled = true) {
   
   return useQuery({
     queryKey: projectId ? taskKeys.all(projectId) : ['tasks-undefined'],
-    queryFn: () => projectId ? projectService.getTasksByProject(projectId) : Promise.reject('No project ID'),
+    queryFn: () => projectId ? taskService.getTasksByProject(projectId) : Promise.reject('No project ID'),
     enabled: !!projectId && enabled,
     refetchInterval, // Smart interval based on page visibility/focus
     staleTime: 2000, // Consider data stale after 2 seconds
@@ -29,7 +29,7 @@ export function useCreateTask() {
   const { showToast } = useToast();
 
   return useMutation({
-    mutationFn: (taskData: CreateTaskRequest) => projectService.createTask(taskData),
+    mutationFn: (taskData: CreateTaskRequest) => taskService.createTask(taskData),
     onSuccess: (_data, variables) => {
       // Invalidate tasks for the project
       queryClient.invalidateQueries({ queryKey: taskKeys.all(variables.project_id) });
@@ -51,7 +51,7 @@ export function useUpdateTask(projectId: string) {
 
   return useMutation({
     mutationFn: ({ taskId, updates }: { taskId: string; updates: UpdateTaskRequest }) =>
-      projectService.updateTask(taskId, updates),
+      taskService.updateTask(taskId, updates),
     onMutate: async ({ taskId, updates }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.all(projectId) });
@@ -97,7 +97,7 @@ export function useDeleteTask(projectId: string) {
   const { showToast } = useToast();
 
   return useMutation({
-    mutationFn: (taskId: string) => projectService.deleteTask(taskId),
+    mutationFn: (taskId: string) => taskService.deleteTask(taskId),
     onMutate: async (taskId) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.all(projectId) });
@@ -137,7 +137,7 @@ export function useTaskCounts() {
   
   return useQuery({
     queryKey: taskKeys.counts(),
-    queryFn: () => projectService.getTaskCountsForAllProjects(),
+    queryFn: () => taskService.getTaskCountsForAllProjects(),
     refetchInterval: false, // Don't poll, only refetch manually
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
