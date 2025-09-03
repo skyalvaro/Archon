@@ -1,13 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, Upload, FileText, History, Search } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
-import { projectService } from '../../../services/projectService';
 import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/primitives';
 import { cn, glassmorphism } from '../../ui/primitives/styles';
 import { DocumentCard } from './components';
 import { DocumentEditor } from './components/DocumentEditor';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
-import { useDocumentActions } from './hooks';
+import { 
+  useDocumentActions,
+  useProjectDocuments,
+  useCreateDocument,
+  useUpdateDocument
+} from './hooks';
 import { DeleteConfirmModal } from '../../ui/components/DeleteConfirmModal';
 import type { ProjectDocument } from './types';
 
@@ -93,11 +97,15 @@ Describe the technical architecture...
 
 export const DocsTab = ({ project }: DocsTabProps) => {
   const { showToast } = useToast();
+  const projectId = project?.id || '';
+  
+  // TanStack Query hooks
+  const { data: documents = [], isLoading } = useProjectDocuments(projectId);
+  const createDocumentMutation = useCreateDocument(projectId);
+  const updateDocumentMutation = useUpdateDocument(projectId);
   
   // Document state
-  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null);
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modals
@@ -116,74 +124,37 @@ export const DocsTab = ({ project }: DocsTabProps) => {
     showDeleteConfirm,
     documentToDelete,
     initiateDelete,
-    confirmDelete: confirmDeleteBase,
+    confirmDelete,
     cancelDelete
-  } = useDocumentActions(project?.id || '');
-  
-  // Wrap confirmDelete to handle local state updates
-  const confirmDelete = () => {
-    const deletingDocId = documentToDelete?.id;
-    confirmDeleteBase();
-    
-    // Update local state after deletion
-    if (deletingDocId) {
-      setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
-      if (selectedDocument?.id === deletingDocId) {
-        setSelectedDocument(documents.find((d) => d.id !== deletingDocId) || null);
-      }
-    }
-  };
+  } = useDocumentActions(projectId);
 
-  // Load project documents
+  // Auto-select first document when documents load
   useEffect(() => {
-    if (project?.id) {
-      loadDocuments();
+    if (documents.length > 0 && !selectedDocument) {
+      setSelectedDocument(documents[0]);
     }
-  }, [project?.id]);
-
-  const loadDocuments = async () => {
-    if (!project?.id) return;
-    
-    setLoading(true);
-    try {
-      const projectData = await projectService.getProject(project.id);
-      if (projectData?.docs && Array.isArray(projectData.docs)) {
-        setDocuments(projectData.docs);
-        if (projectData.docs.length > 0 && !selectedDocument) {
-          setSelectedDocument(projectData.docs[0]);
-        }
+  }, [documents, selectedDocument]);
+  
+  // Update selected document if it was updated
+  useEffect(() => {
+    if (selectedDocument && documents.length > 0) {
+      const updated = documents.find(d => d.id === selectedDocument.id);
+      if (updated && updated !== selectedDocument) {
+        setSelectedDocument(updated);
       }
-    } catch (error) {
-      console.error('Failed to load documents:', error);
-      showToast('Failed to load documents', 'error');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [documents]);
 
-  // Save document
-  const saveDocument = async (doc: ProjectDocument) => {
-    if (!project?.id) return;
+  // Save document using TanStack mutation
+  const saveDocument = async (doc: ProjectDocument): Promise<void> => {
+    if (!projectId) return;
     
-    try {
-      // Update in backend
-      await projectService.updateProject(project.id, {
-        docs: documents.map(d => d.id === doc.id ? doc : d)
-      });
-      
-      // Update local state
-      setDocuments(prev => prev.map(d => d.id === doc.id ? doc : d));
-      showToast('Document saved successfully', 'success');
-    } catch (error) {
-      console.error('Failed to save document:', error);
-      showToast('Failed to save document', 'error');
-      throw error;
-    }
+    await updateDocumentMutation.mutateAsync(doc);
   };
 
   // Create new document from template
   const createDocumentFromTemplate = async (templateKey: string) => {
-    if (!project?.id) return;
+    if (!projectId) return;
     
     const template = DOCUMENT_TEMPLATES[templateKey as keyof typeof DOCUMENT_TEMPLATES];
     if (!template) return;
@@ -197,23 +168,18 @@ export const DocsTab = ({ project }: DocsTabProps) => {
       updated_at: new Date().toISOString(),
     };
     
-    try {
-      const updatedDocs = [...documents, newDoc];
-      await projectService.updateProject(project.id, { docs: updatedDocs });
-      setDocuments(updatedDocs);
-      setSelectedDocument(newDoc);
-      setShowTemplateModal(false);
-      showToast(`Created new ${template.name}`, 'success');
-    } catch (error) {
-      console.error('Failed to create document:', error);
-      showToast('Failed to create document', 'error');
-    }
+    createDocumentMutation.mutate(newDoc, {
+      onSuccess: () => {
+        setSelectedDocument(newDoc);
+        setShowTemplateModal(false);
+      },
+    });
   };
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !project?.id) return;
+    if (!file || !projectId) return;
 
     // Validate file type
     const allowedTypes = ['.md', '.txt', '.pdf'];
@@ -225,8 +191,6 @@ export const DocsTab = ({ project }: DocsTabProps) => {
     }
 
     try {
-      setLoading(true);
-      
       // Read file content
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -252,22 +216,19 @@ export const DocsTab = ({ project }: DocsTabProps) => {
         updated_at: new Date().toISOString(),
       };
 
-      // Save to project
-      const updatedDocs = [...documents, newDoc];
-      await projectService.updateProject(project.id, { docs: updatedDocs });
-      
-      setDocuments(updatedDocs);
-      setSelectedDocument(newDoc);
-      setShowUploadModal(false);
-      showToast(`Uploaded ${file.name}`, 'success');
+      // Save to project using mutation
+      createDocumentMutation.mutate(newDoc, {
+        onSuccess: () => {
+          setSelectedDocument(newDoc);
+          setShowUploadModal(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        },
+      });
     } catch (error) {
       console.error('Failed to upload file:', error);
       showToast('Failed to upload file', 'error');
-    } finally {
-      setLoading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
 
@@ -276,7 +237,7 @@ export const DocsTab = ({ project }: DocsTabProps) => {
     doc.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading && documents.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
@@ -474,10 +435,10 @@ export const DocsTab = ({ project }: DocsTabProps) => {
         <VersionHistoryModal
           isOpen={showVersionHistory}
           onClose={() => setShowVersionHistory(false)}
-          projectId={project?.id || ''}
+          projectId={projectId}
           documentId={selectedDocument.id}
           fieldName="docs"
-          onRestore={loadDocuments}
+          onRestore={() => {}}
         />
       )}
       

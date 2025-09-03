@@ -478,76 +478,8 @@ export const projectService = {
 
 
   // ==================== DOCUMENT OPERATIONS ====================
-
-  /**
-   * List all documents for a project
-   */
-  async listProjectDocuments(projectId: string): Promise<Document[]> {
-    try {
-      const response = await callAPI<{documents: Document[]}>(`/api/projects/${projectId}/docs`);
-      return response.documents || [];
-    } catch (error) {
-      console.error(`Failed to list documents for project ${projectId}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get a specific document with full content
-   */
-  async getDocument(projectId: string, docId: string): Promise<Document> {
-    try {
-      const response = await callAPI<{document: Document}>(`/api/projects/${projectId}/docs/${docId}`);
-      return response.document;
-    } catch (error) {
-      console.error(`Failed to get document ${docId} from project ${projectId}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Create a new document for a project
-   */
-  async createDocument(projectId: string, documentData: Partial<Document>): Promise<Document> {
-    try {
-      const response = await callAPI<{document: Document}>(`/api/projects/${projectId}/docs`, {
-        method: 'POST',
-        body: JSON.stringify(documentData)
-      });
-      return response.document;
-    } catch (error) {
-      console.error(`Failed to create document for project ${projectId}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Update an existing document
-   */
-  async updateDocument(projectId: string, docId: string, updates: Partial<Document>): Promise<Document> {
-    try {
-      const response = await callAPI<{document: Document}>(`/api/projects/${projectId}/docs/${docId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates)
-      });
-      return response.document;
-    } catch (error) {
-      console.error(`Failed to update document ${docId} in project ${projectId}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Delete a document
-   */
-  async deleteDocument(projectId: string, docId: string): Promise<void> {
-    try {
-      await callAPI<void>(`/api/projects/${projectId}/docs/${docId}`, { method: 'DELETE' });
-    } catch (error) {
-      console.error(`Failed to delete document ${docId} from project ${projectId}:`, error);
-      throw error;
-    }
-  },
+  // Note: Documents are stored as JSONB array in project.docs field
+  // Use getProject() and updateProject() to manage documents
 
   // ==================== VERSIONING OPERATIONS ====================
 

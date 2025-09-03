@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useDeleteDocument } from "../../../../hooks/useProjectQueries";
+import { useDeleteDocument } from "./useDocumentQueries";
 import { useToast } from "../../../../contexts/ToastContext";
 import type { ProjectDocument } from "../types";
 import type { UseDocumentActionsReturn } from "../types";
