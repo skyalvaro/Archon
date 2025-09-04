@@ -90,30 +90,31 @@ export function useCreateProject() {
     onError: (error, variables, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Failed to create project:", error, { variables });
-      
+
       // Rollback on error
       if (context?.previousProjects) {
         queryClient.setQueryData(projectKeys.lists(), context.previousProjects);
       }
-      
+
       showToast(`Failed to create project: ${errorMessage}`, "error");
     },
     onSuccess: (response) => {
       // Extract the actual project from the response
       const newProject = response.project;
-      
+
       // Replace optimistic project with real one from server
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
         if (!old) return [newProject];
         // Replace temp project with real one
-        return old.map(project => 
-          project.id.startsWith('temp-') ? newProject : project
-        ).filter((project, index, self) => 
-          // Remove any duplicates just in case
-          index === self.findIndex(p => p.id === project.id)
-        );
+        return old
+          .map((project) => (project.id.startsWith("temp-") ? newProject : project))
+          .filter(
+            (project, index, self) =>
+              // Remove any duplicates just in case
+              index === self.findIndex((p) => p.id === project.id),
+          );
       });
-      
+
       showToast("Project created successfully!", "success");
     },
     onSettled: () => {

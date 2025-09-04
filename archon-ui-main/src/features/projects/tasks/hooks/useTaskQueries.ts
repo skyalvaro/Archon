@@ -73,12 +73,13 @@ export function useCreateTask() {
       queryClient.setQueryData(taskKeys.all(variables.project_id), (old: Task[] | undefined) => {
         if (!old) return [data];
         // Remove temp task and add real one
-        return old.map(task => 
-          task.id.startsWith('temp-') ? data : task
-        ).filter((task, index, self) => 
-          // Remove any duplicates just in case
-          index === self.findIndex(t => t.id === task.id)
-        );
+        return old
+          .map((task) => (task.id.startsWith("temp-") ? data : task))
+          .filter(
+            (task, index, self) =>
+              // Remove any duplicates just in case
+              index === self.findIndex((t) => t.id === task.id),
+          );
       });
       queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
       showToast("Task created successfully", "success");

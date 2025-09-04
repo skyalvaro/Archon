@@ -109,7 +109,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         // Error toast handled by mutation
       }
     },
-    [tasks, updateTaskMutation, showToast],
+    [tasks, updateTaskMutation],
   );
 
   // Move task to different status
@@ -138,7 +138,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         // Error toast handled by mutation
       }
     },
-    [tasks, updateTaskMutation, showToast, getDefaultTaskOrder],
+    [tasks, updateTaskMutation, getDefaultTaskOrder],
   );
 
   const completeTask = useCallback(
