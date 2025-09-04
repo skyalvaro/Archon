@@ -22,4 +22,5 @@ export * from "./select";
 // Export style utilities
 export * from "./styles";
 export * from "./tabs";
+export * from "./toast";
 export * from "./tooltip";

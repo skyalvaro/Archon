@@ -1,6 +1,6 @@
 import { Clipboard, Edit, Trash2 } from "lucide-react";
 import type React from "react";
-import { useToast } from "../../../../contexts/ToastContext";
+import { useToast } from "../../../ui/hooks/useToast";
 import { cn, glassmorphism } from "../../../ui/primitives/styles";
 import { SimpleTooltip } from "../../../ui/primitives/tooltip";
 

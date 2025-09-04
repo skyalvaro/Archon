@@ -1,7 +1,7 @@
 import { FileText, History, Plus, Search, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useToast } from "../../../contexts/ToastContext";
 import { DeleteConfirmModal } from "../../ui/components/DeleteConfirmModal";
+import { useToast } from "../../ui/hooks/useToast";
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, Input } from "../../ui/primitives";
 import { cn, glassmorphism } from "../../ui/primitives/styles";
 import { DocumentCard } from "./components";

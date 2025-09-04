@@ -1,6 +1,6 @@
 import { AlertTriangle, Calendar, Clock, Diff, FileText, GitBranch, RotateCcw, User } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useToast } from "../../../../contexts/ToastContext";
+import { useToast } from "../../../ui/hooks/useToast";
 import {
   AlertDialog,
   AlertDialogAction,

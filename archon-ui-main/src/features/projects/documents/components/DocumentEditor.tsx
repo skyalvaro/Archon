@@ -25,7 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import "@mdxeditor/editor/style.css";
 import { Edit3, Eye, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useToast } from "../../../../contexts/ToastContext";
+import { useToast } from "../../../ui/hooks/useToast";
 import { Button } from "../../../ui/primitives";
 import { cn, glassmorphism } from "../../../ui/primitives/styles";
 import type { ProjectDocument } from "../types";

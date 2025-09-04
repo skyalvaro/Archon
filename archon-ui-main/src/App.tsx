@@ -9,6 +9,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { MainLayout } from './components/layouts/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { ToastProvider as FeaturesToastProvider } from './features/ui/components/ToastProvider';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { TooltipProvider } from './features/ui/primitives/tooltip';
 import { ProjectPage } from './pages/ProjectPage';
@@ -133,11 +134,13 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastProvider>
-          <TooltipProvider>
-            <SettingsProvider>
-              <AppContent />
-            </SettingsProvider>
-          </TooltipProvider>
+          <FeaturesToastProvider>
+            <TooltipProvider>
+              <SettingsProvider>
+                <AppContent />
+              </SettingsProvider>
+            </TooltipProvider>
+          </FeaturesToastProvider>
         </ToastProvider>
       </ThemeProvider>
       {import.meta.env.VITE_SHOW_DEVTOOLS === 'true' && (

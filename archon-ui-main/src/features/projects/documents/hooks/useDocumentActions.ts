@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useToast } from "../../../../contexts/ToastContext";
+import { useToast } from "../../../ui/hooks/useToast";
 import type { ProjectDocument, UseDocumentActionsReturn } from "../types";
 import { useDeleteDocument } from "./useDocumentQueries";
 

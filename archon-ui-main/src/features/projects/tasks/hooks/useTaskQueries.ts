@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "../../../../contexts/ToastContext";
 import { useSmartPolling } from "../../../ui/hooks";
+import { useToast } from "../../../ui/hooks/useToast";
 import { taskService } from "../services";
 import type { CreateTaskRequest, Task, UpdateTaskRequest } from "../types";
 
