@@ -29,7 +29,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onCancel,
   type,
   size = "default",
-  open = true,
+  open = false,
   onOpenChange,
 }) => {
   const TITLES: Record<DeleteConfirmModalProps["type"], string> = {

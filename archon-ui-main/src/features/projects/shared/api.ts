@@ -89,6 +89,11 @@ export async function callAPI<T = unknown>(endpoint: string, options: RequestIni
       throw new ProjectServiceError(errorMessage, "HTTP_ERROR", response.status);
     }
 
+    // Handle 204 No Content responses (common for DELETE operations)
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     const result = await response.json();
 
     // Check if response has error field (from FastAPI error format)

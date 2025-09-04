@@ -9,7 +9,7 @@ import { cn, glassmorphism } from "../../ui/primitives/styles";
 import { TaskEditModal } from "./components/TaskEditModal";
 import { useDeleteTask, useProjectTasks, useUpdateTask } from "./hooks";
 import type { Task } from "./types";
-import { validateTaskOrder } from "./utils";
+import { getReorderTaskOrder, validateTaskOrder } from "./utils";
 import { BoardView, TableView } from "./views";
 
 interface TasksTabProps {
@@ -80,41 +80,6 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
     return maxOrder + 100;
   }, []);
 
-  // Calculate position between two tasks for reordering
-  const calculateReorderPosition = useCallback((statusTasks: Task[], fromIndex: number, toIndex: number) => {
-    // Moving to the beginning
-    if (toIndex === 0) {
-      return Math.max(1, Math.floor(statusTasks[0].task_order / 2));
-    }
-
-    // Moving to the end
-    if (toIndex >= statusTasks.length) {
-      return statusTasks[statusTasks.length - 1].task_order + 100;
-    }
-
-    // Moving between two tasks
-    // When moving down (fromIndex < toIndex), insert after toIndex
-    // When moving up (fromIndex > toIndex), insert before toIndex
-    if (fromIndex < toIndex) {
-      // Moving down - insert after toIndex
-      const afterTask = statusTasks[toIndex];
-      const nextTask = statusTasks[toIndex + 1];
-      if (nextTask) {
-        return Math.floor((afterTask.task_order + nextTask.task_order) / 2);
-      } else {
-        return afterTask.task_order + 100;
-      }
-    } else {
-      // Moving up - insert before toIndex
-      const beforeTask = toIndex > 0 ? statusTasks[toIndex - 1] : null;
-      const targetTask = statusTasks[toIndex];
-      if (beforeTask) {
-        return Math.floor((beforeTask.task_order + targetTask.task_order) / 2);
-      } else {
-        return Math.max(1, Math.floor(targetTask.task_order / 2));
-      }
-    }
-  }, []);
 
   // Task reordering - immediate update
   const handleTaskReorder = useCallback(
@@ -126,8 +91,8 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
       if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex > statusTasks.length) return;
       if (movingTaskIndex === targetIndex) return;
 
-      // Calculate new position
-      const newPosition = calculateReorderPosition(statusTasks, movingTaskIndex, targetIndex);
+      // Calculate new position using battle-tested utility
+      const newPosition = getReorderTaskOrder(statusTasks, taskId, targetIndex);
 
       // Update immediately with optimistic updates
       try {
@@ -146,7 +111,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         showToast(`Failed to reorder task: ${errorMessage}`, "error");
       }
     },
-    [tasks, updateTaskMutation, showToast, calculateReorderPosition],
+    [tasks, updateTaskMutation, showToast],
   );
 
   // Move task to different status

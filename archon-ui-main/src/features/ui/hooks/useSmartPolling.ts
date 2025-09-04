@@ -10,6 +10,11 @@ export function useSmartPolling(baseInterval: number = 10000) {
   const [hasFocus, setHasFocus] = useState(true);
 
   useEffect(() => {
+    // Guard against SSR and non-browser environments
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
     const handleVisibilityChange = () => {
       setIsVisible(!document.hidden);
     };
@@ -27,9 +32,12 @@ export function useSmartPolling(baseInterval: number = 10000) {
     window.addEventListener("blur", handleBlur);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("blur", handleBlur);
+      // Cleanup with same guards
+      if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("focus", handleFocus);
+        window.removeEventListener("blur", handleBlur);
+      }
     };
   }, []);
 
