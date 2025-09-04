@@ -11,7 +11,7 @@ export function useSmartPolling(baseInterval: number = 10000) {
 
   useEffect(() => {
     // Guard against SSR and non-browser environments
-    if (typeof document === 'undefined' || typeof window === 'undefined') {
+    if (typeof document === "undefined" || typeof window === "undefined") {
       return;
     }
 
@@ -33,7 +33,7 @@ export function useSmartPolling(baseInterval: number = 10000) {
 
     return () => {
       // Cleanup with same guards
-      if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+      if (typeof document !== "undefined" && typeof window !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
         window.removeEventListener("focus", handleFocus);
         window.removeEventListener("blur", handleBlur);

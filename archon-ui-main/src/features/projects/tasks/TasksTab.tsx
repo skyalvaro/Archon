@@ -80,12 +80,13 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
     return maxOrder + 100;
   }, []);
 
-
   // Task reordering - immediate update
   const handleTaskReorder = useCallback(
     async (taskId: string, targetIndex: number, status: Task["status"]) => {
       // Get all tasks in the target status, sorted by current order
-      const statusTasks = (tasks as Task[]).filter((task) => task.status === status).sort((a, b) => a.task_order - b.task_order);
+      const statusTasks = (tasks as Task[])
+        .filter((task) => task.status === status)
+        .sort((a, b) => a.task_order - b.task_order);
 
       const movingTaskIndex = statusTasks.findIndex((task) => task.id === taskId);
       if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex > statusTasks.length) return;
