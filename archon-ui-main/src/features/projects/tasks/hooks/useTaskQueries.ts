@@ -16,7 +16,10 @@ export function useProjectTasks(projectId: string | undefined, enabled = true) {
 
   return useQuery<Task[]>({
     queryKey: projectId ? taskKeys.all(projectId) : ["tasks-undefined"],
-    queryFn: () => (projectId ? taskService.getTasksByProject(projectId) : Promise.reject("No project ID")),
+    queryFn: async () => {
+      if (!projectId) throw new Error("No project ID");
+      return taskService.getTasksByProject(projectId);
+    },
     enabled: !!projectId && enabled,
     refetchInterval, // Smart interval based on page visibility/focus
     staleTime: 10000, // Consider data stale after 10 seconds
@@ -38,13 +41,12 @@ export function useCreateTask() {
       const previousTasks = queryClient.getQueryData(taskKeys.all(newTaskData.project_id));
 
       // Create optimistic task with temporary ID
+      const tempId = `temp-${Date.now()}`;
       const optimisticTask: Task = {
-        id: `temp-${Date.now()}`, // Temporary ID until real one comes back
+        id: tempId, // Temporary ID until real one comes back
         ...newTaskData,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        deleted_at: null,
-        subtasks: [],
         // Ensure all required fields have defaults
         task_order: newTaskData.task_order ?? 100,
         status: newTaskData.status ?? "todo",
@@ -57,7 +59,7 @@ export function useCreateTask() {
         return [...old, optimisticTask];
       });
 
-      return { previousTasks };
+      return { previousTasks, tempId };
     },
     onError: (error, variables, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -68,13 +70,13 @@ export function useCreateTask() {
       }
       showToast(`Failed to create task: ${errorMessage}`, "error");
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data, variables, context) => {
       // Replace optimistic task with real one from server
       queryClient.setQueryData(taskKeys.all(variables.project_id), (old: Task[] | undefined) => {
         if (!old) return [data];
-        // Remove temp task and add real one
+        // Replace only the specific temp task with real one
         return old
-          .map((task) => (task.id.startsWith("temp-") ? data : task))
+          .map((task) => (task.id === context?.tempId ? data : task))
           .filter(
             (task, index, self) =>
               // Remove any duplicates just in case
@@ -143,19 +145,19 @@ export function useDeleteTask(projectId: string) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  return useMutation({
+  return useMutation<void, Error, string, { previousTasks?: Task[] }>({
     mutationFn: (taskId: string) => taskService.deleteTask(taskId),
     onMutate: async (taskId) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.all(projectId) });
 
       // Snapshot the previous value
-      const previousTasks = queryClient.getQueryData(taskKeys.all(projectId));
+      const previousTasks = queryClient.getQueryData<Task[]>(taskKeys.all(projectId));
 
       // Optimistically remove the task
-      queryClient.setQueryData(taskKeys.all(projectId), (old: Task[] | undefined) => {
+      queryClient.setQueryData<Task[]>(taskKeys.all(projectId), (old) => {
         if (!old) return old;
-        return old.filter((task: Task) => task.id !== taskId);
+        return old.filter((task) => task.id !== taskId);
       });
 
       return { previousTasks };
