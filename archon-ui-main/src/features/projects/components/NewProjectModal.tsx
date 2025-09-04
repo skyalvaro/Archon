@@ -24,7 +24,6 @@ interface NewProjectModalProps {
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenChange, onSuccess }) => {
   const projectNameId = useId();
   const projectDescriptionId = useId();
-  const _githubRepoId = useId();
 
   const [formData, setFormData] = useState<CreateProjectRequest>({
     title: "",

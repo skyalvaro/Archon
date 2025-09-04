@@ -21,6 +21,5 @@ export type {
   ProjectDocs,
   ProjectFeatures,
   ProjectPRD,
-  TaskCounts,
   UpdateProjectRequest,
 } from "./project";

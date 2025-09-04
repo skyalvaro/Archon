@@ -52,13 +52,13 @@ export const DocumentEditor = ({ document, onSave, isDarkMode = false, className
     }
 
     // If content has a markdown field, use it
-    if (document.content && typeof document.content === "object" && document.content.markdown) {
-      return document.content.markdown;
+    if (document.content && typeof document.content === "object" && "markdown" in document.content) {
+      return (document.content as { markdown: string }).markdown;
     }
 
     // If content has a text field, use it
-    if (document.content && typeof document.content === "object" && document.content.text) {
-      return document.content.text;
+    if (document.content && typeof document.content === "object" && "text" in document.content) {
+      return (document.content as { text: string }).text;
     }
 
     // Otherwise, convert the content object to a readable markdown format

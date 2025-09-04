@@ -14,7 +14,7 @@ export const taskKeys = {
 export function useProjectTasks(projectId: string | undefined, enabled = true) {
   const { refetchInterval } = useSmartPolling(8000); // 8 second base interval
 
-  return useQuery({
+  return useQuery<Task[]>({
     queryKey: projectId ? taskKeys.all(projectId) : ["tasks-undefined"],
     queryFn: () => (projectId ? taskService.getTasksByProject(projectId) : Promise.reject("No project ID")),
     enabled: !!projectId && enabled,

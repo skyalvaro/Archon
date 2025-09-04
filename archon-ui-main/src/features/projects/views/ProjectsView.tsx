@@ -14,9 +14,9 @@ import {
   projectKeys,
   useDeleteProject,
   useProjects,
-  useTaskCounts,
   useUpdateProject,
 } from "../hooks/useProjectQueries";
+import { useTaskCounts } from "../tasks/hooks";
 import { TasksTab } from "../tasks/TasksTab";
 import type { Project } from "../types";
 

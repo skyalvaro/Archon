@@ -3,7 +3,7 @@
  * Focused service for task CRUD operations only
  */
 
-import { callAPI, formatValidationErrors, ValidationError } from "../../shared/api";
+import { callAPI, formatZodErrors, ValidationError } from "../../shared/api";
 
 import { validateCreateTask, validateUpdateTask, validateUpdateTaskStatus } from "../schemas";
 import type { CreateTaskRequest, DatabaseTaskStatus, Task, TaskCounts, UpdateTaskRequest } from "../types";
@@ -44,7 +44,7 @@ export const taskService = {
     // Validate input
     const validation = validateCreateTask(taskData);
     if (!validation.success) {
-      throw new ValidationError(formatValidationErrors(validation.error));
+      throw new ValidationError(formatZodErrors(validation.error));
     }
 
     try {
@@ -70,7 +70,7 @@ export const taskService = {
     // Validate input
     const validation = validateUpdateTask(updates);
     if (!validation.success) {
-      throw new ValidationError(formatValidationErrors(validation.error));
+      throw new ValidationError(formatZodErrors(validation.error));
     }
 
     try {
@@ -96,7 +96,7 @@ export const taskService = {
       status: status,
     });
     if (!validation.success) {
-      throw new ValidationError(formatValidationErrors(validation.error));
+      throw new ValidationError(formatZodErrors(validation.error));
     }
 
     try {

@@ -21,7 +21,7 @@ export const projectKeys = {
 export function useProjects() {
   const { refetchInterval } = useSmartPolling(10000); // 10 second base interval
 
-  return useQuery({
+  return useQuery<Project[]>({
     queryKey: projectKeys.lists(),
     queryFn: () => projectService.listProjects(),
     refetchInterval, // Smart interval based on page visibility/focus

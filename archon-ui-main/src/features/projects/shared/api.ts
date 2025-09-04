@@ -49,6 +49,17 @@ export function formatValidationErrors(errors: ValidationErrorObject): string {
   return errors.errors.map((error: ValidationErrorDetail) => `${error.path.join(".")}: ${error.message}`).join(", ");
 }
 
+// Helper to convert Zod errors to ValidationErrorObject format
+export function formatZodErrors(zodError: { issues: Array<{ path: (string | number)[]; message: string }> }): string {
+  const validationErrors: ValidationErrorObject = {
+    errors: zodError.issues.map((issue) => ({
+      path: issue.path.map(String),
+      message: issue.message,
+    })),
+  };
+  return formatValidationErrors(validationErrors);
+}
+
 // Helper function to call FastAPI endpoints directly
 export async function callAPI<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
   try {

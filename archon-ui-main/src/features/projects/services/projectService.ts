@@ -4,7 +4,7 @@
  */
 
 import { validateCreateProject, validateUpdateProject } from "../schemas";
-import { callAPI, formatRelativeTime, formatValidationErrors, ValidationError } from "../shared/api";
+import { callAPI, formatRelativeTime, formatZodErrors, ValidationError } from "../shared/api";
 import type { CreateProjectRequest, Project, ProjectFeatures, UpdateProjectRequest } from "../types";
 
 export const projectService = {
@@ -76,7 +76,7 @@ export const projectService = {
     const validation = validateCreateProject(projectData);
     if (!validation.success) {
       // Validation failed
-      throw new ValidationError(formatValidationErrors(validation.error));
+      throw new ValidationError(formatZodErrors(validation.error));
     }
     // Validation passed
 
@@ -115,7 +115,7 @@ export const projectService = {
     const validation = validateUpdateProject(updates);
     if (!validation.success) {
       // Validation failed
-      throw new ValidationError(formatValidationErrors(validation.error));
+      throw new ValidationError(formatZodErrors(validation.error));
     }
 
     try {

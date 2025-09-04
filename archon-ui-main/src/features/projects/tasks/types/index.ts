@@ -13,6 +13,7 @@ export type {
   DatabaseTaskStatus,
   Task,
   TaskCodeExample,
+  TaskCounts,
   TaskPriority,
   TaskSource,
   UpdateTaskRequest,

@@ -84,12 +84,6 @@ export interface UpdateProjectRequest {
 }
 
 // Utility types
-export interface TaskCounts {
-  todo: number;
-  doing: number;
-  done: number;
-}
-
 export interface MCPToolResponse<T = unknown> {
   success: boolean;
   data?: T;

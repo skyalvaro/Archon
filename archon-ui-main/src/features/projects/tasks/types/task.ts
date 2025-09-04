@@ -13,6 +13,13 @@ export type DatabaseTaskStatus = "todo" | "doing" | "review" | "done";
 // Assignee type - simplified to predefined options
 export type Assignee = "User" | "Archon" | "AI IDE Agent";
 
+// Task counts for project overview
+export interface TaskCounts {
+  todo: number;
+  doing: number;
+  done: number;
+}
+
 // Task source and code example types (replacing any)
 export type TaskSource =
   | {
