@@ -25,13 +25,14 @@ export function useProjects() {
     queryKey: projectKeys.lists(),
     queryFn: () => projectService.listProjects(),
     refetchInterval, // Smart interval based on page visibility/focus
+    refetchOnWindowFocus: false, // Avoid double refetch with polling
     staleTime: 15000, // Consider data stale after 15 seconds
   });
 }
 
 // Fetch task counts for all projects
 export function useTaskCounts() {
-  return useQuery({
+  return useQuery<Awaited<ReturnType<typeof taskService.getTaskCountsForAllProjects>>>({
     queryKey: projectKeys.taskCounts(),
     queryFn: () => taskService.getTaskCountsForAllProjects(),
     refetchInterval: false, // Don't poll, only refetch manually
@@ -61,11 +62,12 @@ export function useCreateProject() {
       await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
 
       // Snapshot the previous value
-      const previousProjects = queryClient.getQueryData(projectKeys.lists());
+      const previousProjects = queryClient.getQueryData<Project[]>(projectKeys.lists());
 
       // Create optimistic project with temporary ID
+      const tempId = `temp-${Date.now()}`;
       const optimisticProject: Project = {
-        id: `temp-${Date.now()}`, // Temporary ID until real one comes back
+        id: tempId, // Temporary ID until real one comes back
         title: newProjectData.title,
         description: newProjectData.description,
         github_repo: newProjectData.github_repo,
@@ -85,7 +87,7 @@ export function useCreateProject() {
         return [optimisticProject, ...old];
       });
 
-      return { previousProjects };
+      return { previousProjects, tempId };
     },
     onError: (error, variables, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -98,16 +100,16 @@ export function useCreateProject() {
 
       showToast(`Failed to create project: ${errorMessage}`, "error");
     },
-    onSuccess: (response) => {
+    onSuccess: (response, _variables, context) => {
       // Extract the actual project from the response
       const newProject = response.project;
 
       // Replace optimistic project with real one from server
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
         if (!old) return [newProject];
-        // Replace temp project with real one
+        // Replace only the specific temp project with real one
         return old
-          .map((project) => (project.id.startsWith("temp-") ? newProject : project))
+          .map((project) => (project.id === context?.tempId ? newProject : project))
           .filter(
             (project, index, self) =>
               // Remove any duplicates just in case
@@ -137,7 +139,7 @@ export function useUpdateProject() {
       await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
 
       // Snapshot the previous value
-      const previousProjects = queryClient.getQueryData(projectKeys.lists());
+      const previousProjects = queryClient.getQueryData<Project[]>(projectKeys.lists());
 
       // Optimistically update
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
@@ -189,7 +191,7 @@ export function useDeleteProject() {
       await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
 
       // Snapshot the previous value
-      const previousProjects = queryClient.getQueryData(projectKeys.lists());
+      const previousProjects = queryClient.getQueryData<Project[]>(projectKeys.lists());
 
       // Optimistically remove the project
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
@@ -212,8 +214,8 @@ export function useDeleteProject() {
     },
     onSuccess: (_, projectId) => {
       // Don't refetch on success - trust optimistic update
-      // Only remove the specific project's detail data
-      queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) });
+      // Only remove the specific project's detail data (including nested keys)
+      queryClient.removeQueries({ queryKey: projectKeys.detail(projectId), exact: false });
       showToast("Project deleted successfully", "success");
     },
   });

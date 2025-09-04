@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSmartPolling } from "../../../ui/hooks";
 import { useToast } from "../../../ui/hooks/useToast";
+import { projectKeys } from "../../hooks/useProjectQueries";
 import { taskService } from "../services";
 import type { CreateTaskRequest, Task, UpdateTaskRequest } from "../types";
 
 // Query keys factory for tasks
 export const taskKeys = {
   all: (projectId: string) => ["projects", projectId, "tasks"] as const,
-  counts: () => ["taskCounts"] as const,
 };
 
 // Fetch tasks for a specific project
@@ -81,7 +81,7 @@ export function useCreateTask() {
               index === self.findIndex((t) => t.id === task.id),
           );
       });
-      queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.taskCounts() });
       showToast("Task created successfully", "success");
     },
     onSettled: (_data, _error, variables) => {
@@ -124,12 +124,12 @@ export function useUpdateTask(projectId: string) {
       showToast(`Failed to update task: ${errorMessage}`, "error");
       // Refetch on error to ensure consistency
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.taskCounts() });
     },
     onSuccess: (_, { updates }) => {
       // Only invalidate counts if status changed (which affects counts)
       if (updates.status) {
-        queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
+        queryClient.invalidateQueries({ queryKey: projectKeys.taskCounts() });
         // Show toast for significant status changes
         showToast(`Task moved to ${updates.status}`, "success");
       }
@@ -174,17 +174,7 @@ export function useDeleteTask(projectId: string) {
     },
     onSettled: () => {
       // Always refetch counts after deletion
-      queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.taskCounts() });
     },
-  });
-}
-
-// Fetch task counts for all projects
-export function useTaskCounts() {
-  return useQuery({
-    queryKey: taskKeys.counts(),
-    queryFn: () => taskService.getTaskCountsForAllProjects(),
-    refetchInterval: false, // Don't poll, only refetch manually
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 }
