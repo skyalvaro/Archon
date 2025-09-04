@@ -1,13 +1,8 @@
-import React from "react";
-import { User, Bot } from "lucide-react";
-import type { Assignee } from "../types";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-} from "../../../ui/primitives";
+import { Bot, User } from "lucide-react";
+import type React from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../../../ui/primitives";
 import { cn } from "../../../ui/primitives/styles";
+import type { Assignee } from "../types";
 
 interface TaskAssigneeProps {
   assignee: Assignee;
@@ -63,11 +58,7 @@ const getAssigneeStyles = (assigneeName: Assignee) => {
   }
 };
 
-export const TaskAssignee: React.FC<TaskAssigneeProps> = ({
-  assignee,
-  onAssigneeChange,
-  isLoading = false,
-}) => {
+export const TaskAssignee: React.FC<TaskAssigneeProps> = ({ assignee, onAssigneeChange, isLoading = false }) => {
   const styles = getAssigneeStyles(assignee);
 
   // If no change handler, just show a static display
@@ -85,19 +76,13 @@ export const TaskAssignee: React.FC<TaskAssigneeProps> = ({
         >
           {getAssigneeIcon(assignee, "md")}
         </div>
-        <span className="text-gray-600 dark:text-gray-400 text-xs">
-          {assignee}
-        </span>
+        <span className="text-gray-600 dark:text-gray-400 text-xs">{assignee}</span>
       </div>
     );
   }
 
   return (
-    <Select
-      value={assignee}
-      onValueChange={(value) => onAssigneeChange(value as Assignee)}
-      disabled={isLoading}
-    >
+    <Select value={assignee} onValueChange={(value) => onAssigneeChange(value as Assignee)} disabled={isLoading}>
       <SelectTrigger
         className={cn(
           "h-auto py-0.5 px-1.5 gap-1.5",
@@ -144,9 +129,7 @@ export const TaskAssignee: React.FC<TaskAssigneeProps> = ({
                 >
                   {getAssigneeIcon(option, "md")}
                 </div>
-                <span className={cn("text-sm", optionStyles.color)}>
-                  {option}
-                </span>
+                <span className={cn("text-sm", optionStyles.color)}>{option}</span>
               </div>
             </SelectItem>
           );

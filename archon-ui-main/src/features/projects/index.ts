@@ -8,15 +8,14 @@
  * - Project dashboard and routing
  */
 
-// Views
-export { ProjectsView } from './views/ProjectsView';
-
 // Components
-export * from './components';
+export * from "./components";
+export * from "./documents";
 
 // Hooks
-export * from './hooks';
+export * from "./hooks";
 
 // Sub-features
-export * from './tasks';
-export * from './documents';
+export * from "./tasks";
+// Views
+export { ProjectsView } from "./views/ProjectsView";

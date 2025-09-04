@@ -1,7 +1,7 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
-import { Button } from '../../ui/primitives/button';
+import { motion } from "framer-motion";
+import { Plus } from "lucide-react";
+import type React from "react";
+import { Button } from "../../ui/primitives/button";
 
 interface ProjectHeaderProps {
   onNewProject: () => void;
@@ -44,11 +44,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onNewProject }) =>
         />
         Projects
       </motion.h1>
-      <Button
-        onClick={onNewProject}
-        variant="cyan"
-        className="shadow-lg shadow-cyan-500/20"
-      >
+      <Button onClick={onNewProject} variant="cyan" className="shadow-lg shadow-cyan-500/20">
         <Plus className="w-4 h-4 mr-2" />
         New Project
       </Button>

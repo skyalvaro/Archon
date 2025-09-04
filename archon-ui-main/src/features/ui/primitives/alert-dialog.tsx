@@ -1,5 +1,5 @@
-import React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
+import React from "react";
 import { cn, glassmorphism } from "./styles";
 
 // Root
@@ -76,35 +76,23 @@ export const AlertDialogContent = React.forwardRef<
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 // Header
-export const AlertDialogHeader = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "flex flex-col space-y-2 text-center sm:text-left",
-      className,
-    )}
-    {...props}
-  />
-));
+export const AlertDialogHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
+  ),
+);
 AlertDialogHeader.displayName = "AlertDialogHeader";
 
 // Footer
-export const AlertDialogFooter = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      className,
-    )}
-    {...props}
-  />
-));
+export const AlertDialogFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+      {...props}
+    />
+  ),
+);
 AlertDialogFooter.displayName = "AlertDialogFooter";
 
 // Title
@@ -114,11 +102,7 @@ export const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn(
-      "text-lg font-semibold",
-      "text-gray-900 dark:text-gray-100",
-      className,
-    )}
+    className={cn("text-lg font-semibold", "text-gray-900 dark:text-gray-100", className)}
     {...props}
   />
 ));
@@ -135,23 +119,18 @@ export const AlertDialogDescription = React.forwardRef<
     {...props}
   />
 ));
-AlertDialogDescription.displayName =
-  AlertDialogPrimitive.Description.displayName;
+AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 
 // Action (main CTA button)
 export const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Action ref={ref} className={className} {...props} />
-));
+>(({ className, ...props }, ref) => <AlertDialogPrimitive.Action ref={ref} className={className} {...props} />);
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
 
 // Cancel button
 export const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
->(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Cancel ref={ref} className={className} {...props} />
-));
+>(({ className, ...props }, ref) => <AlertDialogPrimitive.Cancel ref={ref} className={className} {...props} />);
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName;

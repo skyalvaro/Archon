@@ -1,6 +1,6 @@
 /**
  * Project Hooks
- * 
+ *
  * All React hooks for the projects feature.
  * Includes:
  * - Data fetching hooks (useProjects, useTasks, useDocuments)
@@ -11,10 +11,10 @@
 
 export {
   projectKeys,
+  useCreateProject,
+  useDeleteProject,
+  useProjectFeatures,
   useProjects,
   useTaskCounts,
-  useProjectFeatures,
-  useCreateProject,
   useUpdateProject,
-  useDeleteProject,
-} from './useProjectQueries';
+} from "./useProjectQueries";

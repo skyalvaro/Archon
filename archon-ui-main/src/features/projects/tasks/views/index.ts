@@ -1,2 +1,2 @@
-export { BoardView } from './BoardView';
-export { TableView } from './TableView';
+export { BoardView } from "./BoardView";
+export { TableView } from "./TableView";

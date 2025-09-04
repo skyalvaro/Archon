@@ -33,11 +33,7 @@ export interface UseTaskEditorReturn {
   projectFeatures: unknown[];
 
   // Actions
-  saveTask: (
-    localTask: Partial<Task> | null,
-    editingTask: Task | null,
-    onSuccess?: () => void,
-  ) => void;
+  saveTask: (localTask: Partial<Task> | null, editingTask: Task | null, onSuccess?: () => void) => void;
 
   // Loading states
   isLoadingFeatures: boolean;

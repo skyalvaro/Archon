@@ -1,10 +1,10 @@
 /**
  * Task ordering utilities that ensure integer precision
- * 
+ *
  * Following alpha principles: detailed errors and no silent failures
  */
 
-import type { Task } from '../types';
+import type { Task } from "../types";
 
 const ORDER_INCREMENT = 1000; // Large increment to avoid precision issues
 const MAX_ORDER = Number.MAX_SAFE_INTEGER - ORDER_INCREMENT;
@@ -19,8 +19,8 @@ export function getDefaultTaskOrder(existingTasks: Task[]): number {
   }
 
   // Find the maximum order in the existing tasks
-  const maxOrder = Math.max(...existingTasks.map(task => task.task_order || 0));
-  
+  const maxOrder = Math.max(...existingTasks.map((task) => task.task_order || 0));
+
   // Ensure we don't exceed safe integer limits
   if (maxOrder >= MAX_ORDER) {
     throw new Error(`Task order limit exceeded. Maximum safe order is ${MAX_ORDER}, got ${maxOrder}`);
@@ -35,7 +35,7 @@ export function getDefaultTaskOrder(existingTasks: Task[]): number {
  */
 export function getInsertTaskOrder(beforeTask: Task | null, afterTask: Task | null): number {
   const beforeOrder = beforeTask?.task_order || 0;
-  const afterOrder = afterTask?.task_order || (beforeOrder + ORDER_INCREMENT * 2);
+  const afterOrder = afterTask?.task_order || beforeOrder + ORDER_INCREMENT * 2;
 
   // If there's enough space between tasks, insert in the middle
   const gap = afterOrder - beforeOrder;
@@ -52,13 +52,9 @@ export function getInsertTaskOrder(beforeTask: Task | null, afterTask: Task | nu
  * Reorder a task within the same status column
  * Ensures integer precision and proper spacing
  */
-export function getReorderTaskOrder(
-  tasks: Task[], 
-  taskId: string, 
-  newIndex: number
-): number {
-  const filteredTasks = tasks.filter(t => t.id !== taskId);
-  
+export function getReorderTaskOrder(tasks: Task[], taskId: string, newIndex: number): number {
+  const filteredTasks = tasks.filter((t) => t.id !== taskId);
+
   if (filteredTasks.length === 0) {
     return ORDER_INCREMENT;
   }
@@ -82,7 +78,7 @@ export function getReorderTaskOrder(
   // Moving to middle position
   const beforeTask = sortedTasks[newIndex - 1];
   const afterTask = sortedTasks[newIndex];
-  
+
   return getInsertTaskOrder(beforeTask, afterTask);
 }
 

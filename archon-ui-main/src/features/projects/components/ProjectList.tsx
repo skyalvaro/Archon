@@ -1,9 +1,9 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { Button } from '../../ui/primitives';
-import { ProjectCard } from './ProjectCard';
-import type { Project } from '../types';
+import { motion } from "framer-motion";
+import { AlertCircle, Loader2 } from "lucide-react";
+import React from "react";
+import { Button } from "../../ui/primitives";
+import type { Project } from "../types";
+import { ProjectCard } from "./ProjectCard";
 
 interface ProjectListProps {
   projects: Project[];
@@ -11,11 +11,9 @@ interface ProjectListProps {
   taskCounts: Record<string, { todo: number; doing: number; done: number }>;
   isLoading: boolean;
   error: Error | null;
-  copiedProjectId: string | null;
   onProjectSelect: (project: Project) => void;
   onPinProject: (e: React.MouseEvent, projectId: string) => void;
   onDeleteProject: (e: React.MouseEvent, projectId: string, title: string) => void;
-  onCopyProjectId: (e: React.MouseEvent, projectId: string) => void;
   onRetry: () => void;
 }
 
@@ -34,11 +32,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   taskCounts,
   isLoading,
   error,
-  copiedProjectId,
   onProjectSelect,
   onPinProject,
   onDeleteProject,
-  onCopyProjectId,
   onRetry,
 }) => {
   // Sort projects - pinned first, then alphabetically
@@ -56,9 +52,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-purple-500 mx-auto mb-4 animate-spin" />
-            <p className="text-gray-600 dark:text-gray-400">
-              Loading your projects...
-            </p>
+            <p className="text-gray-600 dark:text-gray-400">Loading your projects...</p>
           </div>
         </div>
       </motion.div>
@@ -71,9 +65,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600 dark:text-red-400 mb-4">
-              {error.message || "Failed to load projects"}
-            </p>
+            <p className="text-red-600 dark:text-red-400 mb-4">{error.message || "Failed to load projects"}</p>
             <Button onClick={onRetry} variant="default">
               Try Again
             </Button>
@@ -110,8 +102,6 @@ export const ProjectList: React.FC<ProjectListProps> = ({
               onSelect={onProjectSelect}
               onPin={onPinProject}
               onDelete={onDeleteProject}
-              onCopyId={onCopyProjectId}
-              copiedProjectId={copiedProjectId}
             />
           ))}
         </div>

@@ -5,9 +5,9 @@
  */
 
 export { useDocumentActions } from "./useDocumentActions";
-export { 
-  useProjectDocuments,
+export {
   useCreateDocument,
+  useDeleteDocument,
+  useProjectDocuments,
   useUpdateDocument,
-  useDeleteDocument
 } from "./useDocumentQueries";

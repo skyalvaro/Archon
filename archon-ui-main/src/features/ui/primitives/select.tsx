@@ -1,6 +1,6 @@
-import React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { ChevronDown, Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
+import React from "react";
 import { cn } from "./styles";
 
 // Select Root - just re-export
@@ -73,9 +73,7 @@ export const SelectContent = React.forwardRef<
       sideOffset={5}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">
-        {children}
-      </SelectPrimitive.Viewport>
+      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));

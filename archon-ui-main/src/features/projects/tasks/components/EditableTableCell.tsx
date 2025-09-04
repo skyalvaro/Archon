@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Input, Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../../../ui/primitives';
-import { cn } from '../../../ui/primitives/styles';
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../ui/primitives";
+import { cn } from "../../../ui/primitives/styles";
 
 interface EditableTableCellProps {
   value: string;
   onSave: (value: string) => Promise<void>;
-  type?: 'text' | 'select' | 'status' | 'assignee';
+  type?: "text" | "select" | "status" | "assignee";
   options?: readonly string[];
   placeholder?: string;
   className?: string;
@@ -13,19 +14,19 @@ interface EditableTableCellProps {
 }
 
 // Status options for the status select
-const STATUS_OPTIONS = ['todo', 'doing', 'review', 'done'] as const;
+const STATUS_OPTIONS = ["todo", "doing", "review", "done"] as const;
 
 // Assignee options
-const ASSIGNEE_OPTIONS = ['User', 'Archon', 'AI IDE Agent'] as const;
+const ASSIGNEE_OPTIONS = ["User", "Archon", "AI IDE Agent"] as const;
 
-export const EditableTableCell = ({ 
-  value, 
-  onSave, 
-  type = 'text',
+export const EditableTableCell = ({
+  value,
+  onSave,
+  type = "text",
   options,
-  placeholder = 'Click to edit',
+  placeholder = "Click to edit",
   className,
-  isUpdating = false
+  isUpdating = false,
 }: EditableTableCellProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
@@ -56,7 +57,7 @@ export const EditableTableCell = ({
       await onSave(editValue);
       setIsEditing(false);
     } catch (error) {
-      console.error('Failed to save:', error);
+      console.error("Failed to save:", error);
       // Reset on error
       setEditValue(value);
     } finally {
@@ -70,45 +71,48 @@ export const EditableTableCell = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       handleSave();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       e.preventDefault();
       handleCancel();
     }
   };
 
   // Get the appropriate options based on type
-  const selectOptions = type === 'status' 
-    ? STATUS_OPTIONS 
-    : type === 'assignee' 
-    ? ASSIGNEE_OPTIONS 
-    : options || [];
+  const selectOptions = type === "status" ? STATUS_OPTIONS : type === "assignee" ? ASSIGNEE_OPTIONS : options || [];
 
   if (!isEditing) {
     return (
-      <div 
+      // biome-ignore lint/a11y/useSemanticElements: Table cell transforms into input on click - can't use semantic button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => !isUpdating && setIsEditing(true)}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && !isUpdating) {
+            e.preventDefault();
+            setIsEditing(true);
+          }
+        }}
         className={cn(
           "cursor-pointer px-2 py-1 min-h-[28px]",
           "hover:bg-gray-100/50 dark:hover:bg-gray-800/50",
           "rounded transition-colors",
           "flex items-center",
           isUpdating && "opacity-50 cursor-not-allowed",
-          className
+          className,
         )}
         title={value || placeholder}
       >
-        <span className={cn(!value && "text-gray-400 italic")}>
-          {value || placeholder}
-        </span>
+        <span className={cn(!value && "text-gray-400 italic")}>{value || placeholder}</span>
       </div>
     );
   }
 
   // Render select for select types
-  if (type === 'select' || type === 'status' || type === 'assignee') {
+  if (type === "select" || type === "status" || type === "assignee") {
     return (
       <Select
         value={editValue}
@@ -123,12 +127,12 @@ export const EditableTableCell = ({
         }}
         disabled={isSaving}
       >
-        <SelectTrigger 
+        <SelectTrigger
           className={cn(
             "w-full h-7 text-sm",
             "border-cyan-400 dark:border-cyan-600",
             "focus:ring-1 focus:ring-cyan-400",
-            className
+            className,
           )}
           onKeyDown={handleKeyDown}
         >
@@ -159,7 +163,7 @@ export const EditableTableCell = ({
         "h-7 text-sm",
         "border-cyan-400 dark:border-cyan-600",
         "focus:ring-1 focus:ring-cyan-400",
-        className
+        className,
       )}
     />
   );

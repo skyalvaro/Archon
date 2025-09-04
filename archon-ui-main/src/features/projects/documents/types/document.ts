@@ -5,16 +5,16 @@
  */
 
 // Document content can be structured in various ways
-export type DocumentContent = 
-  | string  // Plain text or markdown
-  | { markdown: string }  // Markdown content
-  | { text: string }  // Text content
-  | { 
+export type DocumentContent =
+  | string // Plain text or markdown
+  | { markdown: string } // Markdown content
+  | { text: string } // Text content
+  | {
       markdown?: string;
       text?: string;
-      [key: string]: unknown;  // Allow other fields but with known type
-    }  // Mixed content
-  | Record<string, unknown>;  // Generic object content
+      [key: string]: unknown; // Allow other fields but with known type
+    } // Mixed content
+  | Record<string, unknown>; // Generic object content
 
 export interface ProjectDocument {
   id: string;
@@ -25,16 +25,16 @@ export interface ProjectDocument {
   created_at?: string;
 }
 
-export type DocumentType = 
-  | 'prp' 
-  | 'technical' 
-  | 'business' 
-  | 'meeting_notes' 
-  | 'spec' 
-  | 'design' 
-  | 'note' 
-  | 'api' 
-  | 'guide';
+export type DocumentType =
+  | "prp"
+  | "technical"
+  | "business"
+  | "meeting_notes"
+  | "spec"
+  | "design"
+  | "note"
+  | "api"
+  | "guide";
 
 export interface DocumentCardProps {
   document: ProjectDocument;

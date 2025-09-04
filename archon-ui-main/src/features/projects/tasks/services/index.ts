@@ -5,4 +5,4 @@
  * Part of the vertical slice architecture migration.
  */
 
-export { taskService } from './taskService';
+export { taskService } from "./taskService";

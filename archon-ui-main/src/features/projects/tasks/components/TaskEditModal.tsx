@@ -1,30 +1,26 @@
-import { memo, useCallback, useState, useEffect } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
+  Button,
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from "../../../ui/primitives";
-import { Button } from "../../../ui/primitives";
-import {
-  Input,
-  TextArea,
-  Label,
   FormField,
   FormGrid,
-} from "../../../ui/primitives";
-import {
+  Input,
+  Label,
   Select,
-  SelectTrigger,
   SelectContent,
   SelectItem,
+  SelectTrigger,
   SelectValue,
+  TextArea,
 } from "../../../ui/primitives";
-import { FeatureSelect } from "./FeatureSelect";
-import { Priority } from "./TaskPriority";
-import type { Task, Assignee } from "../types";
 import { useTaskEditor } from "../hooks";
+import type { Assignee, Task } from "../types";
+import { FeatureSelect } from "./FeatureSelect";
+import type { Priority } from "./TaskPriority";
 
 interface TaskEditModalProps {
   isModalOpen: boolean;
@@ -38,23 +34,11 @@ interface TaskEditModalProps {
 const ASSIGNEE_OPTIONS = ["User", "Archon", "AI IDE Agent"] as const;
 
 export const TaskEditModal = memo(
-  ({
-    isModalOpen,
-    editingTask,
-    projectId,
-    onClose,
-    onSaved,
-    onOpenChange,
-  }: TaskEditModalProps) => {
+  ({ isModalOpen, editingTask, projectId, onClose, onSaved, onOpenChange }: TaskEditModalProps) => {
     const [localTask, setLocalTask] = useState<Partial<Task> | null>(null);
 
     // Use business logic hook
-    const {
-      projectFeatures,
-      saveTask,
-      isLoadingFeatures,
-      isSaving: isSavingTask,
-    } = useTaskEditor(projectId);
+    const { projectFeatures, saveTask, isLoadingFeatures, isSaving: isSavingTask } = useTaskEditor(projectId);
 
     // Sync local state with editingTask when it changes
     useEffect(() => {
@@ -99,15 +83,10 @@ export const TaskEditModal = memo(
     }, [onClose]);
 
     return (
-      <Dialog
-        open={isModalOpen}
-        onOpenChange={onOpenChange || ((open) => !open && onClose())}
-      >
+      <Dialog open={isModalOpen} onOpenChange={onOpenChange || ((open) => !open && onClose())}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingTask?.id ? "Edit Task" : "New Task"}
-            </DialogTitle>
+            <DialogTitle>{editingTask?.id ? "Edit Task" : "New Task"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -136,11 +115,7 @@ export const TaskEditModal = memo(
                 <Select
                   value={localTask?.status || "todo"}
                   onValueChange={(value) =>
-                    setLocalTask((prev) =>
-                      prev
-                        ? { ...prev, status: value as Task["status"] }
-                        : null,
-                    )
+                    setLocalTask((prev) => (prev ? { ...prev, status: value as Task["status"] } : null))
                   }
                 >
                   <SelectTrigger className="w-full">
@@ -158,11 +133,9 @@ export const TaskEditModal = memo(
               <FormField>
                 <Label>Priority</Label>
                 <Select
-                  value={(localTask as any)?.priority || "medium"}
+                  value={(localTask as Task & { priority?: Priority })?.priority || "medium"}
                   onValueChange={(value) =>
-                    setLocalTask((prev) =>
-                      prev ? { ...prev, priority: value as Priority } : null,
-                    )
+                    setLocalTask((prev) => (prev ? { ...prev, priority: value as Priority } : null))
                   }
                 >
                   <SelectTrigger className="w-full">
@@ -184,9 +157,7 @@ export const TaskEditModal = memo(
                 <Select
                   value={localTask?.assignee || "User"}
                   onValueChange={(value) =>
-                    setLocalTask((prev) =>
-                      prev ? { ...prev, assignee: value as Assignee } : null,
-                    )
+                    setLocalTask((prev) => (prev ? { ...prev, assignee: value as Assignee } : null))
                   }
                 >
                   <SelectTrigger className="w-full">
@@ -217,11 +188,7 @@ export const TaskEditModal = memo(
           </div>
 
           <DialogFooter>
-            <Button
-              onClick={handleClose}
-              variant="outline"
-              disabled={isSavingTask}
-            >
+            <Button onClick={handleClose} variant="outline" disabled={isSavingTask}>
               Cancel
             </Button>
             <Button

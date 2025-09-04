@@ -1,26 +1,26 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectService, taskService } from '../services';
-import type { Project, CreateProjectRequest, UpdateProjectRequest } from '../types';
-import { useToast } from '../../../contexts/ToastContext';
-import { useSmartPolling } from '../../ui/hooks';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "../../../contexts/ToastContext";
+import { useSmartPolling } from "../../ui/hooks";
+import { projectService, taskService } from "../services";
+import type { CreateProjectRequest, Project, UpdateProjectRequest } from "../types";
 
 // Query keys factory for better organization
 export const projectKeys = {
-  all: ['projects'] as const,
-  lists: () => [...projectKeys.all, 'list'] as const,
+  all: ["projects"] as const,
+  lists: () => [...projectKeys.all, "list"] as const,
   list: (filters?: unknown) => [...projectKeys.lists(), filters] as const,
-  details: () => [...projectKeys.all, 'detail'] as const,
+  details: () => [...projectKeys.all, "detail"] as const,
   detail: (id: string) => [...projectKeys.details(), id] as const,
-  tasks: (projectId: string) => [...projectKeys.detail(projectId), 'tasks'] as const,
-  taskCounts: () => ['taskCounts'] as const,
-  features: (projectId: string) => [...projectKeys.detail(projectId), 'features'] as const,
-  documents: (projectId: string) => [...projectKeys.detail(projectId), 'documents'] as const,
+  tasks: (projectId: string) => [...projectKeys.detail(projectId), "tasks"] as const,
+  taskCounts: () => ["taskCounts"] as const,
+  features: (projectId: string) => [...projectKeys.detail(projectId), "features"] as const,
+  documents: (projectId: string) => [...projectKeys.detail(projectId), "documents"] as const,
 };
 
 // Fetch all projects with smart polling
 export function useProjects() {
   const { refetchInterval } = useSmartPolling(10000); // 10 second base interval
-  
+
   return useQuery({
     queryKey: projectKeys.lists(),
     queryFn: () => projectService.listProjects(),
@@ -42,8 +42,8 @@ export function useTaskCounts() {
 // Fetch project features
 export function useProjectFeatures(projectId: string | undefined) {
   return useQuery({
-    queryKey: projectKeys.features(projectId!),
-    queryFn: () => projectService.getProjectFeatures(projectId!),
+    queryKey: projectId ? projectKeys.features(projectId) : ["features-undefined"],
+    queryFn: () => (projectId ? projectService.getProjectFeatures(projectId) : Promise.reject("No project ID")),
     enabled: !!projectId,
     staleTime: 30000, // Cache for 30 seconds
   });
@@ -55,16 +55,15 @@ export function useCreateProject() {
   const { showToast } = useToast();
 
   return useMutation({
-    mutationFn: (projectData: CreateProjectRequest) => 
-      projectService.createProject(projectData),
+    mutationFn: (projectData: CreateProjectRequest) => projectService.createProject(projectData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-      showToast('Project created successfully!', 'success');
+      showToast("Project created successfully!", "success");
     },
     onError: (error, variables) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to create project:', error, { variables });
-      showToast(`Failed to create project: ${errorMessage}`, 'error');
+      console.error("Failed to create project:", error, { variables });
+      showToast(`Failed to create project: ${errorMessage}`, "error");
     },
   });
 }
@@ -87,38 +86,36 @@ export function useUpdateProject() {
       // Optimistically update
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
         if (!old) return old;
-        
+
         // If pinning a project, unpin all others first
         if (updates.pinned === true) {
-          return old.map(p => ({
+          return old.map((p) => ({
             ...p,
-            pinned: p.id === projectId ? true : false
+            pinned: p.id === projectId,
           }));
         }
-        
-        return old.map(p => 
-          p.id === projectId ? { ...p, ...updates } : p
-        );
+
+        return old.map((p) => (p.id === projectId ? { ...p, ...updates } : p));
       });
 
       return { previousProjects };
     },
-    onError: (err, variables, context) => {
+    onError: (_err, _variables, context) => {
       // Rollback on error
       if (context?.previousProjects) {
         queryClient.setQueryData(projectKeys.lists(), context.previousProjects);
       }
-      showToast('Failed to update project', 'error');
+      showToast("Failed to update project", "error");
     },
     onSuccess: (data, variables) => {
       // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-      
+
       if (variables.updates.pinned !== undefined) {
         const message = variables.updates.pinned
           ? `Pinned "${data.title}" as default project`
           : `Removed "${data.title}" from default selection`;
-        showToast(message, 'info');
+        showToast(message, "info");
       }
     },
   });
@@ -141,27 +138,27 @@ export function useDeleteProject() {
       // Optimistically remove the project
       queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
         if (!old) return old;
-        return old.filter(project => project.id !== projectId);
+        return old.filter((project) => project.id !== projectId);
       });
 
       return { previousProjects };
     },
     onError: (error, projectId, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to delete project:', error, { projectId });
-      
+      console.error("Failed to delete project:", error, { projectId });
+
       // Rollback on error
       if (context?.previousProjects) {
         queryClient.setQueryData(projectKeys.lists(), context.previousProjects);
       }
-      
-      showToast(`Failed to delete project: ${errorMessage}`, 'error');
+
+      showToast(`Failed to delete project: ${errorMessage}`, "error");
     },
     onSuccess: (_, projectId) => {
       // Don't refetch on success - trust optimistic update
       // Only remove the specific project's detail data
       queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) });
-      showToast('Project deleted successfully', 'success');
+      showToast("Project deleted successfully", "success");
     },
   });
 }

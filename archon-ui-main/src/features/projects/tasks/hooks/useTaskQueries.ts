@@ -1,22 +1,22 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { taskService } from '../services';
-import { useToast } from '../../../../contexts/ToastContext';
-import { useSmartPolling } from '../../../ui/hooks';
-import type { Task, CreateTaskRequest, UpdateTaskRequest } from '../types';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "../../../../contexts/ToastContext";
+import { useSmartPolling } from "../../../ui/hooks";
+import { taskService } from "../services";
+import type { CreateTaskRequest, Task, UpdateTaskRequest } from "../types";
 
 // Query keys factory for tasks
 export const taskKeys = {
-  all: (projectId: string) => ['projects', projectId, 'tasks'] as const,
-  counts: () => ['taskCounts'] as const,
+  all: (projectId: string) => ["projects", projectId, "tasks"] as const,
+  counts: () => ["taskCounts"] as const,
 };
 
 // Fetch tasks for a specific project
 export function useProjectTasks(projectId: string | undefined, enabled = true) {
   const { refetchInterval } = useSmartPolling(8000); // 8 second base interval
-  
+
   return useQuery({
-    queryKey: projectId ? taskKeys.all(projectId) : ['tasks-undefined'],
-    queryFn: () => projectId ? taskService.getTasksByProject(projectId) : Promise.reject('No project ID'),
+    queryKey: projectId ? taskKeys.all(projectId) : ["tasks-undefined"],
+    queryFn: () => (projectId ? taskService.getTasksByProject(projectId) : Promise.reject("No project ID")),
     enabled: !!projectId && enabled,
     refetchInterval, // Smart interval based on page visibility/focus
     staleTime: 2000, // Consider data stale after 2 seconds
@@ -32,14 +32,16 @@ export function useCreateTask() {
     mutationFn: (taskData: CreateTaskRequest) => taskService.createTask(taskData),
     onSuccess: (_data, variables) => {
       // Invalidate tasks for the project
-      queryClient.invalidateQueries({ queryKey: taskKeys.all(variables.project_id) });
+      queryClient.invalidateQueries({
+        queryKey: taskKeys.all(variables.project_id),
+      });
       queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
-      showToast('Task created successfully', 'success');
+      showToast("Task created successfully", "success");
     },
     onError: (error, variables) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to create task:', error, { variables });
-      showToast(`Failed to create task: ${errorMessage}`, 'error');
+      console.error("Failed to create task:", error, { variables });
+      showToast(`Failed to create task: ${errorMessage}`, "error");
     },
   });
 }
@@ -62,21 +64,19 @@ export function useUpdateTask(projectId: string) {
       // Optimistically update
       queryClient.setQueryData(taskKeys.all(projectId), (old: Task[] | undefined) => {
         if (!old) return old;
-        return old.map((task: Task) =>
-          task.id === taskId ? { ...task, ...updates } : task
-        );
+        return old.map((task: Task) => (task.id === taskId ? { ...task, ...updates } : task));
       });
 
       return { previousTasks };
     },
     onError: (error, variables, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to update task:', error, { variables });
+      console.error("Failed to update task:", error, { variables });
       // Rollback on error
       if (context?.previousTasks) {
         queryClient.setQueryData(taskKeys.all(projectId), context.previousTasks);
       }
-      showToast(`Failed to update task: ${errorMessage}`, 'error');
+      showToast(`Failed to update task: ${errorMessage}`, "error");
       // Refetch on error to ensure consistency
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
@@ -115,15 +115,15 @@ export function useDeleteTask(projectId: string) {
     },
     onError: (error, taskId, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to delete task:', error, { taskId });
+      console.error("Failed to delete task:", error, { taskId });
       // Rollback on error
       if (context?.previousTasks) {
         queryClient.setQueryData(taskKeys.all(projectId), context.previousTasks);
       }
-      showToast(`Failed to delete task: ${errorMessage}`, 'error');
+      showToast(`Failed to delete task: ${errorMessage}`, "error");
     },
     onSuccess: () => {
-      showToast('Task deleted successfully', 'success');
+      showToast("Task deleted successfully", "success");
     },
     onSettled: () => {
       // Always refetch counts after deletion
@@ -134,7 +134,6 @@ export function useDeleteTask(projectId: string) {
 
 // Fetch task counts for all projects
 export function useTaskCounts() {
-  
   return useQuery({
     queryKey: taskKeys.counts(),
     queryFn: () => taskService.getTaskCountsForAllProjects(),

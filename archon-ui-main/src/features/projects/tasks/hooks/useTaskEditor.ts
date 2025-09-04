@@ -1,16 +1,14 @@
 import { useCallback } from "react";
-import { useCreateTask, useUpdateTask } from "./useTaskQueries";
-import { useProjectFeatures } from "../../hooks/useProjectQueries";
 import { useToast } from "../../../../contexts/ToastContext";
-import type { Task, Assignee, CreateTaskRequest } from "../types";
-import type { UseTaskEditorReturn } from "../types";
+import { useProjectFeatures } from "../../hooks/useProjectQueries";
+import type { Assignee, CreateTaskRequest, Task, UseTaskEditorReturn } from "../types";
+import { useCreateTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
   const { showToast } = useToast();
 
   // TanStack Query hooks
-  const { data: featuresData, isLoading: isLoadingFeatures } =
-    useProjectFeatures(projectId);
+  const { data: featuresData, isLoading: isLoadingFeatures } = useProjectFeatures(projectId);
   const createTaskMutation = useCreateTask();
   const updateTaskMutation = useUpdateTask(projectId);
 
@@ -26,27 +24,18 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
   }, []);
 
   // Build update object with only changed fields
-  const buildTaskUpdates = useCallback(
-    (localTask: Partial<Task>, editingTask: Task) => {
-      const updates: any = {};
+  const buildTaskUpdates = useCallback((localTask: Partial<Task>, editingTask: Task) => {
+    const updates: UpdateTaskRequest = {};
 
-      if (localTask.title !== editingTask.title)
-        updates.title = localTask.title;
-      if (localTask.description !== editingTask.description)
-        updates.description = localTask.description;
-      if (localTask.status !== editingTask.status)
-        updates.status = localTask.status;
-      if (localTask.assignee !== editingTask.assignee)
-        updates.assignee = localTask.assignee || "User";
-      if (localTask.task_order !== editingTask.task_order)
-        updates.task_order = localTask.task_order;
-      if (localTask.feature !== editingTask.feature)
-        updates.feature = localTask.feature || "";
+    if (localTask.title !== editingTask.title) updates.title = localTask.title;
+    if (localTask.description !== editingTask.description) updates.description = localTask.description;
+    if (localTask.status !== editingTask.status) updates.status = localTask.status;
+    if (localTask.assignee !== editingTask.assignee) updates.assignee = localTask.assignee || "User";
+    if (localTask.task_order !== editingTask.task_order) updates.task_order = localTask.task_order;
+    if (localTask.feature !== editingTask.feature) updates.feature = localTask.feature || "";
 
-      return updates;
-    },
-    [],
-  );
+    return updates;
+  }, []);
 
   // Build create request object
   const buildCreateRequest = useCallback(
@@ -58,9 +47,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
         status: (localTask.status as Task["status"]) || "todo",
         assignee: (localTask.assignee as Assignee) || "User",
         feature: localTask.feature || "",
-        task_order:
-          localTask.task_order ||
-          getDefaultTaskOrder((localTask.status as Task["status"]) || "todo"),
+        task_order: localTask.task_order || getDefaultTaskOrder((localTask.status as Task["status"]) || "todo"),
       };
     },
     [projectId, getDefaultTaskOrder],
@@ -68,11 +55,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
 
   // Save task (create or update) with full validation
   const saveTask = useCallback(
-    async (
-      localTask: Partial<Task> | null,
-      editingTask: Task | null,
-      onSuccess?: () => void,
-    ) => {
+    async (localTask: Partial<Task> | null, editingTask: Task | null, onSuccess?: () => void) => {
       // Validation moved here from component
       if (!localTask) {
         showToast("No task data provided", "error");
@@ -120,13 +103,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
         });
       }
     },
-    [
-      buildTaskUpdates,
-      buildCreateRequest,
-      updateTaskMutation,
-      createTaskMutation,
-      showToast,
-    ],
+    [buildTaskUpdates, buildCreateRequest, updateTaskMutation, createTaskMutation, showToast],
   );
 
   return {

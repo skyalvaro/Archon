@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### When to Fail Fast and Loud (Let it Crash!)
 
-These errors should stop execution and bubble up immediately:
+These errors should stop execution and bubble up immediately: (except for crawling flows)
 
 - **Service startup failures** - If credentials, database, or any service can't initialize, the system should crash with a clear error
 - **Missing configuration** - Missing environment variables or invalid settings should stop the system
@@ -127,6 +127,49 @@ npm run test             # Run Vitest tests
 npm run test:coverage    # Run tests with coverage report
 ```
 
+# Biome Linter Guide for AI Assistants
+
+## Overview
+
+This project uses Biome for linting and formatting the `/src/features` directory. Biome provides fast, machine-readable feedback that AI assistants can use to improve code quality.
+
+## Configuration
+
+Biome is configured in `biome.json`:
+
+- **Scope**: Only checks `/src/features/**` directory
+- **Formatting**: 2 spaces, 80 char line width
+- **Linting**: Recommended rules enabled
+- **Import Organization**: Automatically sorts and groups imports
+
+## AI Assistant Workflow in the new /features directory
+
+1. **Check Issues**: Run `npm run biome:ai` to get JSON output
+2. **Parse Output**: Extract error locations and types
+3. **Apply Fixes**:
+   - Run `npm run biome:ai-fix` for auto-fixable issues
+   - Manually fix remaining issues based on patterns above
+4. **Verify**: Run `npm run biome:ai` again to confirm fixes
+
+## JSON Output Format
+
+When using `biome:ai`, the output is structured JSON:
+
+```json
+{
+  "diagnostics": [
+    {
+      "file": "path/to/file.tsx",
+      "line": 10,
+      "column": 5,
+      "severity": "error",
+      "message": "Description of the issue",
+      "rule": "lint/a11y/useButtonType"
+    }
+  ]
+}
+```
+
 ### Backend (python/)
 
 ```bash
@@ -183,12 +226,14 @@ uv run pytest tests/test_service_integration.py -v
 ## Polling Architecture
 
 ### HTTP Polling (replaced Socket.IO)
+
 - **Polling intervals**: 1-2s for active operations, 5-10s for background data
 - **ETag caching**: Reduces bandwidth by ~70% via 304 Not Modified responses
 - **Smart pausing**: Stops polling when browser tab is inactive
 - **Progress endpoints**: `/api/progress/crawl`, `/api/progress/project-creation`
 
 ### Key Polling Hooks
+
 - `usePolling` - Generic polling with ETag support
 - `useDatabaseMutation` - Optimistic updates with rollback
 - `useProjectMutation` - Project-specific operations
@@ -226,7 +271,7 @@ LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR
 
 ### UI Libraries
 
-- **Radix UI** (@radix-ui/react-*) - Unstyled, accessible primitives for `/features`
+- **Radix UI** (@radix-ui/react-\*) - Unstyled, accessible primitives for `/features`
 - **TanStack Query** - Data fetching and caching for `/features`
 - **React DnD** - Drag and drop for Kanban boards
 - **Tailwind CSS** - Utility-first styling with Tron-inspired glassmorphism
@@ -263,10 +308,13 @@ Key tables in Supabase:
 ## API Naming Conventions
 
 ### Task Status Values
+
 Use database values directly (no UI mapping):
+
 - `todo`, `doing`, `review`, `done`
 
 ### Service Method Patterns
+
 - `get[Resource]sByProject(projectId)` - Scoped queries
 - `get[Resource](id)` - Single resource
 - `create[Resource](data)` - Create operations
@@ -274,6 +322,7 @@ Use database values directly (no UI mapping):
 - `delete[Resource](id)` - Soft deletes
 
 ### State Naming
+
 - `is[Action]ing` - Loading states (e.g., `isSwitchingProject`)
 - `[resource]Error` - Error messages
 - `selected[Resource]` - Current selection
@@ -290,12 +339,14 @@ Use database values directly (no UI mapping):
 ### Add a new UI component
 
 For **features** directory (preferred for new components):
+
 1. Use Radix UI primitives from `src/features/ui/primitives/`
 2. Create component in relevant feature folder under `src/features/`
 3. Use TanStack Query for data fetching
 4. Apply Tron-inspired glassmorphism styling with Tailwind
 
 For **legacy** components:
+
 1. Create component in `archon-ui-main/src/components/`
 2. Add to page in `archon-ui-main/src/pages/`
 3. Include any new API calls in services

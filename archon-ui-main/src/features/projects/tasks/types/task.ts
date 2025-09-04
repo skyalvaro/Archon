@@ -1,6 +1,6 @@
 /**
  * Core Task Types
- * 
+ *
  * Main task interfaces and types following vertical slice architecture
  */
 
@@ -8,23 +8,27 @@
 export type { TaskPriority } from "./priority";
 
 // Database status enum - using database values directly
-export type DatabaseTaskStatus = 'todo' | 'doing' | 'review' | 'done';
+export type DatabaseTaskStatus = "todo" | "doing" | "review" | "done";
 
 // Assignee type - simplified to predefined options
-export type Assignee = 'User' | 'Archon' | 'AI IDE Agent';
+export type Assignee = "User" | "Archon" | "AI IDE Agent";
 
 // Task source and code example types (replacing any)
-export type TaskSource = {
-  url: string;
-  type: string;
-  relevance: string;
-} | Record<string, unknown>;
+export type TaskSource =
+  | {
+      url: string;
+      type: string;
+      relevance: string;
+    }
+  | Record<string, unknown>;
 
-export type TaskCodeExample = {
-  file: string;
-  function: string;
-  purpose: string;
-} | Record<string, unknown>;
+export type TaskCodeExample =
+  | {
+      file: string;
+      function: string;
+      purpose: string;
+    }
+  | Record<string, unknown>;
 
 // Base Task interface (matches database schema)
 export interface Task {
@@ -40,12 +44,12 @@ export interface Task {
   code_examples?: TaskCodeExample[];
   created_at: string;
   updated_at: string;
-  
+
   // Soft delete fields
   archived?: boolean;
   archived_at?: string;
   archived_by?: string;
-  
+
   // Extended UI properties
   featureColor?: string;
   priority?: TaskPriority;

@@ -6,7 +6,7 @@
  */
 
 import React, { memo } from "react";
-import { ComboBox, ComboBoxOption } from "../../../ui/primitives";
+import { ComboBox, type ComboBoxOption } from "../../../ui/primitives";
 
 interface FeatureSelectProps {
   value: string;

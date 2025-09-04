@@ -1,11 +1,7 @@
 import { useCallback, useState } from "react";
-import {
-  useUpdateTask,
-  useDeleteTask,
-} from "./useTaskQueries";
 import { useToast } from "../../../../contexts/ToastContext";
-import type { Task } from "../types";
-import type { UseTaskActionsReturn } from "../types";
+import type { Task, UseTaskActionsReturn } from "../types";
+import { useDeleteTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
   const { showToast } = useToast();
@@ -39,10 +35,7 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
 
     deleteTaskMutation.mutate(taskToDelete.id, {
       onSuccess: () => {
-        showToast(
-          `Task "${taskToDelete.title}" deleted successfully`,
-          "success",
-        );
+        showToast(`Task "${taskToDelete.title}" deleted successfully`, "success");
         setShowDeleteConfirm(false);
         setTaskToDelete(null);
       },

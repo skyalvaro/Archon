@@ -1,8 +1,8 @@
-import React from "react";
-import { Edit, Trash2, Clipboard } from "lucide-react";
+import { Clipboard, Edit, Trash2 } from "lucide-react";
+import type React from "react";
 import { useToast } from "../../../../contexts/ToastContext";
-import { SimpleTooltip } from "../../../ui/primitives/tooltip";
 import { cn, glassmorphism } from "../../../ui/primitives/styles";
+import { SimpleTooltip } from "../../../ui/primitives/tooltip";
 
 interface TaskCardActionsProps {
   taskId: string;

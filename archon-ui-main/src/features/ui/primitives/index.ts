@@ -10,16 +10,16 @@
  * - Gradually migrate as we refactor
  */
 
-// Export style utilities
-export * from "./styles";
+export * from "./alert-dialog";
 
 // Export all primitives
 export * from "./button";
+export * from "./combobox";
+export * from "./dialog";
+export * from "./dropdown-menu";
 export * from "./input";
 export * from "./select";
-export * from "./dialog";
-export * from "./alert-dialog";
-export * from "./dropdown-menu";
-export * from "./tooltip";
-export * from "./combobox";
+// Export style utilities
+export * from "./styles";
 export * from "./tabs";
+export * from "./tooltip";

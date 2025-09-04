@@ -1,12 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { projectService } from '../../services';
-import { useToast } from '../../../../contexts/ToastContext';
-import type { ProjectDocument } from '../types';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "../../../../contexts/ToastContext";
+import { projectService } from "../../services";
+import type { ProjectDocument } from "../types";
 
 // Query keys
 const documentKeys = {
-  all: (projectId: string) => ['projects', projectId, 'documents'] as const,
-  detail: (projectId: string, docId: string) => ['projects', projectId, 'documents', docId] as const,
+  all: (projectId: string) => ["projects", projectId, "documents"] as const,
+  detail: (projectId: string, docId: string) => ["projects", projectId, "documents", docId] as const,
 };
 
 /**
@@ -14,7 +14,7 @@ const documentKeys = {
  */
 export function useProjectDocuments(projectId: string | undefined) {
   return useQuery({
-    queryKey: documentKeys.all(projectId!),
+    queryKey: projectId ? documentKeys.all(projectId) : ["documents-undefined"],
     queryFn: async () => {
       if (!projectId) return [];
       const project = await projectService.getProject(projectId);
@@ -36,26 +36,26 @@ export function useCreateDocument(projectId: string) {
       // Get current project
       const project = await projectService.getProject(projectId);
       const currentDocs = (project.docs || []) as ProjectDocument[];
-      
+
       // Add new document to array
       const updatedDocs = [...currentDocs, newDoc];
-      
+
       // Update project with new docs array
       const updatedProject = await projectService.updateProject(projectId, {
-        docs: updatedDocs
+        docs: updatedDocs,
       });
-      
+
       return updatedProject.docs;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: documentKeys.all(projectId) });
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
-      showToast('Document created successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
+      showToast("Document created successfully", "success");
     },
     onError: (error, variables) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to create document:', error, { variables });
-      showToast(`Failed to create document: ${errorMessage}`, 'error');
+      console.error("Failed to create document:", error, { variables });
+      showToast(`Failed to create document: ${errorMessage}`, "error");
     },
   });
 }
@@ -72,22 +72,22 @@ export function useUpdateDocument(projectId: string) {
       // Get current project
       const project = await projectService.getProject(projectId);
       const currentDocs = (project.docs || []) as ProjectDocument[];
-      
+
       // Update the specific document in the array
-      const updatedDocs = currentDocs.map(doc => 
-        doc.id === updatedDoc.id ? updatedDoc : doc
-      );
-      
+      const updatedDocs = currentDocs.map((doc) => (doc.id === updatedDoc.id ? updatedDoc : doc));
+
       // Update project with modified docs array
       const updatedProject = await projectService.updateProject(projectId, {
-        docs: updatedDocs
+        docs: updatedDocs,
       });
-      
+
       return updatedProject.docs;
     },
     onMutate: async (updatedDoc) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: documentKeys.all(projectId) });
+      await queryClient.cancelQueries({
+        queryKey: documentKeys.all(projectId),
+      });
 
       // Snapshot the previous value
       const previousDocs = queryClient.getQueryData(documentKeys.all(projectId));
@@ -95,26 +95,26 @@ export function useUpdateDocument(projectId: string) {
       // Optimistically update to the new value
       queryClient.setQueryData(documentKeys.all(projectId), (old: ProjectDocument[] | undefined) => {
         if (!old) return [updatedDoc];
-        return old.map(doc => doc.id === updatedDoc.id ? updatedDoc : doc);
+        return old.map((doc) => (doc.id === updatedDoc.id ? updatedDoc : doc));
       });
 
       return { previousDocs };
     },
     onError: (error, updatedDoc, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to update document:', error, { updatedDoc });
-      
+      console.error("Failed to update document:", error, { updatedDoc });
+
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousDocs) {
         queryClient.setQueryData(documentKeys.all(projectId), context.previousDocs);
       }
-      
-      showToast(`Failed to save document: ${errorMessage}`, 'error');
+
+      showToast(`Failed to save document: ${errorMessage}`, "error");
     },
     onSuccess: () => {
       // Don't refetch on success - trust optimistic update
       // Only invalidate project data if document count changed (unlikely)
-      showToast('Document saved successfully', 'success');
+      showToast("Document saved successfully", "success");
     },
   });
 }
@@ -131,20 +131,22 @@ export function useDeleteDocument(projectId: string) {
       // Get current project
       const project = await projectService.getProject(projectId);
       const currentDocs = (project.docs || []) as ProjectDocument[];
-      
+
       // Remove document from array
-      const updatedDocs = currentDocs.filter(doc => doc.id !== documentId);
-      
+      const updatedDocs = currentDocs.filter((doc) => doc.id !== documentId);
+
       // Update project with filtered docs array
       const updatedProject = await projectService.updateProject(projectId, {
-        docs: updatedDocs
+        docs: updatedDocs,
       });
-      
+
       return updatedProject.docs;
     },
     onMutate: async (documentId) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: documentKeys.all(projectId) });
+      await queryClient.cancelQueries({
+        queryKey: documentKeys.all(projectId),
+      });
 
       // Snapshot the previous value
       const previousDocs = queryClient.getQueryData(documentKeys.all(projectId));
@@ -152,27 +154,27 @@ export function useDeleteDocument(projectId: string) {
       // Optimistically remove the document
       queryClient.setQueryData(documentKeys.all(projectId), (old: ProjectDocument[] | undefined) => {
         if (!old) return [];
-        return old.filter(doc => doc.id !== documentId);
+        return old.filter((doc) => doc.id !== documentId);
       });
 
       return { previousDocs };
     },
     onError: (error, documentId, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to delete document:', error, { documentId });
-      
+      console.error("Failed to delete document:", error, { documentId });
+
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousDocs) {
         queryClient.setQueryData(documentKeys.all(projectId), context.previousDocs);
       }
-      
-      showToast(`Failed to delete document: ${errorMessage}`, 'error');
+
+      showToast(`Failed to delete document: ${errorMessage}`, "error");
     },
     onSuccess: () => {
       // Don't refetch on success - trust optimistic update
       // Only invalidate project data since document count changed
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
-      showToast('Document deleted successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
+      showToast("Document deleted successfully", "success");
     },
   });
 }

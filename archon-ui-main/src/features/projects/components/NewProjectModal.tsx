@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from "lucide-react";
+import type React from "react";
+import { useId, useState } from "react";
+import { Button } from "../../ui/primitives/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../../ui/primitives/dialog';
-import { Button } from '../../ui/primitives/button';
-import { Input } from '../../ui/primitives/input';
-import { cn } from '../../ui/primitives/styles';
-import { useCreateProject } from '../hooks/useProjectQueries';
-import type { CreateProjectRequest } from '../types';
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/primitives/dialog";
+import { Input } from "../../ui/primitives/input";
+import { cn } from "../../ui/primitives/styles";
+import { useCreateProject } from "../hooks/useProjectQueries";
+import type { CreateProjectRequest } from "../types";
 
 interface NewProjectModalProps {
   open: boolean;
@@ -20,26 +21,26 @@ interface NewProjectModalProps {
   onSuccess?: () => void;
 }
 
-export const NewProjectModal: React.FC<NewProjectModalProps> = ({
-  open,
-  onOpenChange,
-  onSuccess,
-}) => {
+export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenChange, onSuccess }) => {
+  const projectNameId = useId();
+  const projectDescriptionId = useId();
+  const _githubRepoId = useId();
+
   const [formData, setFormData] = useState<CreateProjectRequest>({
-    title: '',
-    description: '',
+    title: "",
+    description: "",
   });
 
   const createProjectMutation = useCreateProject();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.title.trim()) return;
 
     createProjectMutation.mutate(formData, {
       onSuccess: () => {
-        setFormData({ title: '', description: '' });
+        setFormData({ title: "", description: "" });
         onOpenChange(false);
         onSuccess?.();
       },
@@ -48,7 +49,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
   const handleClose = () => {
     if (!createProjectMutation.isPending) {
-      setFormData({ title: '', description: '' });
+      setFormData({ title: "", description: "" });
       onOpenChange(false);
     }
   };
@@ -61,50 +62,46 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             <DialogTitle className="text-xl font-bold bg-gradient-to-r from-purple-400 to-fuchsia-500 text-transparent bg-clip-text">
               Create New Project
             </DialogTitle>
-            <DialogDescription>
-              Start a new project to organize your tasks and documents.
-            </DialogDescription>
+            <DialogDescription>Start a new project to organize your tasks and documents.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 my-6">
             <div>
-              <label 
-                htmlFor="project-name" 
+              <label
+                htmlFor={projectNameId}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
                 Project Name
               </label>
               <Input
-                id="project-name"
+                id={projectNameId}
                 type="text"
                 placeholder="Enter project name..."
                 value={formData.title}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, title: e.target.value }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                 disabled={createProjectMutation.isPending}
-                className={cn(
-                  "w-full",
-                  "focus:border-purple-400 focus:shadow-[0_0_10px_rgba(168,85,247,0.2)]"
-                )}
+                className={cn("w-full", "focus:border-purple-400 focus:shadow-[0_0_10px_rgba(168,85,247,0.2)]")}
                 autoFocus
               />
             </div>
 
             <div>
-              <label 
-                htmlFor="project-description" 
+              <label
+                htmlFor={projectDescriptionId}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
                 Description
               </label>
               <textarea
-                id="project-description"
+                id={projectDescriptionId}
                 placeholder="Enter project description..."
                 rows={4}
                 value={formData.description}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  setFormData((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
                 }
                 disabled={createProjectMutation.isPending}
                 className={cn(
@@ -116,19 +113,14 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   "focus:outline-none focus:border-purple-400",
                   "focus:shadow-[0_0_10px_rgba(168,85,247,0.2)]",
                   "transition-all duration-300",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
                 )}
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleClose}
-              disabled={createProjectMutation.isPending}
-            >
+            <Button type="button" variant="ghost" onClick={handleClose} disabled={createProjectMutation.isPending}>
               Cancel
             </Button>
             <Button

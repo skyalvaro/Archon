@@ -1,2 +1,2 @@
-export { DeleteConfirmModal } from './DeleteConfirmModal';
-export { FeatureErrorBoundary } from './FeatureErrorBoundary';
+export { DeleteConfirmModal } from "./DeleteConfirmModal";
+export { FeatureErrorBoundary } from "./FeatureErrorBoundary";

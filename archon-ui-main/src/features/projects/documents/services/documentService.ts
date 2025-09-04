@@ -3,15 +3,16 @@
  * Focused service for document and versioning operations
  */
 
-import { callAPI } from '../../shared/api';
+import { callAPI } from "../../shared/api";
+import type { RestoreVersionResponse, Version, VersionContentResponse, VersionResponse } from "../types";
 
 export const documentService = {
   /**
    * Get version history for project documents
    */
-  async getDocumentVersionHistory(projectId: string, fieldName: string = 'docs'): Promise<any[]> {
+  async getDocumentVersionHistory(projectId: string, fieldName: string = "docs"): Promise<Version[]> {
     try {
-      const response = await callAPI<{versions: any[]}>(`/api/projects/${projectId}/versions?field_name=${fieldName}`);
+      const response = await callAPI<VersionResponse>(`/api/projects/${projectId}/versions?field_name=${fieldName}`);
       return response.versions || [];
     } catch (error) {
       console.error(`Failed to get document version history for project ${projectId}:`, error);
@@ -22,9 +23,15 @@ export const documentService = {
   /**
    * Get content of a specific document version for preview
    */
-  async getVersionContent(projectId: string, versionNumber: number, fieldName: string = 'docs'): Promise<any> {
+  async getVersionContent(
+    projectId: string,
+    versionNumber: number,
+    fieldName: string = "docs",
+  ): Promise<VersionContentResponse> {
     try {
-      const response = await callAPI<{content: any, version: any}>(`/api/projects/${projectId}/versions/${fieldName}/${versionNumber}`);
+      const response = await callAPI<VersionContentResponse>(
+        `/api/projects/${projectId}/versions/${fieldName}/${versionNumber}`,
+      );
       return response;
     } catch (error) {
       console.error(`Failed to get version ${versionNumber} content for project ${projectId}:`, error);
@@ -35,12 +42,19 @@ export const documentService = {
   /**
    * Restore a project document field to a specific version
    */
-  async restoreDocumentVersion(projectId: string, versionNumber: number, fieldName: string = 'docs'): Promise<any> {
+  async restoreDocumentVersion(
+    projectId: string,
+    versionNumber: number,
+    fieldName: string = "docs",
+  ): Promise<RestoreVersionResponse> {
     try {
-      const response = await callAPI<any>(`/api/projects/${projectId}/versions/${fieldName}/${versionNumber}/restore`, {
-        method: 'POST'
-      });
-      
+      const response = await callAPI<RestoreVersionResponse>(
+        `/api/projects/${projectId}/versions/${fieldName}/${versionNumber}/restore`,
+        {
+          method: "POST",
+        },
+      );
+
       return response;
     } catch (error) {
       console.error(`Failed to restore version ${versionNumber} for project ${projectId}:`, error);

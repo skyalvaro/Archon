@@ -5,4 +5,4 @@
  * Part of the vertical slice architecture migration.
  */
 
-export { documentService } from './documentService';
+export { documentService } from "./documentService";

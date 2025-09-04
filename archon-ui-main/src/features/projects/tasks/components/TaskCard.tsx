@@ -1,26 +1,19 @@
-import React, { useCallback, useState } from "react";
-import { useDrag, useDrop } from "react-dnd";
 import { Tag } from "lucide-react";
-import { Task, Assignee } from "../types";
-import {
-  ItemTypes,
-  getOrderColor,
-  getOrderGlow,
-} from "../utils/task-styles";
+import type React from "react";
+import { useCallback, useState } from "react";
+import { useDrag, useDrop } from "react-dnd";
 import { useTaskActions } from "../hooks";
-import { TaskCardActions } from "./TaskCardActions";
-import { TaskPriority, Priority } from "./TaskPriority";
+import type { Assignee, Task } from "../types";
+import { getOrderColor, getOrderGlow, ItemTypes } from "../utils/task-styles";
 import { TaskAssignee } from "./TaskAssignee";
+import { TaskCardActions } from "./TaskCardActions";
+import { type Priority, TaskPriority } from "./TaskPriority";
 
 export interface TaskCardProps {
   task: Task;
   index: number;
   projectId: string; // Need this for mutations
-  onTaskReorder: (
-    taskId: string,
-    targetIndex: number,
-    status: Task["status"],
-  ) => void;
+  onTaskReorder: (taskId: string, targetIndex: number, status: Task["status"]) => void;
   onEdit?: (task: Task) => void; // Optional edit handler
   onDelete?: (task: Task) => void; // Optional delete handler
   hoveredTaskId?: string | null;
@@ -46,10 +39,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [localPriority, setLocalPriority] = useState<Priority>("medium");
 
   // Use business logic hook
-  const {
-    changeAssignee,
-    isUpdating,
-  } = useTaskActions(projectId);
+  const { changeAssignee, isUpdating } = useTaskActions(projectId);
 
   // Handlers - now just call hook methods
   const handleEdit = useCallback(() => {
@@ -57,7 +47,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (onEdit) {
       onEdit(task);
     } else {
-      console.log("Edit task:", task.title, "(no onEdit handler provided)");
+      // Edit task - no handler provided
     }
   }, [onEdit, task]);
 
@@ -65,7 +55,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (onDelete) {
       onDelete(task);
     } else {
-      console.log("Delete task:", task.title, "(no onDelete handler provided)");
+      // Delete task - no handler provided
     }
   }, [onDelete, task]);
 
@@ -91,10 +81,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const [, drop] = useDrop({
     accept: ItemTypes.TASK,
-    hover: (
-      draggedItem: { id: string; status: Task["status"]; index: number },
-      monitor,
-    ) => {
+    hover: (draggedItem: { id: string; status: Task["status"]; index: number }, monitor) => {
       if (!monitor.isOver({ shallow: true })) return;
       if (draggedItem.id === task.id) return;
       if (draggedItem.status !== task.status) return;
@@ -136,9 +123,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const transitionStyles = "transition-all duration-200 ease-in-out";
 
   // Subtle highlight effect for related tasks
-  const highlightGlow = isHighlighted
-    ? "border-cyan-400/50 shadow-[0_0_8px_rgba(34,211,238,0.2)]"
-    : "";
+  const highlightGlow = isHighlighted ? "border-cyan-400/50 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "";
 
   // Selection styling with glassmorphism
   const selectionGlow = isSelected
@@ -150,12 +135,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     "group-hover:border-cyan-400/70 dark:group-hover:border-cyan-500/50 group-hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] dark:group-hover:shadow-[0_0_15px_rgba(34,211,238,0.6)]";
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Drag-and-drop card with react-dnd - requires div for drag handle
     <div
       ref={(node) => drag(drop(node))}
+      role="button"
+      tabIndex={0}
       className={`w-full min-h-[140px] cursor-move relative ${isDragging ? "opacity-50 scale-90" : "scale-100 opacity-100"} ${transitionStyles} group`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleTaskClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (onEdit) {
+            onEdit(task);
+          }
+        }
+      }}
     >
       <div
         className={`${cardBaseStyles} ${transitionStyles} ${hoverEffectClasses} ${highlightGlow} ${selectionGlow} w-full min-h-[140px] h-full`}
@@ -220,22 +216,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* Footer with assignee - glassmorphism styling */}
           <div className="flex items-center justify-between mt-auto pt-2 pl-1.5 pr-3">
-            <TaskAssignee
-              assignee={task.assignee}
-              onAssigneeChange={handleAssigneeChange}
-              isLoading={isUpdating}
-            />
+            <TaskAssignee assignee={task.assignee} onAssigneeChange={handleAssigneeChange} isLoading={isUpdating} />
 
             {/* Priority display (frontend-only for now) */}
-            <TaskPriority
-              priority={localPriority}
-              onPriorityChange={handlePriorityChange}
-              isLoading={false}
-            />
+            <TaskPriority priority={localPriority} onPriorityChange={handlePriorityChange} isLoading={false} />
           </div>
         </div>
       </div>
-
     </div>
   );
 };

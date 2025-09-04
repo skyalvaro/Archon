@@ -3,25 +3,10 @@
  * Focused service for task CRUD operations only
  */
 
-import type { 
-  Task, 
-  CreateTaskRequest, 
-  UpdateTaskRequest,
-  DatabaseTaskStatus,
-  TaskCounts
-} from '../types';
+import { callAPI, formatValidationErrors, ValidationError } from "../../shared/api";
 
-import {
-  validateCreateTask, 
-  validateUpdateTask,
-  validateUpdateTaskStatus,
-} from '../schemas';
-
-import { 
-  callAPI, 
-  formatValidationErrors, 
-  ValidationError 
-} from '../../shared/api';
+import { validateCreateTask, validateUpdateTask, validateUpdateTaskStatus } from "../schemas";
+import type { CreateTaskRequest, DatabaseTaskStatus, Task, TaskCounts, UpdateTaskRequest } from "../types";
 
 export const taskService = {
   /**
@@ -30,7 +15,7 @@ export const taskService = {
   async getTasksByProject(projectId: string): Promise<Task[]> {
     try {
       const tasks = await callAPI<Task[]>(`/api/projects/${projectId}/tasks`);
-      
+
       // Convert database tasks to UI tasks with status mapping
       return tasks;
     } catch (error) {
@@ -66,14 +51,14 @@ export const taskService = {
       // The validation.data already has defaults from schema
       const requestData = validation.data;
 
-      const task = await callAPI<Task>('/api/tasks', {
-        method: 'POST',
-        body: JSON.stringify(requestData)
+      const task = await callAPI<Task>("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify(requestData),
       });
-      
+
       return task;
     } catch (error) {
-      console.error('Failed to create task:', error);
+      console.error("Failed to create task:", error);
       throw error;
     }
   },
@@ -90,10 +75,10 @@ export const taskService = {
 
     try {
       const task = await callAPI<Task>(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        body: JSON.stringify(validation.data)
+        method: "PUT",
+        body: JSON.stringify(validation.data),
       });
-      
+
       return task;
     } catch (error) {
       console.error(`Failed to update task ${taskId}:`, error);
@@ -106,7 +91,10 @@ export const taskService = {
    */
   async updateTaskStatus(taskId: string, status: DatabaseTaskStatus): Promise<Task> {
     // Validate input
-    const validation = validateUpdateTaskStatus({ task_id: taskId, status: status });
+    const validation = validateUpdateTaskStatus({
+      task_id: taskId,
+      status: status,
+    });
     if (!validation.success) {
       throw new ValidationError(formatValidationErrors(validation.error));
     }
@@ -114,10 +102,10 @@ export const taskService = {
     try {
       // Use the standard update task endpoint with JSON body
       const task = await callAPI<Task>(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status })
+        method: "PUT",
+        body: JSON.stringify({ status }),
       });
-      
+
       return task;
     } catch (error) {
       console.error(`Failed to update task status ${taskId}:`, error);
@@ -131,9 +119,8 @@ export const taskService = {
   async deleteTask(taskId: string): Promise<void> {
     try {
       await callAPI(`/api/tasks/${taskId}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
-      
     } catch (error) {
       console.error(`Failed to delete task ${taskId}:`, error);
       throw error;
@@ -146,15 +133,15 @@ export const taskService = {
   async updateTaskOrder(taskId: string, newOrder: number, newStatus?: DatabaseTaskStatus): Promise<Task> {
     try {
       const updates: UpdateTaskRequest = {
-        task_order: newOrder
+        task_order: newOrder,
       };
-      
+
       if (newStatus) {
         updates.status = newStatus;
       }
-      
+
       const task = await this.updateTask(taskId, updates);
-      
+
       return task;
     } catch (error) {
       console.error(`Failed to update task order for ${taskId}:`, error);
@@ -169,7 +156,7 @@ export const taskService = {
     try {
       // Note: This method requires cross-project access
       // For now, we'll throw an error suggesting to use project-scoped queries
-      throw new Error('getTasksByStatus requires cross-project access. Use getTasksByProject instead.');
+      throw new Error("getTasksByStatus requires cross-project access. Use getTasksByProject instead.");
     } catch (error) {
       console.error(`Failed to get tasks by status ${status}:`, error);
       throw error;
@@ -182,10 +169,10 @@ export const taskService = {
    */
   async getTaskCountsForAllProjects(): Promise<Record<string, TaskCounts>> {
     try {
-      const response = await callAPI<Record<string, TaskCounts>>('/api/projects/task-counts');
+      const response = await callAPI<Record<string, TaskCounts>>("/api/projects/task-counts");
       return response || {};
     } catch (error) {
-      console.error('Failed to get task counts for all projects:', error);
+      console.error("Failed to get task counts for all projects:", error);
       throw error;
     }
   },

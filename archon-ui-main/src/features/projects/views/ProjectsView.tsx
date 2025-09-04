@@ -1,33 +1,28 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { useToast } from '../../../contexts/ToastContext';
-import { useStaggeredEntrance } from '../../../hooks/useStaggeredEntrance';
+import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useToast } from "../../../contexts/ToastContext";
+import { useStaggeredEntrance } from "../../../hooks/useStaggeredEntrance";
+import { DeleteConfirmModal } from "../../ui/components/DeleteConfirmModal";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/primitives";
+import { NewProjectModal } from "../components/NewProjectModal";
+import { ProjectHeader } from "../components/ProjectHeader";
+import { ProjectList } from "../components/ProjectList";
+import { DocsTab } from "../documents/DocsTab";
 import {
+  projectKeys,
+  useDeleteProject,
   useProjects,
   useTaskCounts,
   useUpdateProject,
-  useDeleteProject,
-  projectKeys,
-} from '../hooks/useProjectQueries';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '../../ui/primitives';
-import { DeleteConfirmModal } from '../../ui/components/DeleteConfirmModal';
-import { ProjectHeader } from '../components/ProjectHeader';
-import { ProjectList } from '../components/ProjectList';
-import { NewProjectModal } from '../components/NewProjectModal';
-import { DocsTab } from '../documents/DocsTab';
-import { TasksTab } from '../tasks/TasksTab';
-import type { Project } from '../types';
+} from "../hooks/useProjectQueries";
+import { TasksTab } from "../tasks/TasksTab";
+import type { Project } from "../types";
 
 interface ProjectsViewProps {
   className?: string;
-  'data-id'?: string;
+  "data-id"?: string;
 }
 
 const containerVariants = {
@@ -47,24 +42,20 @@ const itemVariants = {
   },
 };
 
-export function ProjectsView({
-  className = '',
-  'data-id': dataId,
-}: ProjectsViewProps) {
+export function ProjectsView({ className = "", "data-id": dataId }: ProjectsViewProps) {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // State management
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState("tasks");
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{
     id: string;
     title: string;
   } | null>(null);
-  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
 
   const { showToast } = useToast();
 
@@ -86,13 +77,16 @@ export function ProjectsView({
   }, [projects]);
 
   // Handle project selection
-  const handleProjectSelect = useCallback((project: Project) => {
-    if (selectedProject?.id === project.id) return;
-    
-    setSelectedProject(project);
-    setActiveTab('tasks');
-    navigate(`/projects/${project.id}`, { replace: true });
-  }, [selectedProject?.id, navigate]);
+  const handleProjectSelect = useCallback(
+    (project: Project) => {
+      if (selectedProject?.id === project.id) return;
+
+      setSelectedProject(project);
+      setActiveTab("tasks");
+      navigate(`/projects/${project.id}`, { replace: true });
+    },
+    [selectedProject?.id, navigate],
+  );
 
   // Auto-select project based on URL or default to leftmost
   useEffect(() => {
@@ -100,7 +94,7 @@ export function ProjectsView({
 
     // If there's a projectId in the URL, select that project
     if (projectId) {
-      const project = sortedProjects.find(p => p.id === projectId);
+      const project = sortedProjects.find((p) => p.id === projectId);
       if (project) {
         setSelectedProject(project);
         return;
@@ -108,7 +102,7 @@ export function ProjectsView({
     }
 
     // Otherwise, select the first (leftmost) project
-    if (!selectedProject || !sortedProjects.find(p => p.id === selectedProject.id)) {
+    if (!selectedProject || !sortedProjects.find((p) => p.id === selectedProject.id)) {
       const defaultProject = sortedProjects[0];
       setSelectedProject(defaultProject);
       navigate(`/projects/${defaultProject.id}`, { replace: true });
@@ -125,7 +119,7 @@ export function ProjectsView({
   // Handle pin toggle
   const handlePinProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find((p) => p.id === projectId);
     if (!project) return;
 
     updateProjectMutation.mutate({
@@ -146,20 +140,20 @@ export function ProjectsView({
 
     deleteProjectMutation.mutate(projectToDelete.id, {
       onSuccess: () => {
-        showToast(`Project "${projectToDelete.title}" deleted successfully`, 'success');
+        showToast(`Project "${projectToDelete.title}" deleted successfully`, "success");
         setShowDeleteConfirm(false);
         setProjectToDelete(null);
 
         // If we deleted the selected project, select another one
         if (selectedProject?.id === projectToDelete.id) {
-          const remainingProjects = projects.filter(p => p.id !== projectToDelete.id);
+          const remainingProjects = projects.filter((p) => p.id !== projectToDelete.id);
           if (remainingProjects.length > 0) {
             const nextProject = remainingProjects[0];
             setSelectedProject(nextProject);
             navigate(`/projects/${nextProject.id}`, { replace: true });
           } else {
             setSelectedProject(null);
-            navigate('/projects', { replace: true });
+            navigate("/projects", { replace: true });
           }
         }
       },
@@ -171,28 +165,13 @@ export function ProjectsView({
     setProjectToDelete(null);
   };
 
-  // Handle copy project ID
-  const handleCopyProjectId = async (e: React.MouseEvent, projectId: string) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(projectId);
-      setCopiedProjectId(projectId);
-      showToast('Project ID copied to clipboard', 'info');
-      setTimeout(() => setCopiedProjectId(null), 2000);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to copy project ID:', error, { projectId });
-      showToast(`Failed to copy project ID: ${errorMessage}`, 'error');
-    }
-  };
-
   // Staggered entrance animation
   const isVisible = useStaggeredEntrance([1, 2, 3], 0.15);
 
   return (
     <motion.div
       initial="hidden"
-      animate={isVisible ? 'visible' : 'hidden'}
+      animate={isVisible ? "visible" : "hidden"}
       variants={containerVariants}
       className={`max-w-full mx-auto ${className}`}
       data-id={dataId}
@@ -205,48 +184,33 @@ export function ProjectsView({
         taskCounts={taskCounts}
         isLoading={isLoadingProjects}
         error={projectsError as Error | null}
-        copiedProjectId={copiedProjectId}
         onProjectSelect={handleProjectSelect}
         onPinProject={handlePinProject}
         onDeleteProject={handleDeleteProject}
-        onCopyProjectId={handleCopyProjectId}
         onRetry={() => queryClient.invalidateQueries({ queryKey: projectKeys.lists() })}
       />
 
       {/* Project Details Section */}
       {selectedProject && (
         <motion.div variants={itemVariants} className="relative">
-          <Tabs
-            defaultValue="tasks"
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
+          <Tabs defaultValue="tasks" value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList>
-              <TabsTrigger
-                value="docs"
-                className="py-3 font-mono transition-all duration-300"
-                color="blue"
-              >
+              <TabsTrigger value="docs" className="py-3 font-mono transition-all duration-300" color="blue">
                 Docs
               </TabsTrigger>
-              <TabsTrigger
-                value="tasks"
-                className="py-3 font-mono transition-all duration-300"
-                color="orange"
-              >
+              <TabsTrigger value="tasks" className="py-3 font-mono transition-all duration-300" color="orange">
                 Tasks
               </TabsTrigger>
             </TabsList>
 
             {/* Tab content */}
             <div>
-              {activeTab === 'docs' && (
+              {activeTab === "docs" && (
                 <TabsContent value="docs" className="mt-0">
                   <DocsTab project={selectedProject} />
                 </TabsContent>
               )}
-              {activeTab === 'tasks' && (
+              {activeTab === "tasks" && (
                 <TabsContent value="tasks" className="mt-0">
                   <TasksTab projectId={selectedProject.id} />
                 </TabsContent>

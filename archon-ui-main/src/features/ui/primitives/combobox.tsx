@@ -5,11 +5,11 @@
  * Provides autocomplete functionality with keyboard navigation
  */
 
-import * as React from "react";
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { cn } from "./styles";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import * as React from "react";
 import { Button } from "./button";
+import { cn } from "./styles";
 
 export interface ComboBoxOption {
   value: string;
@@ -57,8 +57,7 @@ export const ComboBox = React.forwardRef<HTMLButtonElement, ComboBoxProps>(
         (option) =>
           option.label.toLowerCase().includes(searchLower) ||
           option.value.toLowerCase().includes(searchLower) ||
-          (option.description &&
-            option.description.toLowerCase().includes(searchLower)),
+          option.description?.toLowerCase().includes(searchLower),
       );
     }, [options, search]);
 
@@ -75,11 +74,7 @@ export const ComboBox = React.forwardRef<HTMLButtonElement, ComboBoxProps>(
 
     // Handle custom value input
     const handleCustomValue = () => {
-      if (
-        allowCustomValue &&
-        search &&
-        !filteredOptions.some((opt) => opt.label === search)
-      ) {
+      if (allowCustomValue && search && !filteredOptions.some((opt) => opt.label === search)) {
         onValueChange(search);
         setOpen(false);
         setSearch("");
@@ -175,6 +170,7 @@ export const ComboBox = React.forwardRef<HTMLButtonElement, ComboBoxProps>(
                   {emptyMessage}
                   {allowCustomValue && search && (
                     <button
+                      type="button"
                       onClick={handleCustomValue}
                       className={cn(
                         "mt-2 block w-full",
@@ -193,6 +189,7 @@ export const ComboBox = React.forwardRef<HTMLButtonElement, ComboBoxProps>(
               ) : (
                 filteredOptions.map((option) => (
                   <button
+                    type="button"
                     key={option.value}
                     onClick={() => handleSelect(option.value)}
                     className={cn(
@@ -202,24 +199,19 @@ export const ComboBox = React.forwardRef<HTMLButtonElement, ComboBoxProps>(
                       "text-gray-900 dark:text-white",
                       "transition-colors duration-200",
                       "focus:outline-none focus:bg-gray-100/80 dark:focus:bg-white/10",
-                      value === option.value &&
-                        "bg-cyan-50/50 dark:bg-cyan-900/20",
+                      value === option.value && "bg-cyan-50/50 dark:bg-cyan-900/20",
                     )}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === option.value
-                          ? "opacity-100 text-cyan-600 dark:text-cyan-400"
-                          : "opacity-0",
+                        value === option.value ? "opacity-100 text-cyan-600 dark:text-cyan-400" : "opacity-0",
                       )}
                     />
                     <div className="flex-1 text-left">
                       <div className="font-medium">{option.label}</div>
                       {option.description && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          {option.description}
-                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{option.description}</div>
                       )}
                     </div>
                   </button>

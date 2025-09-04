@@ -1,9 +1,23 @@
-import { useState, useEffect } from 'react';
-import { Clock, RotateCcw, Calendar, User, FileText, Diff, GitBranch, AlertTriangle } from 'lucide-react';
-import { documentService } from '../services';
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../../../ui/primitives';
-import { useToast } from '../../../../contexts/ToastContext';
-import { cn, glassmorphism } from '../../../ui/primitives/styles';
+import { AlertTriangle, Calendar, Clock, Diff, FileText, GitBranch, RotateCcw, User } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useToast } from "../../../../contexts/ToastContext";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../../ui/primitives";
+import { cn, glassmorphism } from "../../../ui/primitives/styles";
+import { documentService } from "../services";
 
 interface Version {
   id: string;
@@ -12,7 +26,7 @@ interface Version {
   change_type: string;
   created_by: string;
   created_at: string;
-  content: unknown;  // Can be document content or other versioned data
+  content: unknown; // Can be document content or other versioned data
   document_id?: string;
 }
 
@@ -25,13 +39,12 @@ interface VersionHistoryModalProps {
   onRestore?: () => void;
 }
 
-
 export const VersionHistoryModal = ({
   isOpen,
   onClose,
   projectId,
-  fieldName = 'docs',
-  onRestore
+  fieldName = "docs",
+  onRestore,
 }: VersionHistoryModalProps) => {
   const [versions, setVersions] = useState<Version[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
@@ -39,27 +52,27 @@ export const VersionHistoryModal = ({
   const [restoring, setRestoring] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [versionToRestore, setVersionToRestore] = useState<Version | null>(null);
-  
+
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (isOpen && projectId) {
-      loadVersions();
-    }
-  }, [isOpen, projectId, fieldName]);
-
-  const loadVersions = async () => {
+  const loadVersions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await documentService.getDocumentVersionHistory(projectId, fieldName);
       setVersions(response || []);
     } catch (error) {
-      console.error('Failed to load versions:', error);
-      showToast('Failed to load version history', 'error');
+      console.error("Failed to load versions:", error);
+      showToast("Failed to load version history", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, fieldName, showToast]);
+
+  useEffect(() => {
+    if (isOpen && projectId) {
+      loadVersions();
+    }
+  }, [isOpen, projectId, loadVersions]);
 
   const handleRestore = (version: Version) => {
     setVersionToRestore(version);
@@ -68,23 +81,19 @@ export const VersionHistoryModal = ({
 
   const confirmRestore = async () => {
     if (!versionToRestore) return;
-    
+
     setRestoring(true);
     try {
-      await documentService.restoreDocumentVersion(
-        projectId,
-        versionToRestore.version_number,
-        fieldName
-      );
-      
-      showToast(`Version ${versionToRestore.version_number} restored successfully`, 'success');
+      await documentService.restoreDocumentVersion(projectId, versionToRestore.version_number, fieldName);
+
+      showToast(`Version ${versionToRestore.version_number} restored successfully`, "success");
       setShowRestoreConfirm(false);
       setVersionToRestore(null);
       onRestore?.();
       onClose();
     } catch (error) {
-      console.error('Failed to restore version:', error);
-      showToast('Failed to restore version', 'error');
+      console.error("Failed to restore version:", error);
+      showToast("Failed to restore version", "error");
     } finally {
       setRestoring(false);
     }
@@ -96,19 +105,27 @@ export const VersionHistoryModal = ({
 
   const getChangeTypeIcon = (changeType: string) => {
     switch (changeType) {
-      case 'create': return <FileText className="w-4 h-4" />;
-      case 'update': return <Diff className="w-4 h-4" />;
-      case 'restore': return <RotateCcw className="w-4 h-4" />;
-      default: return <GitBranch className="w-4 h-4" />;
+      case "create":
+        return <FileText className="w-4 h-4" />;
+      case "update":
+        return <Diff className="w-4 h-4" />;
+      case "restore":
+        return <RotateCcw className="w-4 h-4" />;
+      default:
+        return <GitBranch className="w-4 h-4" />;
     }
   };
 
   const getChangeTypeColor = (changeType: string) => {
     switch (changeType) {
-      case 'create': return 'text-green-600 dark:text-green-400';
-      case 'update': return 'text-blue-600 dark:text-blue-400';
-      case 'restore': return 'text-orange-600 dark:text-orange-400';
-      default: return 'text-gray-600 dark:text-gray-400';
+      case "create":
+        return "text-green-600 dark:text-green-400";
+      case "update":
+        return "text-blue-600 dark:text-blue-400";
+      case "restore":
+        return "text-orange-600 dark:text-orange-400";
+      default:
+        return "text-gray-600 dark:text-gray-400";
     }
   };
 
@@ -128,9 +145,7 @@ export const VersionHistoryModal = ({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
             </div>
           ) : versions.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              No version history available
-            </div>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">No version history available</div>
           ) : (
             <div className="flex gap-4 flex-1 min-h-0">
               {/* Version List */}
@@ -138,6 +153,7 @@ export const VersionHistoryModal = ({
                 <div className="p-4 space-y-2">
                   {versions.map((version) => (
                     <button
+                      type="button"
                       key={version.id}
                       onClick={() => setSelectedVersion(version)}
                       className={cn(
@@ -145,7 +161,7 @@ export const VersionHistoryModal = ({
                         selectedVersion?.id === version.id
                           ? cn(glassmorphism.background.cyan, "border-cyan-500")
                           : cn(glassmorphism.background.subtle, "hover:bg-gray-100 dark:hover:bg-gray-800"),
-                        "border border-gray-200 dark:border-gray-700"
+                        "border border-gray-200 dark:border-gray-700",
                       )}
                     >
                       <div className="flex items-start gap-2">
@@ -187,25 +203,21 @@ export const VersionHistoryModal = ({
                         Version {selectedVersion.version_number} Details
                       </h3>
                       <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleRestore(selectedVersion)}
-                          variant="outline"
-                          size="sm"
-                        >
+                        <Button onClick={() => handleRestore(selectedVersion)} variant="outline" size="sm">
                           <RotateCcw className="w-4 h-4 mr-1" />
                           Restore
                         </Button>
                       </div>
                     </div>
 
-                    <div className={cn(
-                      "p-4 rounded-lg",
-                      glassmorphism.background.subtle,
-                      "border border-gray-200 dark:border-gray-700"
-                    )}>
-                      <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Content Preview
-                      </h4>
+                    <div
+                      className={cn(
+                        "p-4 rounded-lg",
+                        glassmorphism.background.subtle,
+                        "border border-gray-200 dark:border-gray-700",
+                      )}
+                    >
+                      <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Content Preview</h4>
                       <pre className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap font-mono">
                         {JSON.stringify(selectedVersion.content, null, 2)}
                       </pre>
@@ -227,17 +239,14 @@ export const VersionHistoryModal = ({
               Restore Version
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to restore to version {versionToRestore?.version_number}?
-              This will create a new version with the restored content.
+              Are you sure you want to restore to version {versionToRestore?.version_number}? This will create a new
+              version with the restored content.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRestore}
-              disabled={restoring}
-            >
-              {restoring ? 'Restoring...' : 'Restore Version'}
+            <AlertDialogAction onClick={confirmRestore} disabled={restoring}>
+              {restoring ? "Restoring..." : "Restore Version"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

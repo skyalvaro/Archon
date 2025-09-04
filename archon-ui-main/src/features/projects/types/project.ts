@@ -1,6 +1,6 @@
 /**
  * Core Project Types
- * 
+ *
  * Properly typed project interfaces following vertical slice architecture
  */
 
@@ -13,7 +13,16 @@ export type ProjectData = unknown[];
 // Project creation progress tracking
 export interface ProjectCreationProgress {
   progressId: string;
-  status: 'starting' | 'initializing_agents' | 'generating_docs' | 'processing_requirements' | 'ai_generation' | 'finalizing_docs' | 'saving_to_database' | 'completed' | 'error';
+  status:
+    | "starting"
+    | "initializing_agents"
+    | "generating_docs"
+    | "processing_requirements"
+    | "ai_generation"
+    | "finalizing_docs"
+    | "saving_to_database"
+    | "completed"
+    | "error";
   percentage: number;
   logs: string[];
   error?: string;
@@ -30,20 +39,20 @@ export interface Project {
   title: string;
   prd?: ProjectPRD;
   docs?: ProjectDocs;
-  features?: ProjectFeatures;  
+  features?: ProjectFeatures;
   data?: ProjectData;
   github_repo?: string;
   created_at: string;
   updated_at: string;
   technical_sources?: string[];
   business_sources?: string[];
-  
+
   // Extended UI properties
   description?: string;
   progress?: number;
   updated?: string; // Human-readable format
   pinned: boolean;
-  
+
   // Creation progress tracking for inline display
   creationProgress?: ProjectCreationProgress;
 }

@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { KanbanColumn } from '../components/KanbanColumn';
-import type { Task } from '../types';
+import { useState } from "react";
+import { KanbanColumn } from "../components/KanbanColumn";
+import type { Task } from "../types";
 
 interface BoardViewProps {
   tasks: Task[];
   projectId: string;
-  onTaskMove: (taskId: string, newStatus: Task['status']) => void;
-  onTaskReorder: (taskId: string, targetIndex: number, status: Task['status']) => void;
+  onTaskMove: (taskId: string, newStatus: Task["status"]) => void;
+  onTaskReorder: (taskId: string, targetIndex: number, status: Task["status"]) => void;
   onTaskEdit?: (task: Task) => void;
   onTaskDelete?: (task: Task) => void;
 }
@@ -17,23 +17,21 @@ export const BoardView = ({
   onTaskMove,
   onTaskReorder,
   onTaskEdit,
-  onTaskDelete
+  onTaskDelete,
 }: BoardViewProps) => {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
 
   // Simple task filtering for board view
-  const getTasksByStatus = (status: Task['status']) => {
-    return tasks
-      .filter(task => task.status === status)
-      .sort((a, b) => a.task_order - b.task_order);
+  const getTasksByStatus = (status: Task["status"]) => {
+    return tasks.filter((task) => task.status === status).sort((a, b) => a.task_order - b.task_order);
   };
 
   // Column configuration
-  const columns: Array<{ status: Task['status']; title: string }> = [
-    { status: 'todo', title: 'Todo' },
-    { status: 'doing', title: 'Doing' },
-    { status: 'review', title: 'Review' },
-    { status: 'done', title: 'Done' }
+  const columns: Array<{ status: Task["status"]; title: string }> = [
+    { status: "todo", title: "Todo" },
+    { status: "doing", title: "Doing" },
+    { status: "review", title: "Review" },
+    { status: "done", title: "Done" },
   ];
 
   return (

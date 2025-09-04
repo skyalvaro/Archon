@@ -7,15 +7,10 @@
  * This is purely for visual categorization until backend priority support is added.
  */
 
-import React from "react";
 import { AlertCircle } from "lucide-react";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-} from "../../../ui/primitives/select";
-import { glassmorphism, cn } from "../../../ui/primitives/styles";
+import type React from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../../../ui/primitives/select";
+import { cn, glassmorphism } from "../../../ui/primitives/styles";
 
 export type Priority = "critical" | "high" | "medium" | "low";
 
@@ -69,7 +64,6 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
           glow: glassmorphism.priority.medium.glow,
           iconColor: "text-blue-500",
         };
-      case "low":
       default:
         return {
           background: glassmorphism.priority.low.background,
@@ -82,9 +76,7 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
   };
 
   const currentStyles = getPriorityStyles(priority);
-  const currentOption =
-    PRIORITY_OPTIONS.find((opt) => opt.value === priority) ||
-    PRIORITY_OPTIONS[2]; // Default to medium
+  const currentOption = PRIORITY_OPTIONS.find((opt) => opt.value === priority) || PRIORITY_OPTIONS[2]; // Default to medium
 
   // If no change handler, just show a static button
   if (!onPriorityChange) {
@@ -102,21 +94,14 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
         title={`Priority: ${currentOption.label}`}
         aria-label={`Priority: ${currentOption.label}`}
       >
-        <AlertCircle
-          className={cn("w-3 h-3", currentStyles.iconColor)}
-          aria-hidden="true"
-        />
+        <AlertCircle className={cn("w-3 h-3", currentStyles.iconColor)} aria-hidden="true" />
         <span>{currentOption.label}</span>
       </button>
     );
   }
 
   return (
-    <Select
-      value={priority}
-      onValueChange={(value) => onPriorityChange(value as Priority)}
-      disabled={isLoading}
-    >
+    <Select value={priority} onValueChange={(value) => onPriorityChange(value as Priority)} disabled={isLoading}>
       <SelectTrigger
         className={cn(
           "h-auto px-2 py-1 rounded-full text-xs font-medium min-w-[80px]",
@@ -143,15 +128,9 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
           const optionStyles = getPriorityStyles(option.value);
 
           return (
-            <SelectItem
-              key={option.value}
-              value={option.value}
-              className={option.color}
-            >
+            <SelectItem key={option.value} value={option.value} className={option.color}>
               <div className="flex items-center gap-1">
-                <AlertCircle
-                  className={cn("w-3 h-3", optionStyles.iconColor)}
-                />
+                <AlertCircle className={cn("w-3 h-3", optionStyles.iconColor)} />
                 <span>{option.label}</span>
               </div>
             </SelectItem>

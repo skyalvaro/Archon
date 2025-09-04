@@ -14,7 +14,7 @@ export interface UseDocumentActionsReturn {
   confirmDelete: () => void;
   cancelDelete: () => void;
   isDeleting: boolean;
-  
+
   // Clipboard operations
   copyDocumentId: (documentId: string) => void;
 }
@@ -23,7 +23,7 @@ export interface UseDocumentEditorReturn {
   // Document creation/editing
   saveDocument: (document: Partial<ProjectDocument>) => void;
   isSaving: boolean;
-  
+
   // Document types
   availableDocumentTypes: string[];
 }

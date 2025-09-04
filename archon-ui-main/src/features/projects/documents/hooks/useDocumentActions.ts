@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
-import { useDeleteDocument } from "./useDocumentQueries";
 import { useToast } from "../../../../contexts/ToastContext";
-import type { ProjectDocument } from "../types";
-import type { UseDocumentActionsReturn } from "../types";
+import type { ProjectDocument, UseDocumentActionsReturn } from "../types";
+import { useDeleteDocument } from "./useDocumentQueries";
 
 export const useDocumentActions = (projectId: string): UseDocumentActionsReturn => {
   const { showToast } = useToast();
@@ -40,14 +39,20 @@ export const useDocumentActions = (projectId: string): UseDocumentActionsReturn 
   }, []);
 
   // Copy document ID to clipboard
-  const copyDocumentId = useCallback((documentId: string) => {
-    navigator.clipboard.writeText(documentId).then(() => {
-      showToast('Document ID copied to clipboard', 'success');
-    }).catch((error) => {
-      console.error('Failed to copy to clipboard:', error);
-      showToast('Failed to copy ID', 'error');
-    });
-  }, [showToast]);
+  const copyDocumentId = useCallback(
+    (documentId: string) => {
+      navigator.clipboard
+        .writeText(documentId)
+        .then(() => {
+          showToast("Document ID copied to clipboard", "success");
+        })
+        .catch((error) => {
+          console.error("Failed to copy to clipboard:", error);
+          showToast("Failed to copy ID", "error");
+        });
+    },
+    [showToast],
+  );
 
   return {
     // Delete operations
@@ -57,7 +62,7 @@ export const useDocumentActions = (projectId: string): UseDocumentActionsReturn 
     confirmDelete,
     cancelDelete,
     isDeleting: deleteDocumentMutation.isPending,
-    
+
     // Clipboard operations
     copyDocumentId,
   };
