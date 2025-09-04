@@ -37,12 +37,18 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   onDeleteProject,
   onRetry,
 }) => {
-  // Sort projects - pinned first, then alphabetically
+  // Sort projects - pinned first, then by creation date (newest first)
   const sortedProjects = React.useMemo(() => {
     return [...projects].sort((a, b) => {
+      // Pinned projects always come first
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return a.title.localeCompare(b.title);
+      
+      // Then sort by creation date (newest first)
+      // This ensures new projects appear on the left after pinned ones
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA; // Newer projects have higher timestamps
     });
   }, [projects]);
 
