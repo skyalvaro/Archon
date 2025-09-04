@@ -12,14 +12,14 @@ export const taskKeys = {
 
 // Fetch tasks for a specific project
 export function useProjectTasks(projectId: string | undefined, enabled = true) {
-  const { refetchInterval } = useSmartPolling(8000); // 8 second base interval
+  const { refetchInterval } = useSmartPolling(5000); // 5 second base interval for faster MCP updates
 
   return useQuery<Task[]>({
     queryKey: projectId ? taskKeys.all(projectId) : ["tasks-undefined"],
     queryFn: () => (projectId ? taskService.getTasksByProject(projectId) : Promise.reject("No project ID")),
     enabled: !!projectId && enabled,
     refetchInterval, // Smart interval based on page visibility/focus
-    staleTime: 2000, // Consider data stale after 2 seconds
+    staleTime: 10000, // Consider data stale after 10 seconds
   });
 }
 

@@ -49,8 +49,8 @@ export function useSmartPolling(baseInterval: number = 10000) {
     }
 
     if (!hasFocus) {
-      // Page is visible but not focused - poll less frequently
-      return baseInterval * 3; // 30 seconds instead of 10
+      // Page is visible but not focused - poll less frequently (1 minute)
+      return 60000; // 60 seconds for background polling
     }
 
     // Page is active - use normal interval

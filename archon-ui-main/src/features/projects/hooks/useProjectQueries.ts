@@ -19,13 +19,13 @@ export const projectKeys = {
 
 // Fetch all projects with smart polling
 export function useProjects() {
-  const { refetchInterval } = useSmartPolling(10000); // 10 second base interval
+  const { refetchInterval } = useSmartPolling(20000); // 20 second base interval for projects
 
   return useQuery<Project[]>({
     queryKey: projectKeys.lists(),
     queryFn: () => projectService.listProjects(),
     refetchInterval, // Smart interval based on page visibility/focus
-    staleTime: 3000, // Consider data stale after 3 seconds
+    staleTime: 15000, // Consider data stale after 15 seconds
   });
 }
 
