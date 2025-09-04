@@ -4,7 +4,8 @@
  */
 
 import { validateCreateProject, validateUpdateProject } from "../schemas";
-import { callAPI, formatRelativeTime, formatZodErrors, ValidationError } from "../shared/api";
+import { formatRelativeTime, formatZodErrors, ValidationError } from "../shared/api";
+import { callAPIWithETag, invalidateETagCache } from "../shared/apiWithEtag";
 import type { CreateProjectRequest, Project, ProjectFeatures, UpdateProjectRequest } from "../types";
 
 export const projectService = {
@@ -14,7 +15,7 @@ export const projectService = {
   async listProjects(): Promise<Project[]> {
     try {
       // Fetching projects from API
-      const response = await callAPI<{ projects: Project[] }>("/api/projects");
+      const response = await callAPIWithETag<{ projects: Project[] }>("/api/projects");
       // API response received
 
       const projects = response.projects || [];
@@ -49,7 +50,7 @@ export const projectService = {
    */
   async getProject(projectId: string): Promise<Project> {
     try {
-      const project = await callAPI<Project>(`/api/projects/${projectId}`);
+      const project = await callAPIWithETag<Project>(`/api/projects/${projectId}`);
 
       return {
         ...project,
@@ -82,7 +83,7 @@ export const projectService = {
 
     try {
       // Sending project creation request
-      const response = await callAPI<{
+      const response = await callAPIWithETag<{
         project_id: string;
         project: Project;
         status: string;
@@ -91,6 +92,9 @@ export const projectService = {
         method: "POST",
         body: JSON.stringify(validation.data),
       });
+
+      // Invalidate project list cache after creation
+      invalidateETagCache("/api/projects");
 
       // Project creation response received
       return response;
@@ -120,10 +124,14 @@ export const projectService = {
 
     try {
       // Sending update request to API
-      const project = await callAPI<Project>(`/api/projects/${projectId}`, {
+      const project = await callAPIWithETag<Project>(`/api/projects/${projectId}`, {
         method: "PUT",
         body: JSON.stringify(validation.data),
       });
+
+      // Invalidate caches after update
+      invalidateETagCache("/api/projects");
+      invalidateETagCache(`/api/projects/${projectId}`);
 
       // API update response received
 
@@ -149,9 +157,13 @@ export const projectService = {
    */
   async deleteProject(projectId: string): Promise<void> {
     try {
-      await callAPI(`/api/projects/${projectId}`, {
+      await callAPIWithETag(`/api/projects/${projectId}`, {
         method: "DELETE",
       });
+
+      // Invalidate caches after deletion
+      invalidateETagCache("/api/projects");
+      invalidateETagCache(`/api/projects/${projectId}`);
     } catch (error) {
       console.error(`Failed to delete project ${projectId}:`, error);
       throw error;
@@ -163,7 +175,7 @@ export const projectService = {
    */
   async getProjectFeatures(projectId: string): Promise<{ features: ProjectFeatures; count: number }> {
     try {
-      const response = await callAPI<{
+      const response = await callAPIWithETag<{
         features: ProjectFeatures;
         count: number;
       }>(`/api/projects/${projectId}/features`);

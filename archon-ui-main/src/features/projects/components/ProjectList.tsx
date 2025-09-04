@@ -43,7 +43,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
       // Pinned projects always come first
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      
+
       // Then sort by creation date (newest first)
       // This ensures new projects appear on the left after pinned ones
       const dateA = new Date(a.created_at).getTime();
