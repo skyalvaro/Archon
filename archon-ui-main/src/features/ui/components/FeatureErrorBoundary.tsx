@@ -6,6 +6,7 @@ import { cn, glassmorphism } from "../primitives/styles";
 interface Props {
   children: ReactNode;
   featureName: string;
+  onReset?: () => void;
 }
 
 interface State {
@@ -20,24 +21,23 @@ export class FeatureErrorBoundary extends Component<Props, State> {
     this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return {
-      hasError: true,
-      error,
-      errorInfo: null,
-    };
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log detailed error information for debugging (alpha principle: detailed errors)
-    console.error(`Feature Error in ${this.props.featureName}:`, {
-      error,
-      errorInfo,
-      componentStack: errorInfo.componentStack,
-      errorMessage: error.message,
-      errorStack: error.stack,
-      timestamp: new Date().toISOString(),
-    });
+    // Log detailed error information for debugging in dev/test
+    if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+      // biome-ignore lint: intentional diagnostic log in development
+      console.error(`Feature Error in ${this.props.featureName}:`, {
+        error,
+        errorInfo,
+        componentStack: errorInfo.componentStack,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     this.setState({
       error,
@@ -47,6 +47,7 @@ export class FeatureErrorBoundary extends Component<Props, State> {
 
   handleReset = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
+    this.props.onReset?.();
   };
 
   render() {
@@ -57,7 +58,7 @@ export class FeatureErrorBoundary extends Component<Props, State> {
       return (
         <div className={cn("min-h-[400px] flex items-center justify-center p-8", glassmorphism.background.subtle)}>
           <div className="max-w-2xl w-full">
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-4" role="alert" aria-live="assertive" aria-atomic="true">
               <div
                 className={cn(
                   "p-3 rounded-lg",
@@ -65,7 +66,11 @@ export class FeatureErrorBoundary extends Component<Props, State> {
                   "border border-red-500/20 dark:border-red-500/30",
                 )}
               >
-                <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                <AlertTriangle
+                  className="w-6 h-6 text-red-600 dark:text-red-400"
+                  aria-hidden="true"
+                  focusable="false"
+                />
               </div>
 
               <div className="flex-1">
