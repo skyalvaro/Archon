@@ -23,25 +23,69 @@ export function useProjectTasks(projectId: string | undefined, enabled = true) {
   });
 }
 
-// Create task mutation
+// Create task mutation with optimistic updates
 export function useCreateTask() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   return useMutation({
     mutationFn: (taskData: CreateTaskRequest) => taskService.createTask(taskData),
-    onSuccess: (_data, variables) => {
-      // Invalidate tasks for the project
-      queryClient.invalidateQueries({
-        queryKey: taskKeys.all(variables.project_id),
+    onMutate: async (newTaskData) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: taskKeys.all(newTaskData.project_id) });
+
+      // Snapshot the previous value
+      const previousTasks = queryClient.getQueryData(taskKeys.all(newTaskData.project_id));
+
+      // Create optimistic task with temporary ID
+      const optimisticTask: Task = {
+        id: `temp-${Date.now()}`, // Temporary ID until real one comes back
+        ...newTaskData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+        subtasks: [],
+        // Ensure all required fields have defaults
+        task_order: newTaskData.task_order ?? 100,
+        status: newTaskData.status ?? "todo",
+        assignee: newTaskData.assignee ?? "User",
+      } as Task;
+
+      // Optimistically add the new task
+      queryClient.setQueryData(taskKeys.all(newTaskData.project_id), (old: Task[] | undefined) => {
+        if (!old) return [optimisticTask];
+        return [...old, optimisticTask];
+      });
+
+      return { previousTasks };
+    },
+    onError: (error, variables, context) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Failed to create task:", error, { variables });
+      // Rollback on error
+      if (context?.previousTasks) {
+        queryClient.setQueryData(taskKeys.all(variables.project_id), context.previousTasks);
+      }
+      showToast(`Failed to create task: ${errorMessage}`, "error");
+    },
+    onSuccess: (data, variables) => {
+      // Replace optimistic task with real one from server
+      queryClient.setQueryData(taskKeys.all(variables.project_id), (old: Task[] | undefined) => {
+        if (!old) return [data];
+        // Remove temp task and add real one
+        return old.map(task => 
+          task.id.startsWith('temp-') ? data : task
+        ).filter((task, index, self) => 
+          // Remove any duplicates just in case
+          index === self.findIndex(t => t.id === task.id)
+        );
       });
       queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
       showToast("Task created successfully", "success");
     },
-    onError: (error, variables) => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Failed to create task:", error, { variables });
-      showToast(`Failed to create task: ${errorMessage}`, "error");
+    onSettled: (_data, _error, variables) => {
+      // Always refetch to ensure consistency after operation completes
+      queryClient.invalidateQueries({ queryKey: taskKeys.all(variables.project_id) });
     },
   });
 }

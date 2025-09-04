@@ -49,21 +49,76 @@ export function useProjectFeatures(projectId: string | undefined) {
   });
 }
 
-// Create project mutation
+// Create project mutation with optimistic updates
 export function useCreateProject() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   return useMutation({
     mutationFn: (projectData: CreateProjectRequest) => projectService.createProject(projectData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-      showToast("Project created successfully!", "success");
+    onMutate: async (newProjectData) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
+
+      // Snapshot the previous value
+      const previousProjects = queryClient.getQueryData(projectKeys.lists());
+
+      // Create optimistic project with temporary ID
+      const optimisticProject: Project = {
+        id: `temp-${Date.now()}`, // Temporary ID until real one comes back
+        title: newProjectData.title,
+        description: newProjectData.description,
+        github_repo: newProjectData.github_repo,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        prd: undefined,
+        features: [],
+        data: undefined,
+        docs: [],
+        pinned: false,
+      };
+
+      // Optimistically add the new project
+      queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
+        if (!old) return [optimisticProject];
+        // Add new project at the beginning of the list
+        return [optimisticProject, ...old];
+      });
+
+      return { previousProjects };
     },
-    onError: (error, variables) => {
+    onError: (error, variables, context) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Failed to create project:", error, { variables });
+      
+      // Rollback on error
+      if (context?.previousProjects) {
+        queryClient.setQueryData(projectKeys.lists(), context.previousProjects);
+      }
+      
       showToast(`Failed to create project: ${errorMessage}`, "error");
+    },
+    onSuccess: (response) => {
+      // Extract the actual project from the response
+      const newProject = response.project;
+      
+      // Replace optimistic project with real one from server
+      queryClient.setQueryData(projectKeys.lists(), (old: Project[] | undefined) => {
+        if (!old) return [newProject];
+        // Replace temp project with real one
+        return old.map(project => 
+          project.id.startsWith('temp-') ? newProject : project
+        ).filter((project, index, self) => 
+          // Remove any duplicates just in case
+          index === self.findIndex(p => p.id === project.id)
+        );
+      });
+      
+      showToast("Project created successfully!", "success");
+    },
+    onSettled: () => {
+      // Always refetch to ensure consistency after operation completes
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
   });
 }
