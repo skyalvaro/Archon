@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useToast } from "../../../../contexts/ToastContext";
 import { useProjectFeatures } from "../../hooks/useProjectQueries";
-import type { Assignee, CreateTaskRequest, Task, UseTaskEditorReturn } from "../types";
+import type { Assignee, CreateTaskRequest, Task, UpdateTaskRequest, UseTaskEditorReturn } from "../types";
 import { useCreateTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
@@ -13,7 +13,12 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
   const updateTaskMutation = useUpdateTask(projectId);
 
   // Transform features data
-  const projectFeatures = featuresData?.features || [];
+  const projectFeatures = (featuresData?.features || []) as Array<{
+    id: string;
+    label: string;
+    type?: string;
+    color?: string;
+  }>;
   const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
 
   // Get default order for new tasks based on status

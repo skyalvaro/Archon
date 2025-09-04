@@ -5,7 +5,8 @@
  */
 
 // Import priority type from priority.ts to avoid duplication
-export type { TaskPriority } from "./priority";
+import type { TaskPriority } from "./priority";
+export type { TaskPriority };
 
 // Database status enum - using database values directly
 export type DatabaseTaskStatus = "todo" | "doing" | "review" | "done";

@@ -30,7 +30,12 @@ export interface UseTaskActionsReturn {
  */
 export interface UseTaskEditorReturn {
   // Data
-  projectFeatures: unknown[];
+  projectFeatures: Array<{
+    id: string;
+    label: string;
+    type?: string;
+    color?: string;
+  }>;
 
   // Actions
   saveTask: (localTask: Partial<Task> | null, editingTask: Task | null, onSuccess?: () => void) => void;

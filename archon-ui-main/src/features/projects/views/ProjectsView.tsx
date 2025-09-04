@@ -69,7 +69,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
 
   // Sort projects - pinned first, then alphabetically
   const sortedProjects = useMemo(() => {
-    return [...projects].sort((a, b) => {
+    return [...(projects as Project[])].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       return a.title.localeCompare(b.title);
@@ -111,7 +111,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
 
   // Refetch task counts when projects change
   useEffect(() => {
-    if (projects.length > 0) {
+    if ((projects as Project[]).length > 0) {
       refetchTaskCounts();
     }
   }, [projects, refetchTaskCounts]);
@@ -119,7 +119,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
   // Handle pin toggle
   const handlePinProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
-    const project = projects.find((p) => p.id === projectId);
+    const project = (projects as Project[]).find((p) => p.id === projectId);
     if (!project) return;
 
     updateProjectMutation.mutate({
@@ -146,7 +146,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
 
         // If we deleted the selected project, select another one
         if (selectedProject?.id === projectToDelete.id) {
-          const remainingProjects = projects.filter((p) => p.id !== projectToDelete.id);
+          const remainingProjects = (projects as Project[]).filter((p) => p.id !== projectToDelete.id);
           if (remainingProjects.length > 0) {
             const nextProject = remainingProjects[0];
             setSelectedProject(nextProject);

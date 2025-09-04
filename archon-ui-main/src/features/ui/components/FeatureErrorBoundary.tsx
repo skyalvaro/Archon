@@ -55,7 +55,7 @@ export class FeatureErrorBoundary extends Component<Props, State> {
       const isDevelopment = process.env.NODE_ENV === "development";
 
       return (
-        <div className={cn("min-h-[400px] flex items-center justify-center p-8", glassmorphism.background.medium)}>
+        <div className={cn("min-h-[400px] flex items-center justify-center p-8", glassmorphism.background.subtle)}>
           <div className="max-w-2xl w-full">
             <div className="flex items-start gap-4">
               <div

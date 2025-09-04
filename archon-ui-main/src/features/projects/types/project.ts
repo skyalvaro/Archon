@@ -7,7 +7,14 @@
 // Project JSONB field types - replacing any with proper unions
 export type ProjectPRD = Record<string, unknown>;
 export type ProjectDocs = unknown[]; // Will be refined to ProjectDocument[] when fully migrated
-export type ProjectFeatures = unknown[];
+export type ProjectFeature = {
+  id: string;
+  label: string;
+  type?: string;
+  color?: string;
+};
+
+export type ProjectFeatures = ProjectFeature[];
 export type ProjectData = unknown[];
 
 // Project creation progress tracking

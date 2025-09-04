@@ -34,7 +34,7 @@ export function useSmartPolling(baseInterval: number = 10000) {
   }, []);
 
   // Calculate smart interval based on visibility and focus
-  const getSmartInterval = () => {
+  const getSmartInterval = (): number | false => {
     if (!isVisible) {
       // Page is hidden - disable polling
       return false;

@@ -120,7 +120,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
   const handleTaskReorder = useCallback(
     async (taskId: string, targetIndex: number, status: Task["status"]) => {
       // Get all tasks in the target status, sorted by current order
-      const statusTasks = tasks.filter((task) => task.status === status).sort((a, b) => a.task_order - b.task_order);
+      const statusTasks = (tasks as Task[]).filter((task) => task.status === status).sort((a, b) => a.task_order - b.task_order);
 
       const movingTaskIndex = statusTasks.findIndex((task) => task.id === taskId);
       if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex >= statusTasks.length) return;
@@ -152,12 +152,12 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
   // Move task to different status
   const moveTask = useCallback(
     async (taskId: string, newStatus: Task["status"]) => {
-      const movingTask = tasks.find((task) => task.id === taskId);
+      const movingTask = (tasks as Task[]).find((task) => task.id === taskId);
       if (!movingTask || movingTask.status === newStatus) return;
 
       try {
         // Calculate position for new status
-        const tasksInNewStatus = tasks.filter((t) => t.status === newStatus);
+        const tasksInNewStatus = (tasks as Task[]).filter((t) => t.status === newStatus);
         const newOrder = getDefaultTaskOrder(tasksInNewStatus);
 
         // Update via mutation (handles optimistic updates)
@@ -221,7 +221,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         <div className="relative h-[calc(100vh-220px)] overflow-auto">
           {viewMode === "table" ? (
             <TableView
-              tasks={tasks}
+              tasks={tasks as Task[]}
               projectId={projectId}
               onTaskView={openEditModal}
               onTaskComplete={completeTask}
@@ -231,7 +231,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
             />
           ) : (
             <BoardView
-              tasks={tasks}
+              tasks={tasks as Task[]}
               projectId={projectId}
               onTaskMove={moveTask}
               onTaskReorder={handleTaskReorder}

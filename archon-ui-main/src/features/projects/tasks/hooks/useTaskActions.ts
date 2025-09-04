@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useToast } from "../../../../contexts/ToastContext";
-import type { Task, UseTaskActionsReturn } from "../types";
+import type { Assignee, Task, UseTaskActionsReturn } from "../types";
 import { useDeleteTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
@@ -17,7 +17,7 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
     (taskId: string, newAssignee: string) => {
       updateTaskMutation.mutate({
         taskId,
-        updates: { assignee: newAssignee },
+        updates: { assignee: newAssignee as Assignee },
       });
     },
     [updateTaskMutation],
