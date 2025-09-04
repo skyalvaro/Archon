@@ -82,18 +82,19 @@ export const TaskAssignee: React.FC<TaskAssigneeProps> = ({ assignee, onAssignee
   }
 
   return (
-    <Select value={assignee} onValueChange={(value) => onAssigneeChange(value as Assignee)} disabled={isLoading}>
+    <Select value={assignee} onValueChange={(value) => onAssigneeChange(value as Assignee)}>
       <SelectTrigger
+        disabled={isLoading}
         className={cn(
           "h-auto py-0.5 px-1.5 gap-1.5",
           "border-0 shadow-none bg-transparent",
           "hover:bg-gray-100/50 dark:hover:bg-gray-900/50",
           "transition-all duration-200 rounded-md",
           "min-w-fit w-auto",
-          isLoading && "opacity-50 cursor-not-allowed",
         )}
         showChevron={false}
         aria-label={`Assignee: ${assignee}${isLoading ? " (updating...)" : ""}`}
+        aria-disabled={isLoading}
       >
         <div className="flex items-center gap-1.5">
           <div

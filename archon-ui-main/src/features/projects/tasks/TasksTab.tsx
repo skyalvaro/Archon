@@ -123,7 +123,7 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
       const statusTasks = (tasks as Task[]).filter((task) => task.status === status).sort((a, b) => a.task_order - b.task_order);
 
       const movingTaskIndex = statusTasks.findIndex((task) => task.id === taskId);
-      if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex >= statusTasks.length) return;
+      if (movingTaskIndex === -1 || targetIndex < 0 || targetIndex > statusTasks.length) return;
       if (movingTaskIndex === targetIndex) return;
 
       // Calculate new position

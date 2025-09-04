@@ -101,8 +101,9 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
   }
 
   return (
-    <Select value={priority} onValueChange={(value) => onPriorityChange(value as Priority)} disabled={isLoading}>
+    <Select value={priority} onValueChange={(value) => onPriorityChange(value as Priority)}>
       <SelectTrigger
+        disabled={isLoading}
         className={cn(
           "h-auto px-2 py-1 rounded-full text-xs font-medium min-w-[80px]",
           "border-0 shadow-none", // Remove default border and shadow
@@ -112,10 +113,10 @@ export const TaskPriority: React.FC<TaskPriorityProps> = ({
           currentStyles.hover,
           currentStyles.glow,
           "backdrop-blur-md",
-          isLoading && "opacity-50 cursor-not-allowed",
         )}
         showChevron={false}
         aria-label={`Priority: ${currentOption.label}${isLoading ? " (updating...)" : ""}`}
+        aria-disabled={isLoading}
       >
         <div className="flex items-center gap-1">
           <AlertCircle className={cn("w-3 h-3", currentStyles.iconColor)} />
