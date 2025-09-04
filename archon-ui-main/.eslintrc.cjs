@@ -14,7 +14,8 @@ module.exports = {
     '*.config.js',
     '*.config.ts',
     'coverage',
-    'node_modules'
+    'node_modules',
+    'src/features/**'  // Biome handles this directory
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
