@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStaggeredEntrance } from "../../../hooks/useStaggeredEntrance";
 import { DeleteConfirmModal } from "../../ui/components/DeleteConfirmModal";
-import { useToast } from "../../ui/hooks/useToast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/primitives";
 import { NewProjectModal } from "../components/NewProjectModal";
 import { ProjectHeader } from "../components/ProjectHeader";
@@ -51,8 +50,6 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
     id: string;
     title: string;
   } | null>(null);
-
-  const { showToast } = useToast();
 
   // React Query hooks
   const { data: projects = [], isLoading: isLoadingProjects, error: projectsError } = useProjects();
@@ -135,7 +132,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
 
     deleteProjectMutation.mutate(projectToDelete.id, {
       onSuccess: () => {
-        showToast(`Project "${projectToDelete.title}" deleted successfully`, "success");
+        // Success toast handled by mutation
         setShowDeleteConfirm(false);
         setProjectToDelete(null);
 

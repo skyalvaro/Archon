@@ -1,10 +1,8 @@
 import { useCallback, useState } from "react";
-import { useToast } from "../../../ui/hooks/useToast";
 import type { Assignee, Task, UseTaskActionsReturn } from "../types";
 import { useDeleteTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
-  const { showToast } = useToast();
   const updateTaskMutation = useUpdateTask(projectId);
   const deleteTaskMutation = useDeleteTask(projectId);
 
@@ -35,18 +33,17 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
 
     deleteTaskMutation.mutate(taskToDelete.id, {
       onSuccess: () => {
-        showToast(`Task "${taskToDelete.title}" deleted successfully`, "success");
+        // Success toast handled by mutation
         setShowDeleteConfirm(false);
         setTaskToDelete(null);
       },
       onError: (error) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Failed to delete task:", error, { taskToDelete });
-        showToast(`Failed to delete task "${taskToDelete.title}": ${errorMessage}`, "error");
+        // Error toast handled by mutation
         // Modal stays open on error so user can retry
       },
     });
-  }, [deleteTaskMutation, taskToDelete, showToast]);
+  }, [deleteTaskMutation, taskToDelete]);
 
   // Cancel deletion
   const cancelDelete = useCallback(() => {

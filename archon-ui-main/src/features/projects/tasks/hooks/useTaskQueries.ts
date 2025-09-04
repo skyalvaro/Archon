@@ -85,6 +85,8 @@ export function useUpdateTask(projectId: string) {
       // Only invalidate counts if status changed (which affects counts)
       if (updates.status) {
         queryClient.invalidateQueries({ queryKey: taskKeys.counts() });
+        // Show toast for significant status changes
+        showToast(`Task moved to ${updates.status}`, "success");
       }
       // Don't refetch task list - trust optimistic update
     },

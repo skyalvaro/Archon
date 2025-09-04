@@ -63,12 +63,10 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
 
     deleteTaskMutation.mutate(taskToDelete.id, {
       onSuccess: () => {
-        showToast(`Task "${taskToDelete.title}" deleted successfully`, "success");
         closeDeleteModal();
       },
       onError: (error) => {
         console.error("Failed to delete task:", error);
-        showToast(`Failed to delete task "${taskToDelete.title}"`, "error");
       },
     });
   };
@@ -104,12 +102,11 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
           },
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Failed to reorder task:", error, {
           taskId,
           newPosition,
         });
-        showToast(`Failed to reorder task: ${errorMessage}`, "error");
+        // Error toast handled by mutation
       }
     },
     [tasks, updateTaskMutation, showToast],
@@ -135,11 +132,10 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
           },
         });
 
-        showToast(`Task moved to ${newStatus}`, "success");
+        // Success handled by mutation
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Failed to move task:", error, { taskId, newStatus });
-        showToast(`Failed to move task: ${errorMessage}`, "error");
+        // Error toast handled by mutation
       }
     },
     [tasks, updateTaskMutation, showToast, getDefaultTaskOrder],
@@ -166,9 +162,8 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
         updates: processedUpdates,
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Failed to update task:", error, { taskId, updates });
-      showToast(`Failed to update task: ${errorMessage}`, "error");
+      // Error toast handled by mutation
     }
   };
 

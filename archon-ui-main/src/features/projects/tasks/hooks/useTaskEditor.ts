@@ -83,12 +83,12 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
           },
           {
             onSuccess: () => {
-              showToast("Task updated successfully", "success");
+              // Success toast handled by mutation
               onSuccess?.();
             },
             onError: (error) => {
               console.error("Failed to update task:", error);
-              showToast("Failed to update task", "error");
+              // Error toast handled by mutation
             },
           },
         );
@@ -98,12 +98,12 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
 
         createTaskMutation.mutate(newTaskData, {
           onSuccess: () => {
-            showToast("Task created successfully", "success");
+            // Success toast handled by mutation
             onSuccess?.();
           },
           onError: (error) => {
             console.error("Failed to create task:", error);
-            showToast("Failed to create task", "error");
+            // Error toast handled by mutation
           },
         });
       }
