@@ -5,8 +5,5 @@
  * Uses Radix UI primitives for better accessibility and consistency.
  */
 
-export type { DocumentCardProps, DocumentCreateTriggerProps } from "../types";
 export { DocumentCard } from "./DocumentCard";
-export { DocumentCreateTrigger } from "./DocumentCreateTrigger";
-export { DocumentEditor } from "./DocumentEditor";
-export { VersionHistoryModal } from "./VersionHistoryModal";
+export { DocumentViewer } from "./DocumentViewer";

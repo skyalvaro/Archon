@@ -1,13 +1,7 @@
 /**
  * Document Hooks
  *
- * Business logic hooks for document management operations.
+ * Read-only hooks for document display
  */
 
-export { useDocumentActions } from "./useDocumentActions";
-export {
-  useCreateDocument,
-  useDeleteDocument,
-  useProjectDocuments,
-  useUpdateDocument,
-} from "./useDocumentQueries";
+export { useProjectDocuments } from "./useDocumentQueries";

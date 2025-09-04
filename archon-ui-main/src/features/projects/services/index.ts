@@ -5,7 +5,6 @@
  * Replaces the monolithic src/services/projectService.ts with focused services.
  */
 
-export { documentService } from "../documents/services/documentService";
 // Export shared utilities
 export * from "../shared/api";
 // Re-export other services for convenience

@@ -21,6 +21,7 @@ export interface ProjectDocument {
   title: string;
   content?: DocumentContent;
   document_type?: DocumentType | string;
+  tags?: string[];
   updated_at: string;
   created_at?: string;
 }
@@ -41,8 +42,4 @@ export interface DocumentCardProps {
   isActive: boolean;
   onSelect: (doc: ProjectDocument) => void;
   onDelete: (doc: ProjectDocument) => void;
-}
-
-export interface DocumentCreateTriggerProps {
-  onClick: () => void;
 }
