@@ -8,7 +8,7 @@ import { cn, glassmorphism } from "../../ui/primitives/styles";
 import { TaskEditModal } from "./components/TaskEditModal";
 import { useDeleteTask, useProjectTasks, useUpdateTask } from "./hooks";
 import type { Task } from "./types";
-import { getReorderTaskOrder, validateTaskOrder } from "./utils";
+import { getReorderTaskOrder, ORDER_INCREMENT, validateTaskOrder } from "./utils";
 import { BoardView, TableView } from "./views";
 
 interface TasksTabProps {
@@ -71,9 +71,9 @@ export const TasksTab = ({ projectId }: TasksTabProps) => {
 
   // Get default order for new tasks in a status
   const getDefaultTaskOrder = useCallback((statusTasks: Task[]) => {
-    if (statusTasks.length === 0) return 100;
+    if (statusTasks.length === 0) return ORDER_INCREMENT;
     const maxOrder = Math.max(...statusTasks.map((t) => t.task_order));
-    return maxOrder + 100;
+    return maxOrder + ORDER_INCREMENT;
   }, []);
 
   // Task reordering - immediate update

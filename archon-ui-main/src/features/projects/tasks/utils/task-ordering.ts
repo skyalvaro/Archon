@@ -6,7 +6,7 @@
 
 import type { Task } from "../types";
 
-const ORDER_INCREMENT = 1000; // Large increment to avoid precision issues
+export const ORDER_INCREMENT = 1000; // Large increment to avoid precision issues
 const MAX_ORDER = Number.MAX_SAFE_INTEGER - ORDER_INCREMENT;
 
 /**
