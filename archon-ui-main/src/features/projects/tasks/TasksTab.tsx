@@ -3,7 +3,6 @@ import { useCallback, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { DeleteConfirmModal } from "../../ui/components/DeleteConfirmModal";
-import { useToast } from "../../ui/hooks/useToast";
 import { Button } from "../../ui/primitives";
 import { cn, glassmorphism } from "../../ui/primitives/styles";
 import { TaskEditModal } from "./components/TaskEditModal";
@@ -17,7 +16,6 @@ interface TasksTabProps {
 }
 
 export const TasksTab = ({ projectId }: TasksTabProps) => {
-  const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<"table" | "board">("board");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
