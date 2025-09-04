@@ -143,7 +143,8 @@ async def get_llm_client(provider: str | None = None, use_embedding_provider: bo
         raise
     finally:
         # Cleanup if needed
-        pass
+        if client and hasattr(client, "close"):
+            await client.close()
 
 
 async def _get_optimal_ollama_instance(instance_type: str | None = None,
