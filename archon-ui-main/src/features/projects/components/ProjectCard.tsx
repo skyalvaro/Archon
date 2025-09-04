@@ -11,6 +11,7 @@ interface ProjectCardProps {
   taskCounts: {
     todo: number;
     doing: number;
+    review: number;
     done: number;
   };
   onSelect: (project: Project) => void;
@@ -127,7 +128,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
           </div>
 
-          {/* Doing pill */}
+          {/* Doing pill (includes review) */}
           <div className="relative flex-1">
             <div
               className={cn(
@@ -171,7 +172,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
                     isSelected ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-600",
                   )}
                 >
-                  {taskCounts.doing || 0}
+                  {(taskCounts.doing || 0) + (taskCounts.review || 0)}
                 </span>
               </div>
             </div>

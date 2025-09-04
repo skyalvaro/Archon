@@ -18,6 +18,7 @@ export type Assignee = "User" | "Archon" | "AI IDE Agent";
 export interface TaskCounts {
   todo: number;
   doing: number;
+  review: number;
   done: number;
 }
 
