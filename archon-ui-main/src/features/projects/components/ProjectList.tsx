@@ -46,17 +46,18 @@ export const ProjectList: React.FC<ProjectListProps> = ({
 
       // Then sort by creation date (newest first)
       // This ensures new projects appear on the left after pinned ones
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
-      return dateB - dateA; // Newer projects have higher timestamps
+      const timeA = Number.isFinite(Date.parse(a.created_at)) ? Date.parse(a.created_at) : 0;
+      const timeB = Number.isFinite(Date.parse(b.created_at)) ? Date.parse(b.created_at) : 0;
+      const byDate = timeB - timeA; // Newer first
+      return byDate !== 0 ? byDate : a.id.localeCompare(b.id); // Tie-break with ID for deterministic sort
     });
   }, [projects]);
 
   if (isLoading) {
     return (
-      <motion.div variants={itemVariants} className="mb-10">
+      <motion.div initial="hidden" animate="visible" variants={itemVariants} className="mb-10">
         <div className="flex items-center justify-center py-12">
-          <div className="text-center">
+          <div className="text-center" role="status" aria-live="polite" aria-busy="true">
             <Loader2 className="w-8 h-8 text-purple-500 mx-auto mb-4 animate-spin" />
             <p className="text-gray-600 dark:text-gray-400">Loading your projects...</p>
           </div>
@@ -67,9 +68,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({
 
   if (error) {
     return (
-      <motion.div variants={itemVariants} className="mb-10">
+      <motion.div initial="hidden" animate="visible" variants={itemVariants} className="mb-10">
         <div className="flex items-center justify-center py-12">
-          <div className="text-center">
+          <div className="text-center" role="alert" aria-live="assertive">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-4" />
             <p className="text-red-600 dark:text-red-400 mb-4">{error.message || "Failed to load projects"}</p>
             <Button onClick={onRetry} variant="default">
@@ -83,7 +84,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
 
   if (sortedProjects.length === 0) {
     return (
-      <motion.div variants={itemVariants} className="mb-10">
+      <motion.div initial="hidden" animate="visible" variants={itemVariants} className="mb-10">
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <p className="text-gray-600 dark:text-gray-400 mb-4">
@@ -96,9 +97,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   }
 
   return (
-    <motion.div className="relative mb-10" variants={itemVariants}>
+    <motion.div initial="hidden" animate="visible" className="relative mb-10" variants={itemVariants}>
       <div className="overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-thin">
-        <div className="flex gap-4 min-w-max">
+        <div className="flex gap-4 min-w-max" role="list" aria-label="Projects">
           {sortedProjects.map((project) => (
             <ProjectCard
               key={project.id}

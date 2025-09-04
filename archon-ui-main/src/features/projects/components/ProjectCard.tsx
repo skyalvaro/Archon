@@ -29,6 +29,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   return (
     <motion.div
+      role="listitem"
       onClick={() => onSelect(project)}
       className={cn(
         "relative rounded-xl backdrop-blur-md w-72 min-h-[180px] cursor-pointer overflow-visible group flex flex-col",
