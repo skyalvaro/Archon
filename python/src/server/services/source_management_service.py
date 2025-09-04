@@ -33,7 +33,7 @@ def _get_model_choice() -> str:
         return "gpt-4.1-nano"
 
 
-def extract_source_summary(
+async def extract_source_summary(
     source_id: str, content: str, max_length: int = 500, provider: str = None
 ) -> str:
     """
@@ -72,39 +72,14 @@ The above content is from the documentation for '{source_id}'. Please provide a 
 """
 
     try:
-        try:
-            import os
+        # Use unified LLM provider service instead of hardcoded OpenAI
+        from .llm_provider_service import get_llm_client
 
-            import openai
-
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                # Try to get from credential service with direct fallback
-                from .credential_service import credential_service
-
-                if (
-                    credential_service._cache_initialized
-                    and "OPENAI_API_KEY" in credential_service._cache
-                ):
-                    cached_key = credential_service._cache["OPENAI_API_KEY"]
-                    if isinstance(cached_key, dict) and cached_key.get("is_encrypted"):
-                        api_key = credential_service._decrypt_value(cached_key["encrypted_value"])
-                    else:
-                        api_key = cached_key
-                else:
-                    api_key = os.getenv("OPENAI_API_KEY", "")
-
-            if not api_key:
-                raise ValueError("No OpenAI API key available")
-
-            client = openai.OpenAI(api_key=api_key)
-            search_logger.info("Successfully created LLM client fallback for summary generation")
-        except Exception as e:
-            search_logger.error(f"Failed to create LLM client fallback: {e}")
-            return default_summary
-
-        # Call the OpenAI API to generate the summary
-        response = client.chat.completions.create(
+        async with get_llm_client(provider=provider) as client:
+            search_logger.info("Successfully created LLM client for summary generation")
+            
+            # Call the LLM API to generate the summary
+            response = await client.chat.completions.create(
             model=model_choice,
             messages=[
                 {
@@ -140,7 +115,7 @@ The above content is from the documentation for '{source_id}'. Please provide a 
         return default_summary
 
 
-def generate_source_title_and_metadata(
+async def generate_source_title_and_metadata(
     source_id: str,
     content: str,
     knowledge_type: str = "technical",
@@ -166,40 +141,8 @@ def generate_source_title_and_metadata(
     # Try to generate a better title from content
     if content and len(content.strip()) > 100:
         try:
-            try:
-                import os
-
-                import openai
-
-                api_key = os.getenv("OPENAI_API_KEY")
-                if not api_key:
-                    # Try to get from credential service with direct fallback
-                    from .credential_service import credential_service
-
-                    if (
-                        credential_service._cache_initialized
-                        and "OPENAI_API_KEY" in credential_service._cache
-                    ):
-                        cached_key = credential_service._cache["OPENAI_API_KEY"]
-                        if isinstance(cached_key, dict) and cached_key.get("is_encrypted"):
-                            api_key = credential_service._decrypt_value(
-                                cached_key["encrypted_value"]
-                            )
-                        else:
-                            api_key = cached_key
-                    else:
-                        api_key = os.getenv("OPENAI_API_KEY", "")
-
-                if not api_key:
-                    raise ValueError("No OpenAI API key available")
-
-                client = openai.OpenAI(api_key=api_key)
-            except Exception as e:
-                search_logger.error(
-                    f"Failed to create LLM client fallback for title generation: {e}"
-                )
-                # Don't proceed if client creation fails
-                raise
+            # Use unified LLM provider service instead of hardcoded OpenAI
+            from .llm_provider_service import get_llm_client
 
             model_choice = _get_model_choice()
 
@@ -215,7 +158,8 @@ def generate_source_title_and_metadata(
 
 Provide only the title, nothing else."""
 
-            response = client.chat.completions.create(
+            async with get_llm_client(provider=provider) as client:
+                response = await client.chat.completions.create(
                 model=model_choice,
                 messages=[
                     {
@@ -247,7 +191,7 @@ Provide only the title, nothing else."""
     return title, metadata
 
 
-def update_source_info(
+async def update_source_info(
     client: Client,
     source_id: str,
     summary: str,
@@ -351,7 +295,7 @@ def update_source_info(
                 }
             else:
                 # Fallback to AI generation only if no display name
-                title, metadata = generate_source_title_and_metadata(
+                title, metadata = await generate_source_title_and_metadata(
                     source_id, content, knowledge_type, tags, None, source_display_name
                 )
                 
@@ -568,7 +512,7 @@ class SourceManagementService:
             logger.error(f"Error updating source metadata: {e}")
             return False, {"error": f"Error updating source metadata: {str(e)}"}
 
-    def create_source_info(
+    async def create_source_info(
         self,
         source_id: str,
         content_sample: str,
@@ -596,10 +540,10 @@ class SourceManagementService:
                 tags = []
 
             # Generate source summary using the utility function
-            source_summary = extract_source_summary(source_id, content_sample)
+            source_summary = await extract_source_summary(source_id, content_sample)
 
             # Create the source info using the utility function
-            update_source_info(
+            await update_source_info(
                 self.supabase_client,
                 source_id,
                 source_summary,
