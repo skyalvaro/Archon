@@ -67,38 +67,26 @@ function isSafeObject(obj: any): boolean {
   // Quick size check to prevent expensive operations on large objects
   if (Object.keys(obj).length > MAX_OBJECT_KEYS) return false;
   
-  // Use WeakSet for cycle detection - more efficient than recursive depth checking
-  const visited = new WeakSet();
-  
-  function hasCycles(value: any, depth = 0): boolean {
-    if (depth > MAX_RECURSION_DEPTH) return true; // Prevent deep recursion
-    if (typeof value !== 'object' || value === null) return false;
-    
-    if (visited.has(value)) return true; // Circular reference detected
-    visited.add(value);
-    
-    try {
-      for (const key in value) {
-        if (Object.prototype.hasOwnProperty.call(value, key) && hasCycles(value[key], depth + 1)) {
-          return true;
-        }
-      }
-    } catch {
-      return true; // Error during traversal indicates unsafe object
-    }
-    
+  // For simple objects like API error responses, just try JSON.stringify as a safety check
+  try {
+    JSON.stringify(obj);
+    return true;
+  } catch {
+    // Only fail if JSON.stringify fails (indicates circular references)
+    console.log('🔍 [Debug] JSON.stringify failed, object has circular references');
     return false;
   }
-  
-  return !hasCycles(obj);
 }
 
 /**
  * Parse and enhance API errors from knowledge base operations
  */
 export function parseKnowledgeBaseError(error: any): EnhancedError {
+  console.log('🔍 [Debug] parseKnowledgeBaseError called with:', error);
+  
   // Enhanced input validation
   if (!error) {
+    console.log('🔍 [Debug] No error provided, creating fallback');
     return createFallbackError('No error information provided');
   }
   
@@ -123,6 +111,7 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
 
   // Check for circular references and object safety
   if (!isSafeObject(error)) {
+    console.log('🔍 [Debug] Object safety check failed, creating fallback');
     return createFallbackError('Error object contains circular references');
   }
 
@@ -146,9 +135,11 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
     // Parse error details from API response
     if (error.error || error.detail) {
       const errorData = error.error || error.detail;
+      console.log('🔍 [Debug] Found error data:', errorData);
       
       // Check if it's an OpenAI-specific error
       if (typeof errorData === 'object' && errorData.error_type) {
+        console.log('🔍 [Debug] Detected OpenAI error type:', errorData.error_type);
         enhancedError.isOpenAIError = true;
         
         // Validate and normalize the error details
