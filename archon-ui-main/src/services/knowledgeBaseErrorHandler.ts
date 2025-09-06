@@ -48,7 +48,7 @@ function createFallbackError(reason: string): EnhancedError {
   return Object.assign(new Error('Unknown error occurred'), {
     errorDetails: {
       error: 'unknown',
-      message: `${reason}. Please try again or contact support if the problem persists.`,
+      message: sanitizeMessage(`${reason}. Please try again or contact support if the problem persists.`),
       error_type: 'api_error' as const
     }
   }) as EnhancedError;
@@ -57,6 +57,24 @@ function createFallbackError(reason: string): EnhancedError {
 // Constants for validation
 const MAX_OBJECT_KEYS = 100;
 const MAX_RECURSION_DEPTH = 10;
+
+// Sanitization patterns for frontend error messages
+const REDACTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
+  [/\bsk-[A-Za-z0-9]{10,}\b/g, 'sk-REDACTED'],
+  [/\borg-[A-Za-z0-9]{6,}\b/g, 'org-REDACTED'],
+  [/\bproj_[A-Za-z0-9]{10,}\b/g, 'proj_REDACTED'],
+  [/\bBearer\s+[A-Za-z0-9._-]{10,}\b/gi, 'Bearer REDACTED'],
+  [/\bhttps?:\/\/[^\s]{1,200}/gi, '[REDACTED_URL]'],
+];
+
+function sanitizeMessage(msg: unknown): string {
+  if (typeof msg !== 'string' || msg.length === 0) return 'Unknown error occurred';
+  let out = msg.slice(0, 10_000); // cap length
+  for (const [re, replacement] of REDACTION_PATTERNS) {
+    out = out.replace(re, replacement);
+  }
+  return out;
+}
 
 /**
  * Check if an object can be safely serialized (no circular references)
@@ -92,11 +110,13 @@ function isSafeObject(obj: any, visited = new WeakSet(), depth = 0): boolean {
  * Parse and enhance API errors from knowledge base operations
  */
 export function parseKnowledgeBaseError(error: any): EnhancedError {
-  console.log('🔍 [Debug] parseKnowledgeBaseError called with:', error);
+  if (process.env.NODE_ENV !== 'production') {
+    const safeMsg = sanitizeMessage((error && (error.message || error?.response?.data?.message)) ?? '');
+    console.debug('parseKnowledgeBaseError', { status: error?.status ?? error?.response?.status, message: safeMsg });
+  }
   
   // Enhanced input validation
   if (!error) {
-    console.log('🔍 [Debug] No error provided, creating fallback');
     return createFallbackError('No error information provided');
   }
   
@@ -121,7 +141,6 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
 
   // Check for circular references and object safety
   if (!isSafeObject(error)) {
-    console.log('🔍 [Debug] Object safety check failed, creating fallback');
     return createFallbackError('Error object contains circular references');
   }
 
@@ -133,23 +152,26 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
     return createFallbackError('Unrecognized error object structure');
   }
   
-  const enhancedError: EnhancedError = new Error(error.message || 'Unknown error');
+  const baseMessage =
+    (typeof error?.message === 'string' && error.message) ||
+    (typeof error?.response?.data?.message === 'string' && error.response.data.message) ||
+    'Unknown error';
+  const enhancedError: EnhancedError = new Error(sanitizeMessage(baseMessage));
   
   // Check if this is an HTTP response error with JSON details
   if (error && typeof error === 'object') {
     // Handle fetch Response errors
-    if (error.status) {
-      enhancedError.statusCode = error.status;
-    }
+    if (typeof error.status === 'number') enhancedError.statusCode = error.status;
+    if (typeof error.statusCode === 'number') enhancedError.statusCode = error.statusCode;
+    if (typeof error.response?.status === 'number') enhancedError.statusCode = error.response.status;
+    if (typeof error.response?.statusCode === 'number') enhancedError.statusCode = error.response.statusCode;
     
     // Parse error details from API response
-    if (error.error || error.detail) {
-      const errorData = error.error || error.detail;
-      console.log('🔍 [Debug] Found error data:', errorData);
+    if (error.error || error.detail || error.response?.data) {
+      const errorData = error.error || error.detail || error.response?.data?.error || error.response?.data;
       
       // Check if it's an OpenAI-specific error
       if (typeof errorData === 'object' && errorData.error_type) {
-        console.log('🔍 [Debug] Detected OpenAI error type:', errorData.error_type);
         enhancedError.isOpenAIError = true;
         
         // Validate and normalize the error details
@@ -175,10 +197,16 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
             enhancedError.message = 'OpenAI API rate limit exceeded. Please wait a moment and try again.';
             break;
           case 'api_error':
-            enhancedError.message = `OpenAI API error: ${errorData.message}. Please check your API key configuration.`;
+            enhancedError.message = sanitizeMessage(
+              `OpenAI API error: ${typeof errorData.message === 'string' ? errorData.message : 'Unknown error'}. Please check your API key configuration.`
+            );
             break;
           default:
-            enhancedError.message = errorData.message || errorData.error || enhancedError.message;
+            enhancedError.message = sanitizeMessage(
+              (typeof errorData.message === 'string' && errorData.message) ||
+                (typeof errorData.error === 'string' && errorData.error) ||
+                enhancedError.message
+            );
         }
       }
     }
@@ -204,10 +232,10 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
         return `OpenAI API rate limit exceeded. Please wait a moment and try again.`;
       
       case 'api_error':
-        return `OpenAI API error: ${error.errorDetails.message}. Please check your API key configuration.`;
+        return sanitizeMessage(`OpenAI API error: ${error.errorDetails.message}. Please check your API key configuration.`);
       
       default:
-        return error.errorDetails.message || error.message;
+        return sanitizeMessage(error.errorDetails.message || error.message);
     }
   }
   
@@ -225,11 +253,11 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
       case 503:
         return 'Service temporarily unavailable. Please try again later.';
       default:
-        return error.message;
+        return sanitizeMessage(error.message);
     }
   }
   
-  return error.message || 'An unexpected error occurred.';
+  return sanitizeMessage(error.message || 'An unexpected error occurred.');
 }
 
 /**
