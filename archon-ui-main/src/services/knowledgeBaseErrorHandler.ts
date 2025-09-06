@@ -121,10 +121,11 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
   }
   
   if (typeof error === 'string') {
-    return Object.assign(new Error(error), {
+    const sanitizedMessage = sanitizeMessage(error);
+    return Object.assign(new Error(sanitizedMessage), {
       errorDetails: {
         error: 'api_error',
-        message: error,
+        message: sanitizedMessage,
         error_type: 'api_error' as const
       }
     }) as EnhancedError;
