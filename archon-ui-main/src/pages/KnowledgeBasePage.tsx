@@ -17,6 +17,7 @@ import { GroupCreationModal } from '../components/knowledge-base/GroupCreationMo
 import { AddKnowledgeModal } from '../components/knowledge-base/AddKnowledgeModal';
 import { CrawlingTab } from '../components/knowledge-base/CrawlingTab';
 import { DocumentBrowser } from '../components/knowledge-base/DocumentBrowser';
+import { parseKnowledgeBaseError, getDisplayErrorMessage, getErrorAction } from '../services/knowledgeBaseErrorHandler';
 
 interface GroupedKnowledgeItem {
   id: string;
