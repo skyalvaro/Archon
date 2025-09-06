@@ -295,7 +295,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
           target: `http://${host}:${port}`,
           changeOrigin: true,
           secure: false,
-          ws: true,
           configure: (proxy, options) => {
             proxy.on('error', (err, req, res) => {
               console.log('🚨 [VITE PROXY ERROR]:', err.message);
@@ -306,12 +305,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
               console.log('🔄 [VITE PROXY] Forwarding:', req.method, req.url, 'to', `http://${host}:${port}${req.url}`);
             });
           }
-        },
-        // Socket.IO specific proxy configuration
-        '/socket.io': {
-          target: `http://${host}:${port}`,
-          changeOrigin: true,
-          ws: true
         }
       },
     },
@@ -328,15 +321,18 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     test: {
       globals: true,
       environment: 'jsdom',
-      setupFiles: './test/setup.ts',
+      setupFiles: './tests/setup.ts',
       css: true,
+      include: [
+        'src/**/*.{test,spec}.{ts,tsx}',  // Tests colocated in features
+        'tests/**/*.{test,spec}.{ts,tsx}'  // Tests in tests directory
+      ],
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
         '**/cypress/**',
         '**/.{idea,git,cache,output,temp}/**',
-        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
-        '**/*.test.{ts,tsx}',
+        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*'
       ],
       env: {
         VITE_HOST: host,
@@ -347,7 +343,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         reporter: ['text', 'json', 'html'],
         exclude: [
           'node_modules/',
-          'test/',
+          'tests/',
           '**/*.d.ts',
           '**/*.config.*',
           '**/mockData.ts',
