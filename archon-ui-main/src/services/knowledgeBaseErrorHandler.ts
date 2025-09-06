@@ -61,19 +61,29 @@ const MAX_RECURSION_DEPTH = 10;
 /**
  * Check if an object can be safely serialized (no circular references)
  */
-function isSafeObject(obj: any): boolean {
+function isSafeObject(obj: any, visited = new WeakSet(), depth = 0): boolean {
   if (typeof obj !== 'object' || obj === null) return true;
+  if (depth > MAX_RECURSION_DEPTH) return false;
   
   // Quick size check to prevent expensive operations on large objects
   if (Object.keys(obj).length > MAX_OBJECT_KEYS) return false;
   
-  // For simple objects like API error responses, just try JSON.stringify as a safety check
+  // Check for circular references
+  if (visited.has(obj)) return false;
+  visited.add(obj);
+  
+  // Check each property recursively
   try {
-    JSON.stringify(obj);
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (!isSafeObject(obj[key], visited, depth + 1)) {
+          return false;
+        }
+      }
+    }
     return true;
   } catch {
-    // Only fail if JSON.stringify fails (indicates circular references)
-    console.log('🔍 [Debug] JSON.stringify failed, object has circular references');
+    // Error during traversal indicates unsafe object
     return false;
   }
 }
