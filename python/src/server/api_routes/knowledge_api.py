@@ -72,7 +72,7 @@ def _sanitize_openai_error(error_message: str) -> str:
     sanitized_patterns = {
         r'https?://[^\s]+': '[REDACTED_URL]',  # Remove URLs
         r'sk-[a-zA-Z0-9]{48}': '[REDACTED_KEY]',     # Remove API keys (OpenAI format)
-        r'"[^"]*auth[^"]*"': '[REDACTED_AUTH]',     # Remove auth details
+        r'"[^"]*auth[^"]*?"': '[REDACTED_AUTH]',     # Remove auth details (non-greedy)
         r'org-[a-zA-Z0-9]{24}': '[REDACTED_ORG]',   # Remove OpenAI organization IDs
         r'proj_[a-zA-Z0-9]{10,}': '[REDACTED_PROJ]', # Remove OpenAI project IDs (adjusted length)
         r'req_[a-zA-Z0-9]{6,}': '[REDACTED_REQ]',   # Remove OpenAI request IDs (adjusted length)
