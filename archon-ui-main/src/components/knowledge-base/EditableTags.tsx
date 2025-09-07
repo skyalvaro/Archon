@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Input } from '../../features/ui/primitives/input';
@@ -35,6 +36,8 @@ export const EditableTags: React.FC<EditableTagsProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   // Prevent concurrent save operations
   const saveInProgress = useRef(false);
 
@@ -328,9 +331,20 @@ export const EditableTags: React.FC<EditableTagsProps> = ({
         {/* More tags tooltip */}
         {hasMoreTags && (
           <div
+            ref={tooltipRef}
             className="cursor-pointer relative"
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setTooltipPosition({
+                x: rect.left + rect.width / 2,
+                y: rect.bottom + 8
+              });
+              setShowTooltip(true);
+            }}
+            onMouseLeave={() => {
+              setShowTooltip(false);
+              setTooltipPosition(null);
+            }}
           >
             <Badge
               color="purple"
@@ -339,22 +353,32 @@ export const EditableTags: React.FC<EditableTagsProps> = ({
             >
               +{remainingTags.length} more...
             </Badge>
-            {showTooltip && (
-              <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 bg-black dark:bg-zinc-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-[100] whitespace-nowrap max-w-xs">
-                <div className="font-semibold text-purple-300 mb-1">
-                  Additional Tags:
-                </div>
-                {remainingTags.map((tag, index) => (
-                  <div key={index} className="text-gray-300">
-                    • {tag}
-                  </div>
-                ))}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-black dark:border-b-zinc-800"></div>
-              </div>
-            )}
           </div>
         )}
       </div>
+      
+      {/* Portal tooltip for proper z-index layering */}
+      {showTooltip && tooltipPosition && createPortal(
+        <div 
+          className="fixed bg-black dark:bg-zinc-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-[10001] whitespace-nowrap max-w-xs border border-purple-500/50 pointer-events-none"
+          style={{
+            left: tooltipPosition.x,
+            top: tooltipPosition.y,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          <div className="font-semibold text-purple-300 mb-1">
+            Additional Tags:
+          </div>
+          {remainingTags.map((tag, index) => (
+            <div key={index} className="text-gray-300">
+              • {tag}
+            </div>
+          ))}
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-black dark:border-b-zinc-800"></div>
+        </div>,
+        document.body
+      )}
       
       {/* Error display */}
       {validationError && (
