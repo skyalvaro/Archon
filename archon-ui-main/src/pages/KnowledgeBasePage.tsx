@@ -17,6 +17,7 @@ import { GroupCreationModal } from '../components/knowledge-base/GroupCreationMo
 import { AddKnowledgeModal } from '../components/knowledge-base/AddKnowledgeModal';
 import { CrawlingTab } from '../components/knowledge-base/CrawlingTab';
 import { DocumentBrowser } from '../components/knowledge-base/DocumentBrowser';
+import { BulkTagEditor } from '../components/knowledge-base/BulkTagEditor';
 
 interface GroupedKnowledgeItem {
   id: string;
@@ -33,6 +34,7 @@ export const KnowledgeBasePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'technical' | 'business'>('all');
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -699,6 +701,9 @@ export const KnowledgeBasePage = () => {
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button onClick={() => setIsBulkEditModalOpen(true)} variant="secondary" size="sm" accentColor="purple">
+                    Edit Tags
+                  </Button>
                   <Button onClick={() => setIsGroupModalOpen(true)} variant="secondary" size="sm" accentColor="blue">
                     Create Group
                   </Button>
@@ -810,6 +815,19 @@ export const KnowledgeBasePage = () => {
           onClose={() => {
             setIsDocumentBrowserOpen(false);
             setDocumentBrowserSourceId(null);
+          }}
+        />
+      )}
+
+      {isBulkEditModalOpen && (
+        <BulkTagEditor
+          selectedItems={knowledgeItems.filter(item => selectedItems.has(item.id))}
+          onClose={() => setIsBulkEditModalOpen(false)}
+          onUpdate={() => {
+            setIsBulkEditModalOpen(false);
+            setSelectedItems(new Set());
+            setIsSelectionMode(false);
+            loadKnowledgeItems();
           }}
         />
       )}

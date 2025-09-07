@@ -7,6 +7,8 @@ import { KnowledgeItem, knowledgeBaseService } from '../../services/knowledgeBas
 import { useCardTilt } from '../../hooks/useCardTilt';
 import { CodeViewerModal, CodeExample } from '../code/CodeViewerModal';
 import { EditKnowledgeItemModal } from './EditKnowledgeItemModal';
+import { EditableTags } from './EditableTags';
+import { useToast } from '../../contexts/ToastContext';
 import '../../styles/card-animations.css';
 
 // Helper function to guess language from title
@@ -22,65 +24,6 @@ const guessLanguageFromTitle = (title: string = ''): string => {
   return 'javascript'; // Default
 };
 
-// Tags display component
-interface TagsDisplayProps {
-  tags: string[];
-}
-
-const TagsDisplay = ({ tags }: TagsDisplayProps) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  
-  if (!tags || tags.length === 0) return null;
-  
-  const visibleTags = tags.slice(0, 4);
-  const remainingTags = tags.slice(4);
-  const hasMoreTags = remainingTags.length > 0;
-  
-  return (
-    <div className="w-full">
-      <div className="flex flex-wrap gap-2 h-full">
-        {visibleTags.map((tag, index) => (
-          <Badge
-            key={index}
-            color="purple"
-            variant="outline"
-            className="text-xs"
-          >
-            {tag}
-          </Badge>
-        ))}
-        {hasMoreTags && (
-          <div
-            className="cursor-pointer relative"
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
-          >
-            <Badge
-              color="purple"
-              variant="outline"
-              className="bg-purple-100/50 dark:bg-purple-900/30 border-dashed text-xs"
-            >
-              +{remainingTags.length} more...
-            </Badge>
-            {showTooltip && (
-              <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 bg-black dark:bg-zinc-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-50 whitespace-nowrap max-w-xs">
-                <div className="font-semibold text-purple-300 mb-1">
-                  Additional Tags:
-                </div>
-                {remainingTags.map((tag, index) => (
-                  <div key={index} className="text-gray-300">
-                    • {tag}
-                  </div>
-                ))}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-black dark:border-b-zinc-800"></div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Delete confirmation modal component
 interface DeleteConfirmModalProps {
@@ -154,6 +97,9 @@ export const KnowledgeItemCard = ({
   const [loadedCodeExamples, setLoadedCodeExamples] = useState<any[] | null>(null);
   const [isLoadingCodeExamples, setIsLoadingCodeExamples] = useState(false);
   const [isRecrawling, setIsRecrawling] = useState(false);
+  const [isUpdatingTags, setIsUpdatingTags] = useState(false);
+  
+  const { showToast } = useToast();
 
   const statusColorMap = {
     active: 'green',
@@ -222,6 +168,31 @@ export const KnowledgeItemCard = ({
         setIsRecrawling(false);
       }, 60000); // Reset after 60 seconds as a fallback
     }
+  };
+
+  const handleTagsUpdate = async (tags: string[]) => {
+    setIsUpdatingTags(true);
+    try {
+      await knowledgeBaseService.updateKnowledgeItem(item.source_id, { tags });
+      if (onUpdate) {
+        onUpdate();
+      }
+      showToast('Tags updated successfully', 'success');
+    } catch (error) {
+      const errorMessage = error instanceof Error 
+        ? `Failed to update tags: ${error.message}` 
+        : 'Failed to update tags: Unknown error occurred';
+      
+      console.error('Tag update error for card:', error);
+      showToast(errorMessage, 'error');
+      throw error; // Re-throw to let EditableTags handle the error display
+    } finally {
+      setIsUpdatingTags(false);
+    }
+  };
+
+  const handleTagError = (error: string) => {
+    showToast(error, 'error');
   };
 
   // Get code examples count from metadata
@@ -368,7 +339,13 @@ export const KnowledgeItemCard = ({
           
           {/* Tags section - flexible height with flex-1 */}
           <div className="flex-1 flex flex-col card-3d-layer-2 min-h-[4rem]">
-            <TagsDisplay tags={item.metadata.tags || []} />
+            <EditableTags 
+              tags={item.metadata.tags || []} 
+              onTagsUpdate={handleTagsUpdate}
+              maxVisibleTags={4}
+              isUpdating={isUpdatingTags}
+              onError={handleTagError}
+            />
           </div>
           
           {/* Footer section - anchored to bottom */}
