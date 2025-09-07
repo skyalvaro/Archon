@@ -340,7 +340,7 @@ export const EditableTags: React.FC<EditableTagsProps> = ({
               +{remainingTags.length} more...
             </Badge>
             {showTooltip && (
-              <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 bg-black dark:bg-zinc-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-50 whitespace-nowrap max-w-xs">
+              <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 bg-black dark:bg-zinc-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-[100] whitespace-nowrap max-w-xs">
                 <div className="font-semibold text-purple-300 mb-1">
                   Additional Tags:
                 </div>

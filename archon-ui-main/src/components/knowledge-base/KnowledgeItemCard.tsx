@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link as LinkIcon, Upload, Trash2, RefreshCw, Code, FileText, Brain, BoxIcon, Pencil } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { Checkbox } from '../ui/Checkbox';
 import { KnowledgeItem, knowledgeBaseService } from '../../services/knowledgeBaseService';
 import { useCardTilt } from '../../hooks/useCardTilt';
 import { CodeViewerModal, CodeExample } from '../code/CodeViewerModal';
@@ -73,9 +72,6 @@ interface KnowledgeItemCardProps {
   onUpdate?: () => void;
   onRefresh?: (sourceId: string) => void;
   onBrowseDocuments?: (sourceId: string) => void;
-  isSelectionMode?: boolean;
-  isSelected?: boolean;
-  onToggleSelection?: (event: React.MouseEvent) => void;
 }
 
 export const KnowledgeItemCard = ({
@@ -84,9 +80,6 @@ export const KnowledgeItemCard = ({
   onUpdate,
   onRefresh,
   onBrowseDocuments,
-  isSelectionMode = false,
-  isSelected = false,
-  onToggleSelection
 }: KnowledgeItemCardProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -142,10 +135,10 @@ export const KnowledgeItemCard = ({
   const sourceIconColor = getSourceIconColor();
   const typeIconColor = getTypeIconColor();
 
-  // Use the tilt effect hook - disable in selection mode
+  // Use the tilt effect hook
   const { cardRef, tiltStyles, handlers } = useCardTilt({
-    max: isSelectionMode ? 0 : 10,
-    scale: isSelectionMode ? 1 : 1.02,
+    max: 10,
+    scale: 1.02,
     perspective: 1200,
   });
 
@@ -241,26 +234,8 @@ export const KnowledgeItemCard = ({
     >
       <Card
         accentColor={accentColor}
-        className={`relative h-full flex flex-col overflow-hidden ${
-          isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-        } ${isSelectionMode ? 'cursor-pointer' : ''}`}
-        onClick={(e) => {
-          if (isSelectionMode && onToggleSelection) {
-            e.stopPropagation();
-            onToggleSelection(e);
-          }
-        }}
+        className="relative h-full flex flex-col overflow-hidden"
       >
-        {/* Checkbox for selection mode */}
-        {isSelectionMode && (
-          <div className="absolute top-3 right-3 z-20">
-            <Checkbox
-              checked={isSelected}
-              onChange={() => {}}
-              className="pointer-events-none"
-            />
-          </div>
-        )}
         
         {/* Reflection overlay */}
         <div
@@ -306,8 +281,7 @@ export const KnowledgeItemCard = ({
             <h3 className="text-gray-800 dark:text-white font-medium flex-1 line-clamp-1 truncate min-w-0">
               {item.title}
             </h3>
-            {!isSelectionMode && (
-              <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -329,7 +303,6 @@ export const KnowledgeItemCard = ({
                 <Trash2 className="w-3 h-3" />
                 </button>
               </div>
-            )}
           </div>
           
           {/* Description section - fixed height */}
