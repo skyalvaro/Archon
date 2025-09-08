@@ -52,6 +52,7 @@ const STATUS_CONFIG = {
   'source_creation': { label: 'Creating Source', icon: <FileText className="w-4 h-4" />, color: 'indigo' },
   'document_storage': { label: 'Storing Documents', icon: <Database className="w-4 h-4" />, color: 'green' },
   'code_extraction': { label: 'Extracting Code', icon: <Code className="w-4 h-4" />, color: 'yellow' },
+  'code_storage': { label: 'Storing Code Examples', icon: <Database className="w-4 h-4" />, color: 'purple' },
   'finalization': { label: 'Finalizing', icon: <Zap className="w-4 h-4" />, color: 'orange' },
   
   // Upload statuses
@@ -204,7 +205,7 @@ export const CrawlingProgressCard: React.FC<CrawlingProgressCardProps> = ({
     const steps = isUpload ? [
       'reading', 'extracting', 'chunking', 'creating_source', 'summarizing', 'storing'
     ] : [
-      'analyzing', 'crawling', 'processing', 'source_creation', 'document_storage', 'code_extraction', 'finalization'
+      'analyzing', 'crawling', 'processing', 'source_creation', 'document_storage', 'code_extraction', 'code_storage', 'finalization'
     ];
     
     return steps.map(stepId => {
