@@ -144,19 +144,8 @@ class KnowledgeItemService:
                 # Determine source type
                 source_type = self._determine_source_type(source_metadata, first_page_url)
 
-                # Apply same URL resolution logic as _transform_source_to_item
-                original_url = source_metadata.get("original_url")
-                display_url = original_url
-                if not display_url:
-                    # If no original_url, try to get a real URL from first page instead of source:// fallback
-                    if first_page_url and not first_page_url.startswith("source://"):
-                        display_url = first_page_url
-                    else:
-                        # Last resort: try to extract from source metadata or use the fallback
-                        display_url = source_metadata.get("url") or first_page_url
-                        print(f"🔍 DEBUG LIST: No valid URL found for {source_id}, using fallback: {display_url}")
-
-                print(f"🔍 DEBUG LIST: URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}, display_url={display_url}")
+                # Use original URL from metadata if available, fallback to first page URL
+                display_url = source_metadata.get("original_url") or first_page_url
 
                 item = {
                     "id": source_id,
@@ -367,9 +356,6 @@ class KnowledgeItemService:
         source_metadata = source.get("metadata", {})
         source_id = source["source_id"]
         
-        # Debug: log the raw source record to see what we're getting from the database
-        print(f"🔍 DEBUG: Raw source record for {source_id}: {source}")
-
         # Get first page URL
         first_page_url = await self._get_first_page_url(source_id)
 
@@ -379,21 +365,9 @@ class KnowledgeItemService:
         # Get code examples
         code_examples = await self._get_code_examples(source_id)
 
-        # Log URL resolution for debugging - include full metadata for debugging
+        # Use original URL from metadata if available, fallback to first page URL
         original_url = source_metadata.get("original_url")
-        print(f"🔍 DEBUG: URL resolution for {source_id}: source_metadata={source_metadata}")
-        print(f"🔍 DEBUG: URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}")
-        
-        # More robust URL resolution with fallback chain
-        display_url = original_url
-        if not display_url:
-            # If no original_url, try to get a real URL from first page instead of source:// fallback
-            if first_page_url and not first_page_url.startswith("source://"):
-                display_url = first_page_url
-            else:
-                # Last resort: try to extract from source metadata or use the fallback
-                display_url = source_metadata.get("url") or first_page_url
-                safe_logfire_error(f"No valid URL found for {source_id}, using fallback: {display_url}")
+        display_url = original_url or first_page_url
         
         return {
             "id": source_id,
