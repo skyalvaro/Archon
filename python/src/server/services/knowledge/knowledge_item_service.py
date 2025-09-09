@@ -144,10 +144,24 @@ class KnowledgeItemService:
                 # Determine source type
                 source_type = self._determine_source_type(source_metadata, first_page_url)
 
+                # Apply same URL resolution logic as _transform_source_to_item
+                original_url = source_metadata.get("original_url")
+                display_url = original_url
+                if not display_url:
+                    # If no original_url, try to get a real URL from first page instead of source:// fallback
+                    if first_page_url and not first_page_url.startswith("source://"):
+                        display_url = first_page_url
+                    else:
+                        # Last resort: try to extract from source metadata or use the fallback
+                        display_url = source_metadata.get("url") or first_page_url
+                        print(f"🔍 DEBUG LIST: No valid URL found for {source_id}, using fallback: {display_url}")
+
+                print(f"🔍 DEBUG LIST: URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}, display_url={display_url}")
+
                 item = {
                     "id": source_id,
                     "title": source.get("title", source.get("summary", "Untitled")),
-                    "url": first_page_url,
+                    "url": display_url,
                     "source_id": source_id,
                     "code_examples": [{"count": code_examples_count}]
                     if code_examples_count > 0
