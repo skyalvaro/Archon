@@ -365,7 +365,7 @@ class KnowledgeItemService:
         return {
             "id": source_id,
             "title": source.get("title", source.get("summary", "Untitled")),
-            "url": first_page_url,
+            "url": source_metadata.get("original_url") or first_page_url,
             "source_id": source_id,
             "code_examples": code_examples,
             "metadata": {
