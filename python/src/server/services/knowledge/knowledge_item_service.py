@@ -354,7 +354,7 @@ class KnowledgeItemService:
         source_id = source["source_id"]
         
         # Debug: log the raw source record to see what we're getting from the database
-        safe_logfire_info(f"Raw source record for {source_id}: {source}")
+        print(f"🔍 DEBUG: Raw source record for {source_id}: {source}")
 
         # Get first page URL
         first_page_url = await self._get_first_page_url(source_id)
@@ -367,8 +367,8 @@ class KnowledgeItemService:
 
         # Log URL resolution for debugging - include full metadata for debugging
         original_url = source_metadata.get("original_url")
-        safe_logfire_info(f"URL resolution for {source_id}: source_metadata={source_metadata}")
-        safe_logfire_info(f"URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}")
+        print(f"🔍 DEBUG: URL resolution for {source_id}: source_metadata={source_metadata}")
+        print(f"🔍 DEBUG: URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}")
         
         # More robust URL resolution with fallback chain
         display_url = original_url
