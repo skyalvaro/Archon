@@ -112,7 +112,10 @@ export function useUpdateTask(projectId: string) {
       // Optimistically update
       queryClient.setQueryData<Task[]>(taskKeys.all(projectId), (old) => {
         if (!old) return old;
-        return old.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
+        const nowIso = new Date().toISOString();
+        return old.map((task) =>
+          task.id === taskId ? { ...task, ...updates, updated_at: nowIso } : task,
+        );
       });
 
       return { previousTasks };
