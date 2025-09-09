@@ -362,10 +362,25 @@ class KnowledgeItemService:
         # Get code examples
         code_examples = await self._get_code_examples(source_id)
 
+        # Log URL resolution for debugging
+        original_url = source_metadata.get("original_url")
+        safe_logfire_info(f"URL resolution for {source_id}: original_url={original_url}, first_page_url={first_page_url}")
+        
+        # More robust URL resolution with fallback chain
+        display_url = original_url
+        if not display_url:
+            # If no original_url, try to get a real URL from first page instead of source:// fallback
+            if first_page_url and not first_page_url.startswith("source://"):
+                display_url = first_page_url
+            else:
+                # Last resort: try to extract from source metadata or use the fallback
+                display_url = source_metadata.get("url") or first_page_url
+                safe_logfire_error(f"No valid URL found for {source_id}, using fallback: {display_url}")
+        
         return {
             "id": source_id,
             "title": source.get("title", source.get("summary", "Untitled")),
-            "url": source_metadata.get("original_url") or first_page_url,
+            "url": display_url,
             "source_id": source_id,
             "code_examples": code_examples,
             "metadata": {
