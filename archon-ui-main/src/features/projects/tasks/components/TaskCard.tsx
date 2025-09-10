@@ -1,9 +1,10 @@
 import { Tag } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { useTaskActions } from "../hooks";
 import type { Assignee, Task } from "../types";
+import { getTaskPriorityFromTaskOrder, TASK_PRIORITY_OPTIONS } from "../types/priority";
 import { getOrderColor, getOrderGlow, ItemTypes } from "../utils/task-styles";
 import { TaskAssignee } from "./TaskAssignee";
 import { TaskCardActions } from "./TaskCardActions";
@@ -34,9 +35,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   selectedTasks,
   onTaskSelect,
 }) => {
-  // Local state for frontend-only priority
-  // NOTE: Priority is display-only and doesn't sync with backend yet
-  const [localPriority, setLocalPriority] = useState<Priority>("medium");
+  // Derive priority from task_order (backend field) instead of separate priority field
+  const currentPriority = getTaskPriorityFromTaskOrder(task.task_order);
+  const [localPriority, setLocalPriority] = useState<Priority>(currentPriority);
+
+  // Sync local priority when task_order changes
+  useEffect(() => {
+    const priorityFromTaskOrder = getTaskPriorityFromTaskOrder(task.task_order);
+    setLocalPriority(priorityFromTaskOrder);
+  }, [task.task_order]);
 
   // Use business logic hook
   const { changeAssignee, changePriority, isUpdating } = useTaskActions(projectId);
@@ -60,7 +67,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [onDelete, task]);
 
   const handlePriorityChange = useCallback((priority: Priority) => {
-    // Update backend via hook
+    // Update backend via task_order (conversion handled in hook)
     changePriority(task.id, priority);
     // Also update local state for immediate UI feedback
     setLocalPriority(priority);

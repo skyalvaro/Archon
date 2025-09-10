@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Assignee, Task, TaskPriority, UseTaskActionsReturn } from "../types";
+import { TASK_PRIORITY_OPTIONS } from "../types/priority";
 import { useDeleteTask, useUpdateTask } from "./useTaskQueries";
 
 export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
@@ -21,12 +22,16 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
     [updateTaskMutation],
   );
 
-  // Priority change handler
+  // Priority change handler - maps priority to task_order
   const changePriority = useCallback(
     (taskId: string, newPriority: TaskPriority) => {
+      // Convert priority to task_order value for backend
+      const priorityOption = TASK_PRIORITY_OPTIONS.find(opt => opt.label.toLowerCase() === newPriority);
+      const newTaskOrder = priorityOption?.value || 50; // Default to medium
+
       updateTaskMutation.mutate({
         taskId,
-        updates: { priority: newPriority },
+        updates: { task_order: newTaskOrder },
       });
     },
     [updateTaskMutation],
