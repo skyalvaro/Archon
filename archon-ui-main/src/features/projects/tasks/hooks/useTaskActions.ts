@@ -22,7 +22,7 @@ export const useTaskActions = (projectId: string): UseTaskActionsReturn => {
     [updateTaskMutation],
   );
 
-  // Priority change handler - maps priority to task_order
+  // Priority change handler - maps priority to task_order with optimistic updates
   const changePriority = useCallback(
     (taskId: string, newPriority: TaskPriority) => {
       // Convert priority to task_order value for backend

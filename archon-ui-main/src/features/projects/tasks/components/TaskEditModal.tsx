@@ -134,11 +134,12 @@ export const TaskEditModal = memo(
               <FormField>
                 <Label>Priority</Label>
                 <Select
-                  value={
-                    localTask?.task_order 
-                      ? getTaskPriorityFromTaskOrder(localTask.task_order)
-                      : "medium"
-                  }
+                  value={(() => {
+                    const order = localTask?.task_order;
+                    return order !== undefined 
+                      ? getTaskPriorityFromTaskOrder(order) 
+                      : "medium";
+                  })()}
                   onValueChange={(value) => {
                     // Convert priority to task_order value
                     const priorityOption = TASK_PRIORITY_OPTIONS.find(

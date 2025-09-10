@@ -1,10 +1,10 @@
 import { Tag } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { useTaskActions } from "../hooks";
 import type { Assignee, Task } from "../types";
-import { getTaskPriorityFromTaskOrder, TASK_PRIORITY_OPTIONS } from "../types/priority";
+import { getTaskPriorityFromTaskOrder } from "../types/priority";
 import { getOrderColor, getOrderGlow, ItemTypes } from "../utils/task-styles";
 import { TaskAssignee } from "./TaskAssignee";
 import { TaskCardActions } from "./TaskCardActions";
@@ -35,16 +35,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   selectedTasks,
   onTaskSelect,
 }) => {
-  // Derive priority from task_order (backend field) instead of separate priority field
-  const [localPriority, setLocalPriority] = useState<Priority>(() => 
-    getTaskPriorityFromTaskOrder(task.task_order)
-  );
-
-  // Sync local priority when task_order changes
-  useEffect(() => {
-    const priorityFromTaskOrder = getTaskPriorityFromTaskOrder(task.task_order);
-    setLocalPriority(priorityFromTaskOrder);
-  }, [task.task_order]);
+  // Derive priority directly from task_order (backend field)
+  const currentPriority = getTaskPriorityFromTaskOrder(task.task_order);
 
   // Use business logic hook
   const { changeAssignee, changePriority, isUpdating } = useTaskActions(projectId);
@@ -68,10 +60,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [onDelete, task]);
 
   const handlePriorityChange = useCallback((priority: Priority) => {
-    // Update backend via task_order (conversion handled in hook)
+    // Update backend via task_order (optimistic updates handled in hook)
     changePriority(task.id, priority);
-    // Also update local state for immediate UI feedback
-    setLocalPriority(priority);
   }, [changePriority, task.id]);
 
   const handleAssigneeChange = useCallback(
@@ -229,7 +219,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <TaskAssignee assignee={task.assignee} onAssigneeChange={handleAssigneeChange} isLoading={isUpdating} />
 
             {/* Priority display with backend sync */}
-            <TaskPriority priority={localPriority} onPriorityChange={handlePriorityChange} isLoading={isUpdating} />
+            <TaskPriority priority={currentPriority} onPriorityChange={handlePriorityChange} isLoading={isUpdating} />
           </div>
         </div>
       </div>
