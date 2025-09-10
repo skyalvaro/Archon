@@ -61,7 +61,6 @@ export interface Task {
 
   // Extended UI properties
   featureColor?: string;
-  priority?: TaskPriority;
 }
 
 // Request types
@@ -74,7 +73,6 @@ export interface CreateTaskRequest {
   task_order?: number;
   feature?: string;
   featureColor?: string;
-  priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
 }
@@ -87,7 +85,6 @@ export interface UpdateTaskRequest {
   task_order?: number;
   feature?: string;
   featureColor?: string;
-  priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
 }

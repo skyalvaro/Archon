@@ -142,7 +142,7 @@ export const TaskEditModal = memo(
                   onValueChange={(value) => {
                     // Convert priority to task_order value
                     const priorityOption = TASK_PRIORITY_OPTIONS.find(
-                      opt => opt.label.toLowerCase() === value
+                      opt => opt.label.toLowerCase() === value.toLowerCase()
                     );
                     const newTaskOrder = priorityOption?.value || 50; // Default to medium
                     

@@ -36,8 +36,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onTaskSelect,
 }) => {
   // Derive priority from task_order (backend field) instead of separate priority field
-  const currentPriority = getTaskPriorityFromTaskOrder(task.task_order);
-  const [localPriority, setLocalPriority] = useState<Priority>(currentPriority);
+  const [localPriority, setLocalPriority] = useState<Priority>(() => 
+    getTaskPriorityFromTaskOrder(task.task_order)
+  );
 
   // Sync local priority when task_order changes
   useEffect(() => {
