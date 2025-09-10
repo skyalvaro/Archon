@@ -38,6 +38,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
     if (localTask.assignee !== editingTask.assignee) updates.assignee = localTask.assignee || "User";
     if (localTask.task_order !== editingTask.task_order) updates.task_order = localTask.task_order;
     if (localTask.feature !== editingTask.feature) updates.feature = localTask.feature || "";
+    if (localTask.priority !== editingTask.priority) updates.priority = localTask.priority;
 
     return updates;
   }, []);
@@ -53,6 +54,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
         assignee: (localTask.assignee as Assignee) || "User",
         feature: localTask.feature || "",
         task_order: localTask.task_order || getDefaultTaskOrder((localTask.status as Task["status"]) || "todo"),
+        priority: localTask.priority || "medium",
       };
     },
     [projectId, getDefaultTaskOrder],

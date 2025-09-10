@@ -39,7 +39,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [localPriority, setLocalPriority] = useState<Priority>("medium");
 
   // Use business logic hook
-  const { changeAssignee, isUpdating } = useTaskActions(projectId);
+  const { changeAssignee, changePriority, isUpdating } = useTaskActions(projectId);
 
   // Handlers - now just call hook methods
   const handleEdit = useCallback(() => {
@@ -60,9 +60,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [onDelete, task]);
 
   const handlePriorityChange = useCallback((priority: Priority) => {
-    // Frontend-only priority change
+    // Update backend via hook
+    changePriority(task.id, priority);
+    // Also update local state for immediate UI feedback
     setLocalPriority(priority);
-  }, []);
+  }, [changePriority, task.id]);
 
   const handleAssigneeChange = useCallback(
     (newAssignee: Assignee) => {
@@ -218,8 +220,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <div className="flex items-center justify-between mt-auto pt-2 pl-1.5 pr-3">
             <TaskAssignee assignee={task.assignee} onAssigneeChange={handleAssigneeChange} isLoading={isUpdating} />
 
-            {/* Priority display (frontend-only for now) */}
-            <TaskPriority priority={localPriority} onPriorityChange={handlePriorityChange} isLoading={false} />
+            {/* Priority display with backend sync */}
+            <TaskPriority priority={localPriority} onPriorityChange={handlePriorityChange} isLoading={isUpdating} />
           </div>
         </div>
       </div>
