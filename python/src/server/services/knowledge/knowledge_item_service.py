@@ -141,11 +141,14 @@ class KnowledgeItemService:
                 code_examples_count = code_example_counts.get(source_id, 0)
                 chunks_count = chunk_counts.get(source_id, 0)
 
-                # Determine source type
-                source_type = self._determine_source_type(source_metadata, first_page_url)
+                # Compute display_url with proper trimming and fallback
+                original_url = source_metadata.get("original_url")
+                # Trim whitespace and treat empty/whitespace-only strings as None
+                trimmed_original_url = original_url.strip() if original_url and original_url.strip() else None
+                display_url = trimmed_original_url or first_page_url
 
-                # Use original URL from metadata if available, fallback to first page URL
-                display_url = source_metadata.get("original_url") or first_page_url
+                # Determine source type based on final display_url (not raw original_url)
+                source_type = self._determine_source_type(source_metadata, display_url)
 
                 item = {
                     "id": source_id,
@@ -359,15 +362,17 @@ class KnowledgeItemService:
         # Get first page URL
         first_page_url = await self._get_first_page_url(source_id)
 
-        # Determine source type
-        source_type = self._determine_source_type(source_metadata, first_page_url)
+        # Compute display_url with proper trimming and fallback before deriving source_type
+        original_url = source_metadata.get("original_url")
+        # Trim whitespace and treat empty/whitespace-only strings as None
+        trimmed_original_url = original_url.strip() if original_url and original_url.strip() else None
+        display_url = trimmed_original_url or first_page_url
+
+        # Determine source type based on final display_url (not raw original_url)
+        source_type = self._determine_source_type(source_metadata, display_url)
 
         # Get code examples
         code_examples = await self._get_code_examples(source_id)
-
-        # Use original URL from metadata if available, fallback to first page URL
-        original_url = source_metadata.get("original_url")
-        display_url = original_url or first_page_url
         
         return {
             "id": source_id,
