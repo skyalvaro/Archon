@@ -16,6 +16,7 @@ import os
 from urllib.parse import urljoin
 
 import httpx
+
 from mcp.server.fastmcp import Context, FastMCP
 
 # Import service discovery for HTTP communication
