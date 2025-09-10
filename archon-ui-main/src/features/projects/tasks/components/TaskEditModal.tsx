@@ -19,6 +19,7 @@ import {
 } from "../../../ui/primitives";
 import { useTaskEditor } from "../hooks";
 import type { Assignee, Task } from "../types";
+import { getTaskPriorityFromTaskOrder, TASK_PRIORITY_OPTIONS } from "../types/priority";
 import { FeatureSelect } from "./FeatureSelect";
 import type { Priority } from "./TaskPriority";
 
@@ -45,14 +46,14 @@ export const TaskEditModal = memo(
       if (editingTask) {
         setLocalTask(editingTask);
       } else {
-        // Reset for new task
+        // Reset for new task - set medium priority task_order value
         setLocalTask({
           title: "",
           description: "",
           status: "todo",
           assignee: "User" as Assignee,
           feature: "",
-          priority: "medium" as Priority, // Frontend-only priority
+          task_order: 50, // Medium priority task_order value
         });
       }
     }, [editingTask]);
@@ -133,10 +134,20 @@ export const TaskEditModal = memo(
               <FormField>
                 <Label>Priority</Label>
                 <Select
-                  value={(localTask as Task & { priority?: Priority })?.priority || "medium"}
-                  onValueChange={(value) =>
-                    setLocalTask((prev) => (prev ? { ...prev, priority: value as Priority } : null))
+                  value={
+                    localTask?.task_order 
+                      ? getTaskPriorityFromTaskOrder(localTask.task_order)
+                      : "medium"
                   }
+                  onValueChange={(value) => {
+                    // Convert priority to task_order value
+                    const priorityOption = TASK_PRIORITY_OPTIONS.find(
+                      opt => opt.label.toLowerCase() === value
+                    );
+                    const newTaskOrder = priorityOption?.value || 50; // Default to medium
+                    
+                    setLocalTask((prev) => (prev ? { ...prev, task_order: newTaskOrder } : null));
+                  }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
