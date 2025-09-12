@@ -52,10 +52,6 @@ function isSafeObject(obj: any): boolean {
  * Parse and enhance API errors from knowledge base operations
  */
 export function parseKnowledgeBaseError(error: any): EnhancedError {
-  console.log(`🔍 [Error Parser] Input error:`, error);
-  console.log(`🔍 [Error Parser] Error type: ${typeof error}`);
-  console.log(`🔍 [Error Parser] Error keys:`, Object.keys(error || {}));
-  
   // Enhanced input validation
   if (!error) {
     return createFallbackError('No error information provided');
@@ -107,24 +103,14 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
       // Prioritize error.detail (where we put structured OpenAI error data)
       const errorData = error.detail || error.error;
       
-      console.log(`🔍 [Error Parser] Error data:`, errorData);
-      console.log(`🔍 [Error Parser] Error data type:`, typeof errorData);
-      console.log(`🔍 [Error Parser] Has error_type:`, errorData?.error_type);
-      
       // Check if it's an OpenAI-specific error
       if (typeof errorData === 'object' && errorData?.error_type) {
-        console.log(`🔍 [Error Parser] Detected OpenAI error type: ${errorData.error_type}`);
         enhancedError.isOpenAIError = true;
         enhancedError.errorDetails = errorData as OpenAIErrorDetails;
         
         // Override the message with the detailed error message
         enhancedError.message = errorData.message || errorData.error || enhancedError.message;
-        console.log(`🔍 [Error Parser] Set enhanced message: ${enhancedError.message}`);
-      } else {
-        console.log(`🔍 [Error Parser] Not an OpenAI error - errorData type: ${typeof errorData}, has error_type: ${!!errorData?.error_type}`);
       }
-    } else {
-      console.log(`🔍 [Error Parser] No error.detail or error.error found`);
     }
   }
   
