@@ -18,7 +18,7 @@ from src.server.services.embeddings.embedding_exceptions import (
     EmbeddingAPIError,
 )
 from src.server.services.search.rag_service import RAGService
-from src.server.api_routes.knowledge_api import perform_rag_query, RagQueryRequest, _sanitize_openai_error, _validate_openai_api_key
+from src.server.api_routes.knowledge_api import perform_rag_query, RagQueryRequest, _sanitize_provider_error, _validate_provider_api_key
 
 
 class TestOpenAIErrorHandling:
@@ -207,7 +207,7 @@ class TestOpenAIErrorHandling:
             mock_create_embedding.return_value = [0.1] * 1536  # Mock successful embedding
             
             # Should not raise any exception
-            await _validate_openai_api_key()
+            await _validate_provider_api_key()
 
     @pytest.mark.asyncio
     async def test_api_key_validation_auth_failure(self):
@@ -221,7 +221,7 @@ class TestOpenAIErrorHandling:
             
             # Should raise HTTPException with status 401
             with pytest.raises(HTTPException) as exc_info:
-                await _validate_openai_api_key()
+                await _validate_provider_api_key()
             
             assert exc_info.value.status_code == 401
             assert exc_info.value.detail["error_type"] == "authentication_failed"
@@ -238,7 +238,7 @@ class TestOpenAIErrorHandling:
             
             # Should raise HTTPException with status 429
             with pytest.raises(HTTPException) as exc_info:
-                await _validate_openai_api_key()
+                await _validate_provider_api_key()
             
             assert exc_info.value.status_code == 429
             assert exc_info.value.detail["error_type"] == "quota_exhausted"
@@ -246,7 +246,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_urls(self):
         """Test that sanitization function removes URLs from error messages."""
         error_message = "Connection failed to https://api.openai.com/v1/embeddings with status 400"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "https://api.openai.com" not in sanitized
         assert "[REDACTED_URL]" in sanitized
@@ -255,7 +255,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_api_keys(self):
         """Test that sanitization function removes API keys from error messages."""
         error_message = "Authentication failed with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "sk-1234567890abcdef1234567890abcdef1234567890abcdef" not in sanitized
         assert "[REDACTED_KEY]" in sanitized
@@ -264,7 +264,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_auth_info(self):
         """Test that sanitization function removes auth details from error messages."""
         error_message = 'Failed to authenticate: "auth_bearer_xyz123"'
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "auth_bearer_xyz123" not in sanitized
         assert "[REDACTED_AUTH]" in sanitized
@@ -272,7 +272,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_returns_generic_for_sensitive_words(self):
         """Test that sanitization returns generic message for sensitive internal details."""
         error_message = "Internal server error on endpoint /v1/embeddings"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         # Should return generic message due to 'internal' and 'endpoint' keywords
         assert sanitized == "OpenAI API encountered an error. Please verify your API key and quota."
@@ -280,7 +280,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_preserves_safe_messages(self):
         """Test that sanitization preserves safe error messages."""
         error_message = "Model not found: text-embedding-ada-002"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         # Should preserve the message since it contains no sensitive info
         assert sanitized == error_message
@@ -288,7 +288,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_organization_ids(self):
         """Test that sanitization function removes OpenAI organization IDs."""
         error_message = "Permission denied for org-1234567890abcdef12345678 with model access"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "org-1234567890abcdef12345678" not in sanitized
         assert "[REDACTED_ORG]" in sanitized
@@ -297,7 +297,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_project_ids(self):
         """Test that sanitization function removes OpenAI project IDs."""
         error_message = "Project proj_abcdef1234567890xyz not found"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "proj_abcdef1234567890xyz" not in sanitized
         assert "[REDACTED_PROJ]" in sanitized
@@ -306,7 +306,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_removes_request_ids(self):
         """Test that sanitization function removes OpenAI request IDs."""
         error_message = "Request req_1234567890abcdefghij failed with timeout"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         assert "req_1234567890abcdefghij" not in sanitized
         assert "[REDACTED_REQ]" in sanitized
@@ -315,7 +315,7 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_handles_multiple_patterns(self):
         """Test that sanitization handles multiple sensitive patterns in one message."""
         error_message = "Request req_abc123 to https://api.openai.com failed for org-1234567890abcdef12345678 with key sk-1234567890abcdef1234567890abcdef1234567890abcdef"
-        sanitized = _sanitize_openai_error(error_message)
+        sanitized = _sanitize_provider_error(error_message, "openai")
         
         # Verify all patterns are redacted
         assert "req_abc123" not in sanitized
@@ -332,19 +332,19 @@ class TestOpenAIErrorHandling:
     def test_sanitize_openai_error_input_validation(self):
         """Test that sanitization function handles invalid input gracefully."""
         # Test None input
-        result = _sanitize_openai_error(None)
+        result = _sanitize_provider_error(None, "openai")
         assert result == "OpenAI API encountered an error. Please verify your API key and quota."
         
         # Test non-string input
-        result = _sanitize_openai_error(123)
+        result = _sanitize_provider_error(123, "openai")
         assert result == "OpenAI API encountered an error. Please verify your API key and quota."
         
         # Test empty string
-        result = _sanitize_openai_error("")
+        result = _sanitize_provider_error("", "openai")
         assert result == "OpenAI API encountered an error. Please verify your API key and quota."
         
         # Test whitespace-only string
-        result = _sanitize_openai_error("   ")
+        result = _sanitize_provider_error("   ", "openai")
         assert result == "OpenAI API encountered an error. Please verify your API key and quota."
 
     @pytest.mark.asyncio
