@@ -11,7 +11,8 @@
 export interface OpenAIErrorDetails {
   error: string;
   message: string;
-  error_type: 'quota_exhausted' | 'rate_limit' | 'api_error' | 'authentication_failed';
+  error_type: 'quota_exhausted' | 'rate_limit' | 'api_error' | 'authentication_failed' | 'timeout_error' | 'configuration_error';
+  error_code?: string; // Structured error code for reliable detection
   tokens_used?: number;
   retry_after?: number;
   api_key_prefix?: string;
@@ -135,6 +136,12 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
       case 'api_error':
         return `OpenAI API error: ${error.errorDetails.message}. Please check your API key configuration.`;
       
+      case 'timeout_error':
+        return `Request timed out. Please try again or check your network connection.`;
+      
+      case 'configuration_error':
+        return `OpenAI API configuration error. Please check your API key settings.`;
+      
       default:
         return error.errorDetails.message || error.message;
     }
@@ -173,6 +180,10 @@ export function getErrorSeverity(error: EnhancedError): 'error' | 'warning' | 'i
         return 'warning'; // Temporary - retry may work
       case 'api_error':
         return 'error'; // Likely configuration issue
+      case 'timeout_error':
+        return 'warning'; // Temporary - retry may work
+      case 'configuration_error':
+        return 'error'; // Configuration issue
       default:
         return 'error';
     }
@@ -196,10 +207,18 @@ export function getErrorAction(error: EnhancedError): string | null {
       case 'authentication_failed':
         return 'Verify your OpenAI API key in Settings';
       case 'rate_limit':
-        const retryAfter = error.errorDetails.retry_after || 30;
-        return `Wait ${retryAfter} seconds and try again`;
+        const retryAfter = error.errorDetails.retry_after;
+        if (retryAfter && retryAfter > 0) {
+          return `Wait ${retryAfter} seconds and try again`;
+        } else {
+          return 'Wait a moment and try again';
+        }
       case 'api_error':
         return 'Verify your OpenAI API key in Settings';
+      case 'timeout_error':
+        return 'Check your network connection and try again';
+      case 'configuration_error':
+        return 'Check your OpenAI API key in Settings';
       default:
         return null;
     }

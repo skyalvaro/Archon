@@ -24,7 +24,9 @@ export async function callKnowledgeAPI<T>(
       // The ETag client extracts the error message but loses the structured details
       // We need to reconstruct the structured error based on the status code and message
       
-      if (error.statusCode === 401 && error.message === "Invalid OpenAI API key") {
+      // Use status code and message patterns to identify OpenAI errors
+      // More reliable than exact string matching
+      if (error.statusCode === 401 && error.message.includes("OpenAI API key")) {
         // This is our OpenAI authentication error
         errorData = {
           status: 401,
@@ -32,10 +34,11 @@ export async function callKnowledgeAPI<T>(
           detail: {
             error: "Invalid OpenAI API key",
             message: "Please verify your OpenAI API key in Settings before starting a crawl.",
-            error_type: "authentication_failed"
+            error_type: "authentication_failed",
+            error_code: "OPENAI_AUTH_FAILED"
           }
         };
-      } else if (error.statusCode === 429 && error.message === "OpenAI quota exhausted") {
+      } else if (error.statusCode === 429 && error.message.includes("quota")) {
         // This is our OpenAI quota error
         errorData = {
           status: 429,
@@ -43,10 +46,11 @@ export async function callKnowledgeAPI<T>(
           detail: {
             error: "OpenAI quota exhausted",
             message: "Your OpenAI API key has no remaining credits. Please add credits to your account.",
-            error_type: "quota_exhausted"
+            error_type: "quota_exhausted",
+            error_code: "OPENAI_QUOTA_EXHAUSTED"
           }
         };
-      } else if (error.statusCode === 429 && error.message === "OpenAI API rate limit exceeded") {
+      } else if (error.statusCode === 429 && error.message.includes("rate limit")) {
         // This is our rate limit error
         errorData = {
           status: 429,
@@ -55,10 +59,10 @@ export async function callKnowledgeAPI<T>(
             error: "OpenAI API rate limit exceeded",
             message: "Too many requests to OpenAI API. Please wait a moment and try again.",
             error_type: "rate_limit",
-            retry_after: 30
+            error_code: "OPENAI_RATE_LIMIT"
           }
         };
-      } else if (error.statusCode === 502 && error.message === "OpenAI API error") {
+      } else if (error.statusCode === 502 && error.message.includes("OpenAI")) {
         // This is our generic API error
         errorData = {
           status: 502,
@@ -66,7 +70,8 @@ export async function callKnowledgeAPI<T>(
           detail: {
             error: "OpenAI API error",
             message: "OpenAI API error. Please check your API key configuration.",
-            error_type: "api_error"
+            error_type: "api_error",
+            error_code: "OPENAI_API_ERROR"
           }
         };
       } else {
@@ -148,7 +153,16 @@ export async function uploadWithEnhancedErrors(
   } catch (error: any) {
     // Check if it's a timeout error
     if (error instanceof Error && error.name === 'AbortError') {
-      const timeoutError = parseKnowledgeBaseError(new Error('Request timed out'));
+      const timeoutError = parseKnowledgeBaseError({
+        status: 408,
+        error: 'Request timed out',
+        detail: {
+          error: 'Request timeout',
+          message: 'The request took too long to complete. Please try again or check your network connection.',
+          error_type: 'timeout_error',
+          error_code: 'REQUEST_TIMEOUT'
+        }
+      });
       throw timeoutError;
     }
     

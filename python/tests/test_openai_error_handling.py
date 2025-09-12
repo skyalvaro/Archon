@@ -113,6 +113,7 @@ class TestOpenAIErrorHandling:
             assert "quota exhausted" in exc_info.value.detail["error"].lower()
             assert "add credits" in exc_info.value.detail["message"].lower()
             assert exc_info.value.detail["error_type"] == "quota_exhausted"
+            assert exc_info.value.detail["error_code"] == "OPENAI_QUOTA_EXHAUSTED"
             assert exc_info.value.detail["tokens_used"] == 500
 
     @pytest.mark.asyncio
@@ -142,6 +143,7 @@ class TestOpenAIErrorHandling:
             assert "authentication failed" in exc_info.value.detail["error"].lower()
             assert "invalid or expired" in exc_info.value.detail["message"].lower()
             assert exc_info.value.detail["error_type"] == "authentication_failed"
+            assert exc_info.value.detail["error_code"] == "OPENAI_AUTH_FAILED"
             assert exc_info.value.detail["api_key_prefix"] == "sk-1…"
 
     @pytest.mark.asyncio

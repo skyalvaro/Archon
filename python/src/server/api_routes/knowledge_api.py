@@ -63,21 +63,35 @@ def _sanitize_openai_error(error_message: str) -> str:
     if not error_message.strip():
         return "OpenAI API encountered an error. Please verify your API key and quota."
 
-    # Common patterns to sanitize with bounded quantifiers to prevent ReDoS
-    sanitized_patterns = {
-        r'https?://[^\s]{1,200}': '[REDACTED_URL]',  # Remove URLs (bounded)
-        r'sk-[a-zA-Z0-9]{48}': '[REDACTED_KEY]',     # Remove OpenAI API keys
-        r'"[^"]{1,100}auth[^"]{1,100}"': '[REDACTED_AUTH]',     # Remove auth details (bounded)
-        r'org-[a-zA-Z0-9]{24}': '[REDACTED_ORG]',   # Remove OpenAI organization IDs
-        r'proj_[a-zA-Z0-9]{10,20}': '[REDACTED_PROJ]', # Remove OpenAI project IDs (bounded)
-        r'req_[a-zA-Z0-9]{6,20}': '[REDACTED_REQ]',   # Remove OpenAI request IDs (bounded)
-        r'user-[a-zA-Z0-9]{10,20}': '[REDACTED_USER]', # Remove OpenAI user IDs (bounded)
-        r'sess_[a-zA-Z0-9]{10,20}': '[REDACTED_SESS]', # Remove session IDs (bounded)
-        r'Bearer\s+[^\s]{1,200}': 'Bearer [REDACTED_AUTH_TOKEN]', # Remove bearer tokens (bounded)
-    }
+    # Length limit to prevent processing overly large error messages
+    if len(error_message) > 2000:
+        return "OpenAI API encountered an error. Please verify your API key and quota."
 
+    # Optimized patterns using string operations where possible to prevent ReDoS
     sanitized = error_message
-    for pattern, replacement in sanitized_patterns.items():
+    
+    # Use string operations for API key detection (faster and safer than regex)
+    if 'sk-' in sanitized:
+        words = sanitized.split()
+        for i, word in enumerate(words):
+            if word.startswith('sk-') and len(word) == 51:  # OpenAI API key format: sk- + 48 chars
+                words[i] = '[REDACTED_KEY]'
+        sanitized = ' '.join(words)
+    
+    # Use simple, efficient regex patterns with strict bounds
+    sanitized_patterns = [
+        (r'https?://[a-zA-Z0-9.-]+/[^\s]*', '[REDACTED_URL]'),  # URLs with simplified pattern
+        (r'org-[a-zA-Z0-9]{24}', '[REDACTED_ORG]'),   # Fixed length org IDs
+        (r'proj_[a-zA-Z0-9]{10,15}', '[REDACTED_PROJ]'), # Project IDs
+        (r'req_[a-zA-Z0-9]{6,15}', '[REDACTED_REQ]'),   # Request IDs  
+        (r'user-[a-zA-Z0-9]{10,15}', '[REDACTED_USER]'), # User IDs
+        (r'sess_[a-zA-Z0-9]{10,15}', '[REDACTED_SESS]'), # Session IDs
+        (r'Bearer [a-zA-Z0-9._-]+', 'Bearer [REDACTED_AUTH_TOKEN]'), # Bearer tokens
+        (r'"[^"]*auth[^"]*"', '[REDACTED_AUTH]'),     # Auth details in quotes
+    ]
+
+    # Apply patterns efficiently
+    for pattern, replacement in sanitized_patterns:
         sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
 
     # Check for sensitive words after pattern replacement
@@ -136,6 +150,7 @@ async def _validate_openai_api_key() -> None:
                 "error": "Invalid OpenAI API key",
                 "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
                 "error_type": "authentication_failed",
+                "error_code": "OPENAI_AUTH_FAILED",
                 "api_key_prefix": getattr(e, "api_key_prefix", None),
             }
         ) from None
@@ -147,6 +162,7 @@ async def _validate_openai_api_key() -> None:
                 "error": "OpenAI quota exhausted",
                 "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
                 "error_type": "quota_exhausted",
+                "error_code": "OPENAI_QUOTA_EXHAUSTED",
                 "tokens_used": getattr(e, "tokens_used", None),
             }
         ) from None
@@ -204,11 +220,27 @@ async def _validate_openai_api_key() -> None:
                 }
             ) from None
         
-        # For any other errors, log them but allow the operation to continue
-        # The error will be caught later during actual processing
-        logger.warning(f"⚠️ API key validation failed with unexpected error (allowing operation to continue): {e}")
-        # Don't block the operation for unexpected validation errors
-        pass
+        # Only allow specific safe errors to pass through
+        # For configuration or network errors, we should fail fast
+        if (isinstance(e, (ConnectionError, TimeoutError)) or 
+            "network" in error_str.lower() or 
+            "timeout" in error_str.lower() or
+            "connection" in error_str.lower()):
+            # Network-related errors can be temporary - allow operation to continue
+            logger.warning(f"⚠️ API key validation failed due to network issue (allowing operation to continue): {e}")
+            pass
+        else:
+            # For configuration or API errors, fail fast to prevent wasted operations
+            logger.error(f"❌ API key validation failed with critical error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "OpenAI API configuration error",
+                    "message": "Unable to validate OpenAI API key. Please check your API key configuration.",
+                    "error_type": "configuration_error",
+                    "error_code": "OPENAI_CONFIG_ERROR"
+                }
+            ) from None
 
 
 # Request Models
@@ -1160,6 +1192,7 @@ async def perform_rag_query(request: RagQueryRequest):
                     "error": "OpenAI API authentication failed",
                     "message": "Invalid or expired OpenAI API key. Please check your API key in settings.",
                     "error_type": "authentication_failed",
+                    "error_code": "OPENAI_AUTH_FAILED",
                     "api_key_prefix": getattr(e, "api_key_prefix", None),
                 }
             )
@@ -1173,6 +1206,7 @@ async def perform_rag_query(request: RagQueryRequest):
                     "error": "OpenAI API quota exhausted",
                     "message": "Your OpenAI API key has no remaining credits. Please add credits to your OpenAI account or check your billing settings.",
                     "error_type": "quota_exhausted",
+                    "error_code": "OPENAI_QUOTA_EXHAUSTED",
                     "tokens_used": getattr(e, "tokens_used", None),
                 }
             )
@@ -1186,6 +1220,7 @@ async def perform_rag_query(request: RagQueryRequest):
                     "error": "OpenAI API rate limit exceeded",
                     "message": "Too many requests to OpenAI API. Please wait a moment and try again.",
                     "error_type": "rate_limit",
+                    "error_code": "OPENAI_RATE_LIMIT",
                     "retry_after": 30,  # Suggest 30 second wait
                 }
             )
@@ -1200,6 +1235,7 @@ async def perform_rag_query(request: RagQueryRequest):
                     "error": "OpenAI API error",
                     "message": f"OpenAI API error: {sanitized_message}",
                     "error_type": "api_error",
+                    "error_code": "OPENAI_API_ERROR",
                 }
             )
         else:
