@@ -18,6 +18,10 @@ export async function callKnowledgeAPI<T>(
     // Use the ETag-aware API client for caching benefits
     return await callAPIWithETag<T>(endpoint, options);
   } catch (error: any) {
+    console.log(`🔍 [Knowledge API] Caught error for ${endpoint}:`, error);
+    console.log(`🔍 [Knowledge API] Error type: ${typeof error}`);
+    console.log(`🔍 [Knowledge API] Error keys:`, Object.keys(error || {}));
+    
     // Apply enhanced error parsing for OpenAI errors
     const enhancedError = parseKnowledgeBaseError({
       status: error.statusCode || error.status,
@@ -25,12 +29,17 @@ export async function callKnowledgeAPI<T>(
       detail: error.detail
     });
     
+    console.log(`🔍 [Knowledge API] Enhanced error:`, enhancedError);
+    console.log(`🔍 [Knowledge API] Is OpenAI error:`, enhancedError.isOpenAIError);
+    console.log(`🔍 [Knowledge API] Error details:`, enhancedError.errorDetails);
+    
     // Preserve the original error structure but enhance with our parsing
     const finalError = error as EnhancedError;
     finalError.isOpenAIError = enhancedError.isOpenAIError;
     finalError.errorDetails = enhancedError.errorDetails;
     finalError.message = enhancedError.message;
     
+    console.log(`🔍 [Knowledge API] Final error to throw:`, finalError);
     throw finalError;
   }
 }

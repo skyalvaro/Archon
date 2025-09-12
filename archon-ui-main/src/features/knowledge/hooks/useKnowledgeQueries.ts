@@ -260,6 +260,11 @@ export function useCrawlUrl() {
       return response;
     },
     onError: (error, _variables, context) => {
+      console.log(`🔍 [Crawl Hook] Received error:`, error);
+      console.log(`🔍 [Crawl Hook] Error type: ${typeof error}`);
+      console.log(`🔍 [Crawl Hook] Error keys:`, Object.keys(error || {}));
+      console.log(`🔍 [Crawl Hook] Is OpenAI error:`, (error as EnhancedError)?.isOpenAIError);
+      
       // Rollback optimistic updates on error
       if (context?.previousKnowledge) {
         queryClient.setQueryData(knowledgeKeys.lists(), context.previousKnowledge);
@@ -278,6 +283,8 @@ export function useCrawlUrl() {
       const errorMessage = (error as EnhancedError)?.isOpenAIError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to start crawl");
+      
+      console.log(`🔍 [Crawl Hook] Final error message for toast:`, errorMessage);
       showToast(errorMessage, "error");
     },
   });

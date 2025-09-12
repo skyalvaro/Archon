@@ -100,21 +100,24 @@ async def _validate_openai_api_key() -> None:
     Raises:
         HTTPException: 401 if API key is invalid/missing, 429 if quota exhausted
     """
+    # Import embedding exceptions for specific error handling
+    from ..services.embeddings.embedding_exceptions import (
+        EmbeddingAuthenticationError,
+        EmbeddingQuotaExhaustedError,
+    )
+    
     try:
         # Test the API key with a minimal embedding request
         from ..services.embeddings.embedding_service import create_embedding
 
+        logger.info("🔑 Validating OpenAI API key before starting operation...")
         # Try to create a test embedding with minimal content
-        await create_embedding(text="test")
-
-    except Exception as e:
-        # Import embedding exceptions for specific error handling
-        from ..services.embeddings.embedding_exceptions import (
-            EmbeddingAuthenticationError,
-            EmbeddingQuotaExhaustedError,
-        )
-
-        if isinstance(e, EmbeddingAuthenticationError):
+        test_result = await create_embedding(text="test")
+        
+        if test_result:
+            logger.info("✅ OpenAI API key validation successful")
+        else:
+            logger.error("❌ OpenAI API key validation failed - no embedding returned")
             raise HTTPException(
                 status_code=401,
                 detail={
@@ -123,20 +126,35 @@ async def _validate_openai_api_key() -> None:
                     "error_type": "authentication_failed"
                 }
             )
-        elif isinstance(e, EmbeddingQuotaExhaustedError):
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "OpenAI quota exhausted",
-                    "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
-                    "error_type": "quota_exhausted"
-                }
-            )
-        else:
-            # For any other errors, allow the operation to continue
-            # The error will be caught later during actual processing
-            logger.warning(f"API key validation failed with unexpected error: {e}")
-            pass
+
+    except EmbeddingAuthenticationError as e:
+        logger.error(f"❌ OpenAI authentication failed: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "Invalid OpenAI API key",
+                "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
+                "error_type": "authentication_failed",
+                "api_key_prefix": getattr(e, "api_key_prefix", None),
+            }
+        ) from None
+    except EmbeddingQuotaExhaustedError as e:
+        logger.error(f"❌ OpenAI quota exhausted: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "OpenAI quota exhausted",
+                "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+                "error_type": "quota_exhausted",
+                "tokens_used": getattr(e, "tokens_used", None),
+            }
+        ) from None
+    except Exception as e:
+        # For any other errors, log them but allow the operation to continue
+        # The error will be caught later during actual processing
+        logger.warning(f"⚠️ API key validation failed with unexpected error: {e}")
+        # Don't block the operation for unexpected validation errors
+        pass
 
 
 # Request Models
