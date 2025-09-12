@@ -144,7 +144,8 @@ class TaskService:
         status: str = None,
         include_closed: bool = False,
         exclude_large_fields: bool = False,
-        include_archived: bool = False
+        include_archived: bool = False,
+        search_query: str = None
     ) -> tuple[bool, dict[str, Any]]:
         """
         List tasks with various filters.
@@ -155,6 +156,7 @@ class TaskService:
             include_closed: Include done tasks
             exclude_large_fields: If True, excludes sources and code_examples fields
             include_archived: If True, includes archived tasks
+            search_query: Keyword search in title, description, and feature fields
 
         Returns:
             Tuple of (success, result_dict)
@@ -193,6 +195,19 @@ class TaskService:
                 # Only exclude done tasks if no specific status filter is applied
                 query = query.neq("status", "done")
                 filters_applied.append("exclude done tasks")
+
+            # Apply keyword search if provided
+            if search_query:
+                # Split search query into terms
+                search_terms = search_query.lower().split()
+                # Use ilike for case-insensitive search, AND logic for multiple terms
+                for term in search_terms:
+                    query = query.or_(
+                        f"title.ilike.%{term}%,"
+                        f"description.ilike.%{term}%,"
+                        f"feature.ilike.%{term}%"
+                    )
+                filters_applied.append(f"search={search_query}")
 
             # Filter out archived tasks only if not including them
             if not include_archived:
