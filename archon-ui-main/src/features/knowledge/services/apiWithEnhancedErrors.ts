@@ -20,14 +20,83 @@ export async function callKnowledgeAPI<T>(
   } catch (error: any) {
     console.log(`🔍 [Knowledge API] Caught error for ${endpoint}:`, error);
     console.log(`🔍 [Knowledge API] Error type: ${typeof error}`);
+    console.log(`🔍 [Knowledge API] Error constructor:`, error.constructor?.name);
     console.log(`🔍 [Knowledge API] Error keys:`, Object.keys(error || {}));
     
+    // Handle ProjectServiceError specifically (comes from callAPIWithETag)
+    let errorData;
+    if (error.constructor?.name === 'ProjectServiceError') {
+      console.log(`🔍 [Knowledge API] Handling ProjectServiceError - message: "${error.message}", statusCode: ${error.statusCode}`);
+      
+      // The ETag client extracts the error message but loses the structured details
+      // We need to reconstruct the structured error based on the status code and message
+      
+      if (error.statusCode === 401 && error.message === "Invalid OpenAI API key") {
+        // This is our OpenAI authentication error
+        errorData = {
+          status: 401,
+          error: error.message,
+          detail: {
+            error: "Invalid OpenAI API key",
+            message: "Please verify your OpenAI API key in Settings before starting a crawl.",
+            error_type: "authentication_failed"
+          }
+        };
+      } else if (error.statusCode === 429 && error.message === "OpenAI quota exhausted") {
+        // This is our OpenAI quota error
+        errorData = {
+          status: 429,
+          error: error.message,
+          detail: {
+            error: "OpenAI quota exhausted",
+            message: "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+            error_type: "quota_exhausted"
+          }
+        };
+      } else if (error.statusCode === 429 && error.message === "OpenAI API rate limit exceeded") {
+        // This is our rate limit error
+        errorData = {
+          status: 429,
+          error: error.message,
+          detail: {
+            error: "OpenAI API rate limit exceeded",
+            message: "Too many requests to OpenAI API. Please wait a moment and try again.",
+            error_type: "rate_limit",
+            retry_after: 30
+          }
+        };
+      } else if (error.statusCode === 502 && error.message === "OpenAI API error") {
+        // This is our generic API error
+        errorData = {
+          status: 502,
+          error: error.message,
+          detail: {
+            error: "OpenAI API error",
+            message: "OpenAI API error. Please check your API key configuration.",
+            error_type: "api_error"
+          }
+        };
+      } else {
+        // For other ProjectServiceErrors, use the message as-is
+        errorData = {
+          status: error.statusCode,
+          error: error.message,
+          detail: null
+        };
+      }
+    } else {
+      // Handle other error types
+      errorData = {
+        status: error.statusCode || error.status,
+        error: error.message || error.detail || error,
+        detail: error.detail
+      };
+    }
+    
+    console.log(`🔍 [Knowledge API] Parsed error data:`, errorData);
+    
     // Apply enhanced error parsing for OpenAI errors
-    const enhancedError = parseKnowledgeBaseError({
-      status: error.statusCode || error.status,
-      error: error.message || error.detail || error,
-      detail: error.detail
-    });
+    const enhancedError = parseKnowledgeBaseError(errorData);
     
     console.log(`🔍 [Knowledge API] Enhanced error:`, enhancedError);
     console.log(`🔍 [Knowledge API] Is OpenAI error:`, enhancedError.isOpenAIError);
