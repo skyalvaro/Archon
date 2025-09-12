@@ -117,7 +117,8 @@ class RAGService:
 
                 if not query_embedding:
                     logger.error("Failed to create embedding for query")
-                    return []
+                    # Follow fail-fast principle - embedding failure should not return empty results
+                    raise RuntimeError("Failed to create embedding for query - this indicates a configuration or API issue")
 
                 if use_hybrid_search:
                     # Use hybrid strategy
@@ -141,9 +142,22 @@ class RAGService:
                 return results
 
             except Exception as e:
+                # Import embedding exceptions for specific error handling
+                from ..embeddings.embedding_exceptions import (
+                    EmbeddingAPIError,
+                    EmbeddingAuthenticationError,
+                    EmbeddingQuotaExhaustedError,
+                    EmbeddingRateLimitError,
+                )
+
+                # Re-raise OpenAI embedding errors so they propagate to the API layer with specific error info
+                if isinstance(e, (EmbeddingAuthenticationError, EmbeddingQuotaExhaustedError, EmbeddingRateLimitError, EmbeddingAPIError)):
+                    raise
+
                 logger.error(f"Document search failed: {e}")
                 span.set_attribute("error", str(e))
-                return []
+                # Follow fail-fast principle - don't return empty results for legitimate failures
+                raise RuntimeError(f"Document search failed: {str(e)}") from e
 
     async def search_code_examples(
         self,

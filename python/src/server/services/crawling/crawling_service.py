@@ -486,7 +486,7 @@ class CrawlingService:
                     logger.error("Code extraction failed, continuing crawl without code examples", exc_info=True)
                     safe_logfire_error(f"Code extraction failed | error={e}")
                     code_examples_count = 0
-                    
+
                     # Report code extraction failure to progress tracker
                     if self.progress_tracker:
                         await self.progress_tracker.update(

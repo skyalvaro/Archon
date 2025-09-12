@@ -3,7 +3,8 @@
  * Handles all knowledge-related API operations using TanStack Query patterns
  */
 
-import { callAPIWithETag, invalidateETagCache } from "../../projects/shared/apiWithEtag";
+import { invalidateETagCache } from "../../projects/shared/apiWithEtag";
+import { callKnowledgeAPI, uploadWithEnhancedErrors } from "./apiWithEnhancedErrors";
 import type {
   ChunksResponse,
   CodeExamplesResponse,
@@ -40,21 +41,21 @@ export const knowledgeService = {
     const queryString = params.toString();
     const endpoint = `/api/knowledge-items/summary${queryString ? `?${queryString}` : ""}`;
 
-    return callAPIWithETag<KnowledgeItemsResponse>(endpoint);
+    return callKnowledgeAPI<KnowledgeItemsResponse>(endpoint);
   },
 
   /**
    * Get a specific knowledge item
    */
   async getKnowledgeItem(sourceId: string): Promise<KnowledgeItem> {
-    return callAPIWithETag<KnowledgeItem>(`/api/knowledge-items/${sourceId}`);
+    return callKnowledgeAPI<KnowledgeItem>(`/api/knowledge-items/${sourceId}`);
   },
 
   /**
    * Delete a knowledge item
    */
   async deleteKnowledgeItem(sourceId: string): Promise<{ success: boolean; message: string }> {
-    const response = await callAPIWithETag<{ success: boolean; message: string }>(`/api/knowledge-items/${sourceId}`, {
+    const response = await callKnowledgeAPI<{ success: boolean; message: string }>(`/api/knowledge-items/${sourceId}`, {
       method: "DELETE",
     });
 
@@ -70,7 +71,7 @@ export const knowledgeService = {
    * Update a knowledge item
    */
   async updateKnowledgeItem(sourceId: string, updates: Partial<KnowledgeItem>): Promise<KnowledgeItem> {
-    const response = await callAPIWithETag<KnowledgeItem>(`/api/knowledge-items/${sourceId}`, {
+    const response = await callKnowledgeAPI<KnowledgeItem>(`/api/knowledge-items/${sourceId}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
@@ -87,7 +88,7 @@ export const knowledgeService = {
    * Start crawling a URL
    */
   async crawlUrl(request: CrawlRequest): Promise<CrawlStartResponse> {
-    const response = await callAPIWithETag<CrawlStartResponse>("/api/knowledge-items/crawl", {
+    const response = await callKnowledgeAPI<CrawlStartResponse>("/api/knowledge-items/crawl", {
       method: "POST",
       body: JSON.stringify(request),
     });
@@ -103,7 +104,7 @@ export const knowledgeService = {
    * Refresh an existing knowledge item
    */
   async refreshKnowledgeItem(sourceId: string): Promise<RefreshResponse> {
-    const response = await callAPIWithETag<RefreshResponse>(`/api/knowledge-items/${sourceId}/refresh`, {
+    const response = await callKnowledgeAPI<RefreshResponse>(`/api/knowledge-items/${sourceId}/refresh`, {
       method: "POST",
     });
 
@@ -132,38 +133,21 @@ export const knowledgeService = {
       formData.append("tags", JSON.stringify(metadata.tags));
     }
 
-    // Use fetch directly for file upload (FormData doesn't work well with our ETag wrapper)
-    // In test environment, we need absolute URLs
-    let uploadUrl = "/api/documents/upload";
-    if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") {
-      const testHost = process.env?.VITE_HOST || "localhost";
-      const testPort = process.env?.ARCHON_SERVER_PORT || "8181";
-      uploadUrl = `http://${testHost}:${testPort}${uploadUrl}`;
-    }
-
-    const response = await fetch(uploadUrl, {
-      method: "POST",
-      body: formData,
-      signal: AbortSignal.timeout(30000), // 30 second timeout for file uploads
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || `HTTP ${response.status}`);
-    }
+    // Use enhanced upload wrapper with OpenAI error handling
+    const result = await uploadWithEnhancedErrors("/documents/upload", formData, 30000);
 
     // Invalidate list cache
     invalidateETagCache("/api/knowledge-items");
     invalidateETagCache("/api/knowledge-items/summary");
 
-    return response.json();
+    return result;
   },
 
   /**
    * Stop a running crawl
    */
   async stopCrawl(progressId: string): Promise<{ success: boolean; message: string }> {
-    return callAPIWithETag<{ success: boolean; message: string }>(`/api/knowledge-items/stop/${progressId}`, {
+    return callKnowledgeAPI<{ success: boolean; message: string }>(`/api/knowledge-items/stop/${progressId}`, {
       method: "POST",
     });
   },
@@ -193,7 +177,7 @@ export const knowledgeService = {
     const queryString = params.toString();
     const endpoint = `/api/knowledge-items/${sourceId}/chunks${queryString ? `?${queryString}` : ""}`;
 
-    return callAPIWithETag<ChunksResponse>(endpoint);
+    return callKnowledgeAPI<ChunksResponse>(endpoint);
   },
 
   /**
@@ -217,14 +201,14 @@ export const knowledgeService = {
     const queryString = params.toString();
     const endpoint = `/api/knowledge-items/${sourceId}/code-examples${queryString ? `?${queryString}` : ""}`;
 
-    return callAPIWithETag<CodeExamplesResponse>(endpoint);
+    return callKnowledgeAPI<CodeExamplesResponse>(endpoint);
   },
 
   /**
    * Search the knowledge base
    */
   async searchKnowledgeBase(options: SearchOptions): Promise<SearchResultsResponse> {
-    return callAPIWithETag("/api/knowledge-items/search", {
+    return callKnowledgeAPI("/api/knowledge-items/search", {
       method: "POST",
       body: JSON.stringify(options),
     });
@@ -234,6 +218,6 @@ export const knowledgeService = {
    * Get available knowledge sources
    */
   async getKnowledgeSources(): Promise<KnowledgeSource[]> {
-    return callAPIWithETag<KnowledgeSource[]>("/api/knowledge-items/sources");
+    return callKnowledgeAPI<KnowledgeSource[]>("/api/knowledge-items/sources");
   },
 };

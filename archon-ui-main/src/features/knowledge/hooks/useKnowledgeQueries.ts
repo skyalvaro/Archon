@@ -11,6 +11,7 @@ import { useActiveOperations } from "../progress/hooks";
 import { progressKeys } from "../progress/hooks/useProgressQueries";
 import type { ActiveOperation, ActiveOperationsResponse } from "../progress/types";
 import { knowledgeService } from "../services";
+import { getDisplayErrorMessage, type EnhancedError } from "../utils/errorHandler";
 import type {
   CrawlRequest,
   CrawlStartResponse,
@@ -273,7 +274,10 @@ export function useCrawlUrl() {
         queryClient.setQueryData(progressKeys.list(), context.previousOperations);
       }
 
-      const errorMessage = error instanceof Error ? error.message : "Failed to start crawl";
+      // Use enhanced error handling for better user experience
+      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+        ? getDisplayErrorMessage(error as EnhancedError)
+        : (error instanceof Error ? error.message : "Failed to start crawl");
       showToast(errorMessage, "error");
     },
   });
@@ -449,8 +453,10 @@ export function useUploadDocument() {
         queryClient.setQueryData(progressKeys.list(), context.previousOperations);
       }
 
-      // Display the actual error message from backend
-      const message = error instanceof Error ? error.message : "Failed to upload document";
+      // Use enhanced error handling for better user experience
+      const message = (error as EnhancedError)?.isOpenAIError 
+        ? getDisplayErrorMessage(error as EnhancedError)
+        : (error instanceof Error ? error.message : "Failed to upload document");
       showToast(message, "error");
     },
   });
@@ -521,7 +527,10 @@ export function useDeleteKnowledgeItem() {
         queryClient.setQueryData(queryKey, data);
       }
 
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete item";
+      // Use enhanced error handling for better user experience
+      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+        ? getDisplayErrorMessage(error as EnhancedError)
+        : (error instanceof Error ? error.message : "Failed to delete item");
       showToast(errorMessage, "error");
     },
     onSuccess: (data) => {
@@ -568,7 +577,10 @@ export function useUpdateKnowledgeItem() {
         queryClient.setQueryData(knowledgeKeys.detail(variables.sourceId), context.previousItem);
       }
 
-      const errorMessage = error instanceof Error ? error.message : "Failed to update item";
+      // Use enhanced error handling for better user experience
+      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+        ? getDisplayErrorMessage(error as EnhancedError)
+        : (error instanceof Error ? error.message : "Failed to update item");
       showToast(errorMessage, "error");
     },
     onSuccess: (_data, { sourceId }) => {
@@ -604,7 +616,10 @@ export function useRefreshKnowledgeItem() {
       return data;
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : "Failed to refresh item";
+      // Use enhanced error handling for better user experience
+      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+        ? getDisplayErrorMessage(error as EnhancedError)
+        : (error instanceof Error ? error.message : "Failed to refresh item");
       showToast(errorMessage, "error");
     },
   });
