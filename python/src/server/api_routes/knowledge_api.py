@@ -53,143 +53,128 @@ crawl_semaphore = asyncio.Semaphore(CONCURRENT_CRAWL_LIMIT)
 active_crawl_tasks: dict[str, asyncio.Task] = {}
 
 
-def _sanitize_openai_error(error_message: str) -> str:
-    """Sanitize OpenAI API error messages to prevent information disclosure."""
-    import re
-
-    # Input validation
-    if not isinstance(error_message, str):
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-    if not error_message.strip():
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-
-    # Length limit to prevent processing overly large error messages
-    if len(error_message) > 2000:
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-
-    # Optimized patterns using string operations where possible to prevent ReDoS
-    sanitized = error_message
+def _sanitize_provider_error(error_message: str, provider: str = None) -> str:
+    """Sanitize provider-specific error messages to prevent information disclosure."""
+    from ..services.embeddings.provider_error_adapters import ProviderErrorFactory
     
-    # Use string operations for API key detection (faster and safer than regex)
-    if 'sk-' in sanitized:
-        words = sanitized.split()
-        for i, word in enumerate(words):
-            if word.startswith('sk-') and len(word) == 51:  # OpenAI API key format: sk- + 48 chars
-                words[i] = '[REDACTED_KEY]'
-        sanitized = ' '.join(words)
+    # Auto-detect provider if not specified
+    if not provider:
+        provider = ProviderErrorFactory.detect_provider_from_error(error_message)
     
-    # Use simple, efficient regex patterns with strict bounds
-    sanitized_patterns = [
-        (r'https?://[a-zA-Z0-9.-]+/[^\s]*', '[REDACTED_URL]'),  # URLs with simplified pattern
-        (r'org-[a-zA-Z0-9]{24}', '[REDACTED_ORG]'),   # Fixed length org IDs
-        (r'proj_[a-zA-Z0-9]{10,15}', '[REDACTED_PROJ]'), # Project IDs
-        (r'req_[a-zA-Z0-9]{6,15}', '[REDACTED_REQ]'),   # Request IDs  
-        (r'user-[a-zA-Z0-9]{10,15}', '[REDACTED_USER]'), # User IDs
-        (r'sess_[a-zA-Z0-9]{10,15}', '[REDACTED_SESS]'), # Session IDs
-        (r'Bearer [a-zA-Z0-9._-]+', 'Bearer [REDACTED_AUTH_TOKEN]'), # Bearer tokens
-        (r'"[^"]*auth[^"]*"', '[REDACTED_AUTH]'),     # Auth details in quotes
-    ]
-
-    # Apply patterns efficiently
-    for pattern, replacement in sanitized_patterns:
-        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
-
-    # Check for sensitive words after pattern replacement
-    sensitive_words = ['internal', 'server', 'token']
-    # Only check for 'endpoint' if it's not part of our redacted URL pattern
-    if 'endpoint' in sanitized.lower() and '[REDACTED_URL]' not in sanitized:
-        sensitive_words.append('endpoint')
-
-    # Return generic message if still contains sensitive info
-    if any(word in sanitized.lower() for word in sensitive_words):
-        return "OpenAI API encountered an error. Please verify your API key and quota."
-
-    return sanitized
+    # Use provider-specific sanitization
+    return ProviderErrorFactory.sanitize_provider_error(error_message, provider)
 
 
-async def _validate_openai_api_key() -> None:
+async def _validate_provider_api_key(provider: str = None) -> None:
     """
-    Validate OpenAI API key is present and working before starting operations.
+    Validate LLM provider API key is present and working before starting operations.
+    
+    Args:
+        provider: LLM provider name (openai, google, anthropic, ollama). If None, detects from active config.
     
     Raises:
         HTTPException: 401 if API key is invalid/missing, 429 if quota exhausted
     """
-    # Import embedding exceptions for specific error handling
-    from ..services.embeddings.embedding_exceptions import (
-        EmbeddingAuthenticationError,
-        EmbeddingQuotaExhaustedError,
-        EmbeddingAPIError,
-    )
+    from ..services.embeddings.provider_error_adapters import ProviderErrorFactory
     
     try:
+        # Get active provider if not specified
+        if not provider:
+            # Get current embedding provider from credentials
+            from ..services.credential_service import credential_service
+            provider_config = await credential_service.get_setting("EMBEDDING_PROVIDER", default="openai")
+            provider = provider_config.lower() if isinstance(provider_config, str) else "openai"
+
+        provider_name = ProviderErrorFactory.get_adapter(provider).get_provider_name()
+        logger.info(f"🔑 Validating {provider_name.title()} API key before starting operation...")
+        
         # Test the API key with a minimal embedding request
         from ..services.embeddings.embedding_service import create_embedding
-
-        logger.info("🔑 Validating OpenAI API key before starting operation...")
-        # Try to create a test embedding with minimal content
         test_result = await create_embedding(text="test")
         
         if test_result:
-            logger.info("✅ OpenAI API key validation successful")
+            logger.info(f"✅ {provider_name.title()} API key validation successful")
         else:
-            logger.error("❌ OpenAI API key validation failed - no embedding returned")
+            logger.error(f"❌ {provider_name.title()} API key validation failed - no embedding returned")
             raise HTTPException(
                 status_code=401,
                 detail={
-                    "error": "Invalid OpenAI API key",
-                    "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
-                    "error_type": "authentication_failed"
+                    "error": f"Invalid {provider_name.title()} API key",
+                    "message": f"Please verify your {provider_name.title()} API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed",
+                    "error_code": f"{provider_name.upper()}_AUTH_FAILED",
+                    "provider": provider_name
                 }
             )
 
     except EmbeddingAuthenticationError as e:
-        logger.error(f"❌ OpenAI authentication failed: {e}")
+        logger.error(f"❌ {provider_name.title()} authentication failed: {e}")
         raise HTTPException(
             status_code=401,
             detail={
-                "error": "Invalid OpenAI API key",
-                "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
+                "error": f"Invalid {provider_name.title()} API key",
+                "message": f"Please verify your {provider_name.title()} API key in Settings before starting a crawl.",
                 "error_type": "authentication_failed",
-                "error_code": "OPENAI_AUTH_FAILED",
+                "error_code": f"{provider_name.upper()}_AUTH_FAILED",
+                "provider": provider_name,
                 "api_key_prefix": getattr(e, "api_key_prefix", None),
             }
         ) from None
     except EmbeddingQuotaExhaustedError as e:
-        logger.error(f"❌ OpenAI quota exhausted: {e}")
+        logger.error(f"❌ {provider_name.title()} quota exhausted: {e}")
         raise HTTPException(
             status_code=429,
             detail={
-                "error": "OpenAI quota exhausted",
-                "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+                "error": f"{provider_name.title()} quota exhausted",
+                "message": f"Your {provider_name.title()} API key has no remaining credits. Please add credits to your account.",
                 "error_type": "quota_exhausted",
-                "error_code": "OPENAI_QUOTA_EXHAUSTED",
+                "error_code": f"{provider_name.upper()}_QUOTA_EXHAUSTED",
+                "provider": provider_name,
                 "tokens_used": getattr(e, "tokens_used", None),
             }
         ) from None
     except EmbeddingAPIError as e:
         error_str = str(e)
-        logger.error(f"❌ OpenAI API error during validation: {error_str}")
+        logger.error(f"❌ {provider_name.title()} API error during validation: {error_str}")
         
-        # Check if this is an authentication error (401 status code)
-        if ("401" in error_str and ("invalid" in error_str.lower() or "incorrect" in error_str.lower())):
-            logger.error("🔍 Detected OpenAI authentication error in EmbeddingAPIError")
+        # Use provider-specific error parsing to determine the actual error type
+        enhanced_error = ProviderErrorFactory.parse_provider_error(e, provider_name)
+        
+        if isinstance(enhanced_error, EmbeddingAuthenticationError):
+            logger.error(f"🔍 Detected {provider_name.title()} authentication error in EmbeddingAPIError")
             raise HTTPException(
                 status_code=401,
                 detail={
-                    "error": "Invalid OpenAI API key",
-                    "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
-                    "error_type": "authentication_failed"
+                    "error": f"Invalid {provider_name.title()} API key",
+                    "message": f"Please verify your {provider_name.title()} API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed",
+                    "error_code": f"{provider_name.upper()}_AUTH_FAILED",
+                    "provider": provider_name
+                }
+            ) from None
+        elif isinstance(enhanced_error, EmbeddingQuotaExhaustedError):
+            logger.error(f"🔍 Detected {provider_name.title()} quota error in EmbeddingAPIError")
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": f"{provider_name.title()} quota exhausted",
+                    "message": f"Your {provider_name.title()} API quota has been exceeded. Please check your billing settings.",
+                    "error_type": "quota_exhausted",
+                    "error_code": f"{provider_name.upper()}_QUOTA_EXHAUSTED",
+                    "provider": provider_name
                 }
             ) from None
         else:
             # Other API errors should also block the operation
-            logger.error("🔍 Other OpenAI API error during validation")
+            logger.error(f"🔍 Other {provider_name.title()} API error during validation")
             raise HTTPException(
                 status_code=502,
                 detail={
-                    "error": "OpenAI API error",
-                    "message": "OpenAI API error during validation. Please check your API key configuration.",
-                    "error_type": "api_error"
+                    "error": f"{provider_name.title()} API error",
+                    "message": f"{provider_name.title()} API error during validation. Please check your API key configuration.",
+                    "error_type": "api_error",
+                    "error_code": f"{provider_name.upper()}_API_ERROR",
+                    "provider": provider_name
                 }
             ) from None
     except Exception as e:
@@ -669,8 +654,8 @@ async def get_knowledge_item_code_examples(
 @router.post("/knowledge-items/{source_id}/refresh")
 async def refresh_knowledge_item(source_id: str):
     """Refresh a knowledge item by re-crawling its URL with the same metadata."""
-    # CRITICAL: Validate OpenAI API key before starting refresh
-    await _validate_openai_api_key()
+    # CRITICAL: Validate LLM provider API key before starting refresh
+    await _validate_provider_api_key()
 
     try:
         safe_logfire_info(f"Starting knowledge item refresh | source_id={source_id}")
@@ -790,8 +775,8 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
     if not request.url.startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
 
-    # CRITICAL: Validate OpenAI API key before starting crawl
-    await _validate_openai_api_key()
+    # CRITICAL: Validate LLM provider API key before starting crawl
+    await _validate_provider_api_key()
 
     try:
         safe_logfire_info(
@@ -946,8 +931,8 @@ async def upload_document(
     knowledge_type: str = Form("technical"),
 ):
     """Upload and process a document with progress tracking."""
-    # CRITICAL: Validate OpenAI API key before starting upload
-    await _validate_openai_api_key()
+    # CRITICAL: Validate LLM provider API key before starting upload
+    await _validate_provider_api_key()
 
     try:
         # DETAILED LOGGING: Track knowledge_type parameter flow
@@ -1181,61 +1166,77 @@ async def perform_rag_query(request: RagQueryRequest):
             EmbeddingRateLimitError,
         )
 
-        # Handle specific OpenAI/embedding errors with detailed messages
+        # Get current provider for error context
+        from ..services.embeddings.provider_error_adapters import ProviderErrorFactory
+        from ..services.credential_service import credential_service
+        
+        try:
+            provider_config = await credential_service.get_setting("EMBEDDING_PROVIDER", default="openai")
+            provider = provider_config.lower() if isinstance(provider_config, str) else "openai"
+        except Exception:
+            provider = "openai"  # Fallback
+        
+        provider_name = ProviderErrorFactory.get_adapter(provider).get_provider_name()
+        
+        # Handle specific LLM provider embedding errors with detailed messages
         if isinstance(e, EmbeddingAuthenticationError):
             safe_logfire_error(
-                f"OpenAI authentication failed during RAG query | query={request.query[:50]} | source={request.source}"
+                f"{provider_name.title()} authentication failed during RAG query | query={request.query[:50]} | source={request.source}"
             )
             raise HTTPException(
                 status_code=401,
                 detail={
-                    "error": "OpenAI API authentication failed",
-                    "message": "Invalid or expired OpenAI API key. Please check your API key in settings.",
+                    "error": f"{provider_name.title()} API authentication failed",
+                    "message": f"Invalid or expired {provider_name.title()} API key. Please check your API key in settings.",
                     "error_type": "authentication_failed",
-                    "error_code": "OPENAI_AUTH_FAILED",
+                    "error_code": f"{provider_name.upper()}_AUTH_FAILED",
+                    "provider": provider_name,
                     "api_key_prefix": getattr(e, "api_key_prefix", None),
                 }
             )
         elif isinstance(e, EmbeddingQuotaExhaustedError):
             safe_logfire_error(
-                f"OpenAI quota exhausted during RAG query | query={request.query[:50]} | source={request.source}"
+                f"{provider_name.title()} quota exhausted during RAG query | query={request.query[:50]} | source={request.source}"
             )
             raise HTTPException(
                 status_code=429,
                 detail={
-                    "error": "OpenAI API quota exhausted",
-                    "message": "Your OpenAI API key has no remaining credits. Please add credits to your OpenAI account or check your billing settings.",
+                    "error": f"{provider_name.title()} API quota exhausted",
+                    "message": f"Your {provider_name.title()} API quota has been exceeded. Please check your billing settings.",
                     "error_type": "quota_exhausted",
-                    "error_code": "OPENAI_QUOTA_EXHAUSTED",
+                    "error_code": f"{provider_name.upper()}_QUOTA_EXHAUSTED",
+                    "provider": provider_name,
                     "tokens_used": getattr(e, "tokens_used", None),
                 }
             )
         elif isinstance(e, EmbeddingRateLimitError):
             safe_logfire_error(
-                f"OpenAI rate limit hit during RAG query | query={request.query[:50]} | source={request.source}"
+                f"{provider_name.title()} rate limit hit during RAG query | query={request.query[:50]} | source={request.source}"
             )
             raise HTTPException(
                 status_code=429,
                 detail={
-                    "error": "OpenAI API rate limit exceeded",
-                    "message": "Too many requests to OpenAI API. Please wait a moment and try again.",
+                    "error": f"{provider_name.title()} API rate limit exceeded",
+                    "message": f"Too many requests to {provider_name.title()} API. Please wait a moment and try again.",
                     "error_type": "rate_limit",
-                    "error_code": "OPENAI_RATE_LIMIT",
+                    "error_code": f"{provider_name.upper()}_RATE_LIMIT",
+                    "provider": provider_name,
                     "retry_after": 30,  # Suggest 30 second wait
                 }
             )
         elif isinstance(e, EmbeddingAPIError):
             safe_logfire_error(
-                f"OpenAI API error during RAG query | error={str(e)} | query={request.query[:50]} | source={request.source}"
+                f"{provider_name.title()} API error during RAG query | error={str(e)} | query={request.query[:50]} | source={request.source}"
             )
-            sanitized_message = _sanitize_openai_error(str(e))
+            sanitized_message = _sanitize_provider_error(str(e), provider_name)
             raise HTTPException(
                 status_code=502,
                 detail={
-                    "error": "OpenAI API error",
-                    "message": f"OpenAI API error: {sanitized_message}",
+                    "error": f"{provider_name.title()} API error",
+                    "message": f"{provider_name.title()} API error: {sanitized_message}",
                     "error_type": "api_error",
-                    "error_code": "OPENAI_API_ERROR",
+                    "error_code": f"{provider_name.upper()}_API_ERROR",
+                    "provider": provider_name,
                 }
             )
         else:

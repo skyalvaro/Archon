@@ -8,11 +8,12 @@
  * by displaying clear error messages when OpenAI API fails.
  */
 
-export interface OpenAIErrorDetails {
+export interface ProviderErrorDetails {
   error: string;
   message: string;
   error_type: 'quota_exhausted' | 'rate_limit' | 'api_error' | 'authentication_failed' | 'timeout_error' | 'configuration_error';
   error_code?: string; // Structured error code for reliable detection
+  provider?: string; // LLM provider (openai, google, anthropic, ollama)
   tokens_used?: number;
   retry_after?: number;
   api_key_prefix?: string;
@@ -20,8 +21,8 @@ export interface OpenAIErrorDetails {
 
 export interface EnhancedError extends Error {
   statusCode?: number;
-  errorDetails?: OpenAIErrorDetails;
-  isOpenAIError?: boolean;
+  errorDetails?: ProviderErrorDetails;
+  isProviderError?: boolean; // Renamed from isOpenAIError for genericity
 }
 
 /**
@@ -104,10 +105,10 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
       // Prioritize error.detail (where we put structured OpenAI error data)
       const errorData = error.detail || error.error;
       
-      // Check if it's an OpenAI-specific error
+      // Check if it's a provider-specific error
       if (typeof errorData === 'object' && errorData?.error_type) {
-        enhancedError.isOpenAIError = true;
-        enhancedError.errorDetails = errorData as OpenAIErrorDetails;
+        enhancedError.isProviderError = true;
+        enhancedError.errorDetails = errorData as ProviderErrorDetails;
         
         // Override the message with the detailed error message
         enhancedError.message = errorData.message || errorData.error || enhancedError.message;
@@ -122,25 +123,26 @@ export function parseKnowledgeBaseError(error: any): EnhancedError {
  * Get user-friendly error message for display in UI
  */
 export function getDisplayErrorMessage(error: EnhancedError): string {
-  if (error.isOpenAIError && error.errorDetails) {
+  if (error.isProviderError && error.errorDetails) {
+    const provider = error.errorDetails.provider ? error.errorDetails.provider.charAt(0).toUpperCase() + error.errorDetails.provider.slice(1) : 'LLM';
     switch (error.errorDetails.error_type) {
       case 'quota_exhausted':
-        return `OpenAI API quota exhausted. Please add credits to your OpenAI account or check your billing settings.`;
+        return `${provider} API quota exhausted. Please add credits to your ${provider} account or check your billing settings.`;
       
       case 'rate_limit':
-        return `OpenAI API rate limit exceeded. Please wait a moment and try again.`;
+        return `${provider} API rate limit exceeded. Please wait a moment and try again.`;
       
       case 'authentication_failed':
-        return `Invalid or expired OpenAI API key. Please check your API key in settings.`;
+        return `Invalid or expired ${provider} API key. Please check your API key in settings.`;
       
       case 'api_error':
-        return `OpenAI API error: ${error.errorDetails.message}. Please check your API key configuration.`;
+        return `${provider} API error: ${error.errorDetails.message}. Please check your API key configuration.`;
       
       case 'timeout_error':
         return `Request timed out. Please try again or check your network connection.`;
       
       case 'configuration_error':
-        return `OpenAI API configuration error. Please check your API key settings.`;
+        return `${provider} API configuration error. Please check your API key settings.`;
       
       default:
         return error.errorDetails.message || error.message;
@@ -170,7 +172,7 @@ export function getDisplayErrorMessage(error: EnhancedError): string {
  * Get error severity level for UI styling
  */
 export function getErrorSeverity(error: EnhancedError): 'error' | 'warning' | 'info' {
-  if (error.isOpenAIError && error.errorDetails) {
+  if (error.isProviderError && error.errorDetails) {
     switch (error.errorDetails.error_type) {
       case 'quota_exhausted':
         return 'error'; // Critical - user action required
@@ -200,12 +202,13 @@ export function getErrorSeverity(error: EnhancedError): 'error' | 'warning' | 'i
  * Get suggested action for the user based on error type
  */
 export function getErrorAction(error: EnhancedError): string | null {
-  if (error.isOpenAIError && error.errorDetails) {
+  if (error.isProviderError && error.errorDetails) {
+    const provider = error.errorDetails.provider ? error.errorDetails.provider.charAt(0).toUpperCase() + error.errorDetails.provider.slice(1) : 'LLM';
     switch (error.errorDetails.error_type) {
       case 'quota_exhausted':
-        return 'Check your OpenAI billing dashboard and add credits';
+        return `Check your ${provider} billing dashboard and add credits`;
       case 'authentication_failed':
-        return 'Verify your OpenAI API key in Settings';
+        return `Verify your ${provider} API key in Settings`;
       case 'rate_limit':
         const retryAfter = error.errorDetails.retry_after;
         if (retryAfter && retryAfter > 0) {
@@ -214,11 +217,11 @@ export function getErrorAction(error: EnhancedError): string | null {
           return 'Wait a moment and try again';
         }
       case 'api_error':
-        return 'Verify your OpenAI API key in Settings';
+        return `Verify your ${provider} API key in Settings`;
       case 'timeout_error':
         return 'Check your network connection and try again';
       case 'configuration_error':
-        return 'Check your OpenAI API key in Settings';
+        return `Check your ${provider} API key in Settings`;
       default:
         return null;
     }

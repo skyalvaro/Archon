@@ -275,7 +275,7 @@ export function useCrawlUrl() {
       }
 
       // Use enhanced error handling for better user experience
-      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+      const errorMessage = (error as EnhancedError)?.isProviderError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to start crawl");
       
@@ -455,7 +455,7 @@ export function useUploadDocument() {
       }
 
       // Use enhanced error handling for better user experience
-      const message = (error as EnhancedError)?.isOpenAIError 
+      const message = (error as EnhancedError)?.isProviderError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to upload document");
       showToast(message, "error");
@@ -529,7 +529,7 @@ export function useDeleteKnowledgeItem() {
       }
 
       // Use enhanced error handling for better user experience
-      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+      const errorMessage = (error as EnhancedError)?.isProviderError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to delete item");
       showToast(errorMessage, "error");
@@ -579,7 +579,7 @@ export function useUpdateKnowledgeItem() {
       }
 
       // Use enhanced error handling for better user experience
-      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+      const errorMessage = (error as EnhancedError)?.isProviderError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to update item");
       showToast(errorMessage, "error");
@@ -618,7 +618,7 @@ export function useRefreshKnowledgeItem() {
     },
     onError: (error) => {
       // Use enhanced error handling for better user experience
-      const errorMessage = (error as EnhancedError)?.isOpenAIError 
+      const errorMessage = (error as EnhancedError)?.isProviderError 
         ? getDisplayErrorMessage(error as EnhancedError)
         : (error instanceof Error ? error.message : "Failed to refresh item");
       showToast(errorMessage, "error");

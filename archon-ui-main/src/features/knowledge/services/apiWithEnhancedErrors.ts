@@ -24,54 +24,63 @@ export async function callKnowledgeAPI<T>(
       // The ETag client extracts the error message but loses the structured details
       // We need to reconstruct the structured error based on the status code and message
       
-      // Use status code and message patterns to identify OpenAI errors
-      // More reliable than exact string matching
-      if (error.statusCode === 401 && error.message.includes("OpenAI API key")) {
-        // This is our OpenAI authentication error
+      // Detect provider from error message and use appropriate error structure
+      let provider = "LLM";
+      if (error.message.includes("OpenAI")) provider = "OpenAI";
+      else if (error.message.includes("Google")) provider = "Google";
+      else if (error.message.includes("Anthropic")) provider = "Anthropic";
+      else if (error.message.includes("Ollama")) provider = "Ollama";
+      
+      if (error.statusCode === 401 && error.message.toLowerCase().includes("api key")) {
+        // Generic authentication error
         errorData = {
           status: 401,
           error: error.message,
           detail: {
-            error: "Invalid OpenAI API key",
-            message: "Please verify your OpenAI API key in Settings before starting a crawl.",
+            error: `Invalid ${provider} API key`,
+            message: `Please verify your ${provider} API key in Settings before starting a crawl.`,
             error_type: "authentication_failed",
-            error_code: "OPENAI_AUTH_FAILED"
+            error_code: `${provider.toUpperCase()}_AUTH_FAILED`,
+            provider: provider.toLowerCase()
           }
         };
-      } else if (error.statusCode === 429 && error.message.includes("quota")) {
-        // This is our OpenAI quota error
+      } else if (error.statusCode === 429 && error.message.toLowerCase().includes("quota")) {
+        // Generic quota error
         errorData = {
           status: 429,
           error: error.message,
           detail: {
-            error: "OpenAI quota exhausted",
-            message: "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+            error: `${provider} quota exhausted`,
+            message: `Your ${provider} API quota has been exceeded. Please check your billing settings.`,
             error_type: "quota_exhausted",
-            error_code: "OPENAI_QUOTA_EXHAUSTED"
+            error_code: `${provider.toUpperCase()}_QUOTA_EXHAUSTED`,
+            provider: provider.toLowerCase()
           }
         };
-      } else if (error.statusCode === 429 && error.message.includes("rate limit")) {
-        // This is our rate limit error
+      } else if (error.statusCode === 429 && error.message.toLowerCase().includes("rate limit")) {
+        // Generic rate limit error
         errorData = {
           status: 429,
           error: error.message,
           detail: {
-            error: "OpenAI API rate limit exceeded",
-            message: "Too many requests to OpenAI API. Please wait a moment and try again.",
+            error: `${provider} API rate limit exceeded`,
+            message: `Too many requests to ${provider} API. Please wait a moment and try again.`,
             error_type: "rate_limit",
-            error_code: "OPENAI_RATE_LIMIT"
+            error_code: `${provider.toUpperCase()}_RATE_LIMIT`,
+            provider: provider.toLowerCase()
           }
         };
-      } else if (error.statusCode === 502 && error.message.includes("OpenAI")) {
-        // This is our generic API error
+      } else if (error.statusCode === 502 && (error.message.toLowerCase().includes("api") || error.message.includes(provider))) {
+        // Generic API error
         errorData = {
           status: 502,
           error: error.message,
           detail: {
-            error: "OpenAI API error",
-            message: "OpenAI API error. Please check your API key configuration.",
+            error: `${provider} API error`,
+            message: `${provider} API error. Please check your API key configuration.`,
             error_type: "api_error",
-            error_code: "OPENAI_API_ERROR"
+            error_code: `${provider.toUpperCase()}_API_ERROR`,
+            provider: provider.toLowerCase()
           }
         };
       } else {
