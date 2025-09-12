@@ -104,6 +104,7 @@ async def _validate_openai_api_key() -> None:
     from ..services.embeddings.embedding_exceptions import (
         EmbeddingAuthenticationError,
         EmbeddingQuotaExhaustedError,
+        EmbeddingAPIError,
     )
     
     try:
@@ -149,10 +150,63 @@ async def _validate_openai_api_key() -> None:
                 "tokens_used": getattr(e, "tokens_used", None),
             }
         ) from None
+    except EmbeddingAPIError as e:
+        error_str = str(e)
+        logger.error(f"❌ OpenAI API error during validation: {error_str}")
+        
+        # Check if this is an authentication error (401 status code)
+        if ("401" in error_str and ("invalid" in error_str.lower() or "incorrect" in error_str.lower())):
+            logger.error("🔍 Detected OpenAI authentication error in EmbeddingAPIError")
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Invalid OpenAI API key",
+                    "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed"
+                }
+            ) from None
+        else:
+            # Other API errors should also block the operation
+            logger.error("🔍 Other OpenAI API error during validation")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "OpenAI API error",
+                    "message": "OpenAI API error during validation. Please check your API key configuration.",
+                    "error_type": "api_error"
+                }
+            ) from None
     except Exception as e:
+        error_str = str(e)
+        logger.error(f"❌ API key validation failed: {error_str}")
+        
+        # Check if this is an authentication error wrapped as a generic exception
+        if ("401" in error_str and ("invalid" in error_str.lower() or "incorrect" in error_str.lower() or "authentication" in error_str.lower())):
+            logger.error("🔍 Detected wrapped OpenAI authentication error")
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Invalid OpenAI API key",
+                    "message": "Please verify your OpenAI API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed"
+                }
+            ) from None
+        
+        # Check if this is a quota error wrapped as a generic exception  
+        if ("quota" in error_str.lower() or "billing" in error_str.lower() or "credits" in error_str.lower()):
+            logger.error("🔍 Detected wrapped OpenAI quota error")
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "OpenAI quota exhausted",
+                    "message": "Your OpenAI API key has no remaining credits. Please add credits to your account.",
+                    "error_type": "quota_exhausted"
+                }
+            ) from None
+        
         # For any other errors, log them but allow the operation to continue
         # The error will be caught later during actual processing
-        logger.warning(f"⚠️ API key validation failed with unexpected error: {e}")
+        logger.warning(f"⚠️ API key validation failed with unexpected error (allowing operation to continue): {e}")
         # Don't block the operation for unexpected validation errors
         pass
 
