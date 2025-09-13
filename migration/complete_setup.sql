@@ -3,7 +3,7 @@
 -- =====================================================
 -- This script combines all migrations into a single file
 -- for easy one-time database initialization
--- 
+--
 -- Run this script in your Supabase SQL Editor to set up
 -- the complete Archon database schema and initial data
 -- =====================================================
@@ -15,6 +15,7 @@
 -- Enable required PostgreSQL extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- =====================================================
 -- SECTION 2: CREDENTIALS AND SETTINGS
@@ -47,9 +48,9 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_archon_settings_updated_at 
-    BEFORE UPDATE ON archon_settings 
-    FOR EACH ROW 
+CREATE TRIGGER update_archon_settings_updated_at
+    BEFORE UPDATE ON archon_settings
+    FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create RLS (Row Level Security) policies for settings
@@ -170,6 +171,8 @@ COMMENT ON TABLE archon_settings IS 'Stores application configuration including 
 -- Create the sources table
 CREATE TABLE IF NOT EXISTS archon_sources (
     source_id TEXT PRIMARY KEY,
+    source_url TEXT,
+    source_display_name TEXT,
     summary TEXT,
     total_word_count INTEGER DEFAULT 0,
     title TEXT,
@@ -180,10 +183,15 @@ CREATE TABLE IF NOT EXISTS archon_sources (
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_archon_sources_title ON archon_sources(title);
+CREATE INDEX IF NOT EXISTS idx_archon_sources_url ON archon_sources(source_url);
+CREATE INDEX IF NOT EXISTS idx_archon_sources_display_name ON archon_sources(source_display_name);
 CREATE INDEX IF NOT EXISTS idx_archon_sources_metadata ON archon_sources USING GIN(metadata);
 CREATE INDEX IF NOT EXISTS idx_archon_sources_knowledge_type ON archon_sources((metadata->>'knowledge_type'));
 
--- Add comments to document the new columns
+-- Add comments to document the columns
+COMMENT ON COLUMN archon_sources.source_id IS 'Unique hash identifier for the source (16-char SHA256 hash of URL)';
+COMMENT ON COLUMN archon_sources.source_url IS 'The original URL that was crawled to create this source';
+COMMENT ON COLUMN archon_sources.source_display_name IS 'Human-readable name for UI display (e.g., "GitHub - microsoft/typescript")';
 COMMENT ON COLUMN archon_sources.title IS 'Descriptive title for the source (e.g., "Pydantic AI API Reference")';
 COMMENT ON COLUMN archon_sources.metadata IS 'JSONB field storing knowledge_type, tags, and other metadata';
 
@@ -196,11 +204,12 @@ CREATE TABLE IF NOT EXISTS archon_crawled_pages (
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     source_id TEXT NOT NULL,
     embedding VECTOR(1536),  -- OpenAI embeddings are 1536 dimensions
+    content_search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    
+
     -- Add a unique constraint to prevent duplicate chunks for the same URL
     UNIQUE(url, chunk_number),
-    
+
     -- Add foreign key constraint to sources table
     FOREIGN KEY (source_id) REFERENCES archon_sources(source_id)
 );
@@ -209,6 +218,8 @@ CREATE TABLE IF NOT EXISTS archon_crawled_pages (
 CREATE INDEX ON archon_crawled_pages USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX idx_archon_crawled_pages_metadata ON archon_crawled_pages USING GIN (metadata);
 CREATE INDEX idx_archon_crawled_pages_source_id ON archon_crawled_pages (source_id);
+CREATE INDEX idx_archon_crawled_pages_content_search ON archon_crawled_pages USING GIN (content_search_vector);
+CREATE INDEX idx_archon_crawled_pages_content_trgm ON archon_crawled_pages USING GIN (content gin_trgm_ops);
 
 -- Create the code_examples table
 CREATE TABLE IF NOT EXISTS archon_code_examples (
@@ -220,11 +231,12 @@ CREATE TABLE IF NOT EXISTS archon_code_examples (
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     source_id TEXT NOT NULL,
     embedding VECTOR(1536),  -- OpenAI embeddings are 1536 dimensions
+    content_search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content || ' ' || COALESCE(summary, ''))) STORED,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    
+
     -- Add a unique constraint to prevent duplicate chunks for the same URL
     UNIQUE(url, chunk_number),
-    
+
     -- Add foreign key constraint to sources table
     FOREIGN KEY (source_id) REFERENCES archon_sources(source_id)
 );
@@ -233,6 +245,9 @@ CREATE TABLE IF NOT EXISTS archon_code_examples (
 CREATE INDEX ON archon_code_examples USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX idx_archon_code_examples_metadata ON archon_code_examples USING GIN (metadata);
 CREATE INDEX idx_archon_code_examples_source_id ON archon_code_examples (source_id);
+CREATE INDEX idx_archon_code_examples_content_search ON archon_code_examples USING GIN (content_search_vector);
+CREATE INDEX idx_archon_code_examples_content_trgm ON archon_code_examples USING GIN (content gin_trgm_ops);
+CREATE INDEX idx_archon_code_examples_summary_trgm ON archon_code_examples USING GIN (summary gin_trgm_ops);
 
 -- =====================================================
 -- SECTION 5: SEARCH FUNCTIONS
@@ -311,6 +326,196 @@ BEGIN
   LIMIT match_count;
 END;
 $$;
+
+-- =====================================================
+-- SECTION 5B: HYBRID SEARCH FUNCTIONS WITH TS_VECTOR
+-- =====================================================
+
+-- Hybrid search function for archon_crawled_pages
+CREATE OR REPLACE FUNCTION hybrid_search_archon_crawled_pages(
+    query_embedding vector(1536),
+    query_text TEXT,
+    match_count INT DEFAULT 10,
+    filter JSONB DEFAULT '{}'::jsonb,
+    source_filter TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+    id BIGINT,
+    url VARCHAR,
+    chunk_number INTEGER,
+    content TEXT,
+    metadata JSONB,
+    source_id TEXT,
+    similarity FLOAT,
+    match_type TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    max_vector_results INT;
+    max_text_results INT;
+BEGIN
+    -- Calculate how many results to fetch from each search type
+    max_vector_results := match_count;
+    max_text_results := match_count;
+    
+    RETURN QUERY
+    WITH vector_results AS (
+        -- Vector similarity search
+        SELECT 
+            cp.id,
+            cp.url,
+            cp.chunk_number,
+            cp.content,
+            cp.metadata,
+            cp.source_id,
+            1 - (cp.embedding <=> query_embedding) AS vector_sim
+        FROM archon_crawled_pages cp
+        WHERE cp.metadata @> filter
+            AND (source_filter IS NULL OR cp.source_id = source_filter)
+            AND cp.embedding IS NOT NULL
+        ORDER BY cp.embedding <=> query_embedding
+        LIMIT max_vector_results
+    ),
+    text_results AS (
+        -- Full-text search with ranking
+        SELECT 
+            cp.id,
+            cp.url,
+            cp.chunk_number,
+            cp.content,
+            cp.metadata,
+            cp.source_id,
+            ts_rank_cd(cp.content_search_vector, plainto_tsquery('english', query_text)) AS text_sim
+        FROM archon_crawled_pages cp
+        WHERE cp.metadata @> filter
+            AND (source_filter IS NULL OR cp.source_id = source_filter)
+            AND cp.content_search_vector @@ plainto_tsquery('english', query_text)
+        ORDER BY text_sim DESC
+        LIMIT max_text_results
+    ),
+    combined_results AS (
+        -- Combine results from both searches
+        SELECT 
+            COALESCE(v.id, t.id) AS id,
+            COALESCE(v.url, t.url) AS url,
+            COALESCE(v.chunk_number, t.chunk_number) AS chunk_number,
+            COALESCE(v.content, t.content) AS content,
+            COALESCE(v.metadata, t.metadata) AS metadata,
+            COALESCE(v.source_id, t.source_id) AS source_id,
+            -- Use vector similarity if available, otherwise text similarity
+            COALESCE(v.vector_sim, t.text_sim, 0)::float8 AS similarity,
+            -- Determine match type
+            CASE 
+                WHEN v.id IS NOT NULL AND t.id IS NOT NULL THEN 'hybrid'
+                WHEN v.id IS NOT NULL THEN 'vector'
+                ELSE 'keyword'
+            END AS match_type
+        FROM vector_results v
+        FULL OUTER JOIN text_results t ON v.id = t.id
+    )
+    SELECT * FROM combined_results
+    ORDER BY similarity DESC
+    LIMIT match_count;
+END;
+$$;
+
+-- Hybrid search function for archon_code_examples
+CREATE OR REPLACE FUNCTION hybrid_search_archon_code_examples(
+    query_embedding vector(1536),
+    query_text TEXT,
+    match_count INT DEFAULT 10,
+    filter JSONB DEFAULT '{}'::jsonb,
+    source_filter TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+    id BIGINT,
+    url VARCHAR,
+    chunk_number INTEGER,
+    content TEXT,
+    summary TEXT,
+    metadata JSONB,
+    source_id TEXT,
+    similarity FLOAT,
+    match_type TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    max_vector_results INT;
+    max_text_results INT;
+BEGIN
+    -- Calculate how many results to fetch from each search type
+    max_vector_results := match_count;
+    max_text_results := match_count;
+    
+    RETURN QUERY
+    WITH vector_results AS (
+        -- Vector similarity search
+        SELECT 
+            ce.id,
+            ce.url,
+            ce.chunk_number,
+            ce.content,
+            ce.summary,
+            ce.metadata,
+            ce.source_id,
+            1 - (ce.embedding <=> query_embedding) AS vector_sim
+        FROM archon_code_examples ce
+        WHERE ce.metadata @> filter
+            AND (source_filter IS NULL OR ce.source_id = source_filter)
+            AND ce.embedding IS NOT NULL
+        ORDER BY ce.embedding <=> query_embedding
+        LIMIT max_vector_results
+    ),
+    text_results AS (
+        -- Full-text search with ranking (searches both content and summary)
+        SELECT 
+            ce.id,
+            ce.url,
+            ce.chunk_number,
+            ce.content,
+            ce.summary,
+            ce.metadata,
+            ce.source_id,
+            ts_rank_cd(ce.content_search_vector, plainto_tsquery('english', query_text)) AS text_sim
+        FROM archon_code_examples ce
+        WHERE ce.metadata @> filter
+            AND (source_filter IS NULL OR ce.source_id = source_filter)
+            AND ce.content_search_vector @@ plainto_tsquery('english', query_text)
+        ORDER BY text_sim DESC
+        LIMIT max_text_results
+    ),
+    combined_results AS (
+        -- Combine results from both searches
+        SELECT 
+            COALESCE(v.id, t.id) AS id,
+            COALESCE(v.url, t.url) AS url,
+            COALESCE(v.chunk_number, t.chunk_number) AS chunk_number,
+            COALESCE(v.content, t.content) AS content,
+            COALESCE(v.summary, t.summary) AS summary,
+            COALESCE(v.metadata, t.metadata) AS metadata,
+            COALESCE(v.source_id, t.source_id) AS source_id,
+            -- Use vector similarity if available, otherwise text similarity
+            COALESCE(v.vector_sim, t.text_sim, 0)::float8 AS similarity,
+            -- Determine match type
+            CASE 
+                WHEN v.id IS NOT NULL AND t.id IS NOT NULL THEN 'hybrid'
+                WHEN v.id IS NOT NULL THEN 'vector'
+                ELSE 'keyword'
+            END AS match_type
+        FROM vector_results v
+        FULL OUTER JOIN text_results t ON v.id = t.id
+    )
+    SELECT * FROM combined_results
+    ORDER BY similarity DESC
+    LIMIT match_count;
+END;
+$$;
+
+-- Add comments to document the new functionality
+COMMENT ON FUNCTION hybrid_search_archon_crawled_pages IS 'Performs hybrid search combining vector similarity and full-text search with configurable weighting';
+COMMENT ON FUNCTION hybrid_search_archon_code_examples IS 'Performs hybrid search on code examples combining vector similarity and full-text search';
 
 -- =====================================================
 -- SECTION 6: RLS POLICIES FOR KNOWLEDGE BASE
@@ -416,7 +621,7 @@ CREATE TABLE IF NOT EXISTS archon_document_versions (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   -- Ensure we have either project_id OR task_id, not both
   CONSTRAINT chk_project_or_task CHECK (
-    (project_id IS NOT NULL AND task_id IS NULL) OR 
+    (project_id IS NOT NULL AND task_id IS NULL) OR
     (project_id IS NULL AND task_id IS NOT NULL)
   ),
   -- Unique constraint to prevent duplicate version numbers per field
@@ -439,51 +644,51 @@ CREATE INDEX IF NOT EXISTS idx_archon_document_versions_version_number ON archon
 CREATE INDEX IF NOT EXISTS idx_archon_document_versions_created_at ON archon_document_versions(created_at);
 
 -- Apply triggers to tables
-CREATE OR REPLACE TRIGGER update_archon_projects_updated_at 
-    BEFORE UPDATE ON archon_projects 
+CREATE OR REPLACE TRIGGER update_archon_projects_updated_at
+    BEFORE UPDATE ON archon_projects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE OR REPLACE TRIGGER update_archon_tasks_updated_at 
-    BEFORE UPDATE ON archon_tasks 
+CREATE OR REPLACE TRIGGER update_archon_tasks_updated_at
+    BEFORE UPDATE ON archon_tasks
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Soft delete function for tasks
 CREATE OR REPLACE FUNCTION archive_task(
     task_id_param UUID,
     archived_by_param TEXT DEFAULT 'system'
-) 
+)
 RETURNS BOOLEAN AS $$
 DECLARE
     task_exists BOOLEAN;
 BEGIN
     -- Check if task exists and is not already archived
     SELECT EXISTS(
-        SELECT 1 FROM archon_tasks 
+        SELECT 1 FROM archon_tasks
         WHERE id = task_id_param AND archived = FALSE
     ) INTO task_exists;
-    
+
     IF NOT task_exists THEN
         RETURN FALSE;
     END IF;
-    
+
     -- Archive the task
-    UPDATE archon_tasks 
-    SET 
+    UPDATE archon_tasks
+    SET
         archived = TRUE,
         archived_at = NOW(),
         archived_by = archived_by_param,
         updated_at = NOW()
     WHERE id = task_id_param;
-    
+
     -- Also archive all subtasks
-    UPDATE archon_tasks 
-    SET 
+    UPDATE archon_tasks
+    SET
         archived = TRUE,
-        archived_at = NOW(), 
+        archived_at = NOW(),
         archived_by = archived_by_param,
         updated_at = NOW()
     WHERE parent_task_id = task_id_param AND archived = FALSE;
-    
+
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
@@ -520,8 +725,8 @@ CREATE TABLE IF NOT EXISTS archon_prompts (
 CREATE INDEX IF NOT EXISTS idx_archon_prompts_name ON archon_prompts(prompt_name);
 
 -- Add trigger to automatically update updated_at timestamp
-CREATE OR REPLACE TRIGGER update_archon_prompts_updated_at 
-    BEFORE UPDATE ON archon_prompts 
+CREATE OR REPLACE TRIGGER update_archon_prompts_updated_at
+    BEFORE UPDATE ON archon_prompts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
@@ -787,7 +992,7 @@ Remember: Create production-ready data models.', 'System prompt for creating dat
 -- SETUP COMPLETE
 -- =====================================================
 -- Your Archon database is now fully configured!
--- 
+--
 -- Next steps:
 -- 1. Add your OpenAI API key via the Settings UI
 -- 2. Enable Projects feature if needed
