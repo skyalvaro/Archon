@@ -597,6 +597,31 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
     if not request.url.startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
 
+    # Validate API key before starting expensive crawl operation
+    try:
+        from ..services.embeddings.embedding_service import create_embedding
+        test_result = await create_embedding(text="test")
+        if not test_result:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Invalid API key",
+                    "message": "Please verify your API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed"
+                }
+            )
+    except Exception as e:
+        error_str = str(e)
+        if ("401" in error_str and ("invalid" in error_str.lower() or "incorrect" in error_str.lower())):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Invalid API key", 
+                    "message": "Please verify your API key in Settings before starting a crawl.",
+                    "error_type": "authentication_failed"
+                }
+            ) from None
+
     try:
         safe_logfire_info(
             f"Starting knowledge item crawl | url={str(request.url)} | knowledge_type={request.knowledge_type} | tags={request.tags}"
